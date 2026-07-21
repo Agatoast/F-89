@@ -16,15 +16,36 @@ namespace F89.Testing
             if (existingPlayer != null)
             {
                 EnsureMapSystems(existingPlayer);
+                EnsurePlayerVisuals(existingPlayer);
                 EnsureWeaponSystems(existingPlayer.gameObject);
-                WeaponTestTargetSpawner.SpawnIfNeeded();
+                WeaponTestTargetSpawner.RemoveIfPresent();
                 AntarcticaBaseSpawner.SpawnIfNeeded();
                 AntarcticaBaseSpawner.TryMovePlayerToCarrier(existingPlayer.transform);
-                RemoveDecoyIfPresent();
                 return null;
             }
 
             return Build();
+        }
+
+        private static void EnsurePlayerVisuals(AircraftController player)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            var visualPivot = player.transform.Find("VisualPivot");
+            if (visualPivot == null)
+            {
+                return;
+            }
+
+            var bankVisual = visualPivot.GetComponent<AircraftBankVisual>();
+            var aircraftVisual = visualPivot.Find("AircraftVisual");
+            if (bankVisual != null && aircraftVisual != null)
+            {
+                bankVisual.Configure(player, visualPivot, aircraftVisual);
+            }
         }
 
         private static void EnsureMapSystems(AircraftController player)
@@ -57,8 +78,7 @@ namespace F89.Testing
             CreateWeaponSystems(player);
             CreateFlightHud(player);
             CreateAntarcticaMapOverlay(player);
-            WeaponTestTargetSpawner.SpawnIfNeeded();
-            RemoveDecoyIfPresent();
+            WeaponTestTargetSpawner.RemoveIfPresent();
             mapRoot.GetComponent<InfiniteWhiteMap>().SetTarget(player.transform);
 
             var grid = mapRoot.GetComponent<MotionGridOverlay>();
@@ -71,15 +91,6 @@ namespace F89.Testing
 
             Debug.Log("F-89 flight test ready. Launch from USS Martin Van Buren. Mission 1: capture Palmer Station.");
             return player;
-        }
-
-        private static void RemoveDecoyIfPresent()
-        {
-            var decoy = GameObject.Find("TestDecoyAirTarget");
-            if (decoy != null)
-            {
-                Object.Destroy(decoy);
-            }
         }
 
         private static Gau27aWeaponConfig LoadGau27aConfig()

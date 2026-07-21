@@ -12,12 +12,33 @@ namespace F89.Core
 
         public static void Attach(GameObject carrierObject, float worldUnitsPerMile)
         {
-            if (carrierObject == null || carrierObject.transform.Find("CarrierVisual") != null)
+            if (carrierObject == null)
             {
                 return;
             }
 
             var texture = LoadTexture();
+            if (texture == null)
+            {
+                Debug.LogWarning(
+                    "F-89: Carrier texture missing at Resources/F89_UssMartinVanBurenCarrier — world deck art will not render.");
+            }
+
+            var existingVisual = carrierObject.transform.Find("CarrierVisual");
+            if (existingVisual != null)
+            {
+                ApplyTransform(existingVisual, texture, worldUnitsPerMile);
+                var existingRenderer = existingVisual.GetComponent<MeshRenderer>();
+                if (existingRenderer != null)
+                {
+                    existingRenderer.sharedMaterial = CreateMaterial(texture);
+                    existingRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                    existingRenderer.receiveShadows = false;
+                }
+
+                return;
+            }
+
             var visualObject = CreatePlaneMeshObject();
             visualObject.name = "CarrierVisual";
             visualObject.transform.SetParent(carrierObject.transform, false);
@@ -73,6 +94,16 @@ namespace F89.Core
                     material.SetTexture("_MainTex", texture);
                 }
 
+                if (material.HasProperty("_BaseColor"))
+                {
+                    material.SetColor("_BaseColor", Color.white);
+                }
+
+                if (material.HasProperty("_Color"))
+                {
+                    material.SetColor("_Color", Color.white);
+                }
+
                 ConfigureTransparentMaterial(material);
             }
 
@@ -91,8 +122,19 @@ namespace F89.Core
                 material.SetFloat("_Blend", 0f);
             }
 
+            if (material.HasProperty("_AlphaClip"))
+            {
+                material.SetFloat("_AlphaClip", 0f);
+            }
+
+            if (material.HasProperty("_Cull"))
+            {
+                material.SetInt("_Cull", (int)CullMode.Off);
+            }
+
             material.SetOverrideTag("RenderType", "Transparent");
-            material.renderQueue = (int)RenderQueue.Transparent - 10;
+            // Below aircraft (Transparent+5) so the plane renders over the deck decal.
+            material.renderQueue = (int)RenderQueue.Transparent - 15;
             material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
             material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);

@@ -62,6 +62,8 @@ namespace F89.UI
         private bool mapPointerDragged;
         private Vector2 panDragAnchorMiles;
         private bool panDragActive;
+        private int mapPanControlId;
+        private bool mapPanHotActive;
 
         private const float MapClickDragThreshold = 5f;
         private const float AutopilotPlaneLabelBlinkPeriodSeconds = 5f;
@@ -514,8 +516,14 @@ namespace F89.UI
                 {
                     panOffsetMiles = GetMapGeoProjection()
                         .ComputePanForAnchorAtGui(mapRect, zoomAnchorMiles.Value, mouse);
-                    ClampPanOffset();
                 }
+
+                ClampPanOffset();
+            }
+
+            if (IsOpen && zoomLevel > 0.001f && worldMap != null)
+            {
+                ClampPanOffset();
             }
         }
 
@@ -537,6 +545,7 @@ namespace F89.UI
             if (open && !wasOpen)
             {
                 zoomLevel = 0f;
+                // Full-theater view must stay centered on map origin or satellite UVs wrap and tile.
                 panOffsetMiles = Vector2.zero;
             }
         }
@@ -978,7 +987,7 @@ namespace F89.UI
         private static readonly Color HostileBaseColor = new Color(0.9f, 0.18f, 0.12f);
         private static readonly Color CarrierMarkerColor = new Color(0.78f, 0.78f, 0.78f);
         private static readonly Color CarrierLabelColor = new Color(0.95f, 0.85f, 0.1f);
-        private const float CarrierMarkerScale = 0.7f;
+        private const float CarrierMarkerScale = 1f;
 
         private void DrawBaseMarkers(Rect mapRect)
         {
@@ -1590,6 +1599,11 @@ namespace F89.UI
             mapPointerDragged = false;
             isDraggingPan = false;
             panDragActive = false;
+            if (mapPanHotActive)
+            {
+                GUIUtility.hotControl = 0;
+                mapPanHotActive = false;
+            }
         }
 
         private static Vector2 GetGuiMousePosition()
@@ -1602,6 +1616,12 @@ namespace F89.UI
 
         private static Vector2 GetMapGuiMouse(Event evt)
         {
+            if (evt != null)
+            {
+                // OnGUI Event.mousePosition is top-left origin (Unity 6+).
+                return evt.mousePosition;
+            }
+
             return GetGuiMousePosition();
         }
 
@@ -1629,8 +1649,10 @@ namespace F89.UI
                 return;
             }
 
+            mapPanControlId = GUIUtility.GetControlID(FocusType.Passive);
             var mouse = GetMapGuiMouse(currentEvent);
             var allowPan = !IsAutopilotSelectMode && !IsAutopilotFlightMode;
+            var ownsPan = mapPanHotActive && GUIUtility.hotControl == mapPanControlId;
 
             if (currentEvent.type == EventType.MouseDown
                 && currentEvent.button == 1
@@ -1660,8 +1682,18 @@ namespace F89.UI
                 panDragActive = false;
                 mapPointerDownGui = mouse;
                 lastDragMouse = mouse;
+
+                if (allowPan && zoomLevel > 0.001f)
+                {
+                    GUIUtility.hotControl = mapPanControlId;
+                    mapPanHotActive = true;
+                }
+
+                currentEvent.Use();
             }
-            else if (currentEvent.type == EventType.MouseDrag && currentEvent.button == 0 && mapPointerDownOnMap)
+            else if (currentEvent.type == EventType.MouseDrag
+                     && currentEvent.button == 0
+                     && (mapPointerDownOnMap || ownsPan))
             {
                 if (Vector2.Distance(mouse, mapPointerDownGui) >= MapClickDragThreshold)
                 {
@@ -1673,6 +1705,7 @@ namespace F89.UI
                     isDraggingPan = true;
                     if (!panDragActive)
                     {
+                        ClampPanOffset();
                         panDragAnchorMiles = GuiToWorldMiles(mapRect, mapPointerDownGui);
                         panDragActive = true;
                     }
@@ -1685,7 +1718,13 @@ namespace F89.UI
             }
             else if (currentEvent.type == EventType.MouseUp && currentEvent.button == 0)
             {
-                var releaseGui = GetGuiMousePosition();
+                if (mapPanHotActive && GUIUtility.hotControl == mapPanControlId)
+                {
+                    GUIUtility.hotControl = 0;
+                }
+
+                mapPanHotActive = false;
+                var releaseGui = GetMapGuiMouse(currentEvent);
                 if (!mapPointerDragged && mapRect.Contains(releaseGui))
                 {
                     if (IsControlHeld(currentEvent))
@@ -2219,18 +2258,22 @@ namespace F89.UI
         {
             var antarcticaHalfMiles = worldMap.antarcticaSizeMiles * 0.5f;
             var visibleHalfMiles = GetVisibleHalfMiles();
-            var center = panOffsetMiles;
 
-            center.x = Mathf.Clamp(
-                center.x,
-                -antarcticaHalfMiles + visibleHalfMiles,
-                antarcticaHalfMiles - visibleHalfMiles);
-            center.y = Mathf.Clamp(
-                center.y,
-                -antarcticaHalfMiles + visibleHalfMiles,
-                antarcticaHalfMiles - visibleHalfMiles);
+            // Full-theater zoom shows the entire map. Keep pan at origin so imagery stays aligned.
+            if (visibleHalfMiles >= antarcticaHalfMiles)
+            {
+                if (zoomLevel <= 0.001f)
+                {
+                    panOffsetMiles = Vector2.zero;
+                }
 
-            panOffsetMiles = center;
+                return;
+            }
+
+            var panLimit = Mathf.Max(0f, antarcticaHalfMiles - visibleHalfMiles);
+            panOffsetMiles = new Vector2(
+                Mathf.Clamp(panOffsetMiles.x, -panLimit, panLimit),
+                Mathf.Clamp(panOffsetMiles.y, -panLimit, panLimit));
         }
 
         private Rect GetGeoMapRect(Rect mapRect)
@@ -2279,6 +2322,12 @@ namespace F89.UI
         private float GetVisibleHalfMiles()
         {
             var antarcticaHalfMiles = worldMap.antarcticaSizeMiles * 0.5f;
+            if (zoomLevel <= 0.001f)
+            {
+                // Exact map half-extent keeps satellite UVs in [0, 1] at full zoom.
+                return antarcticaHalfMiles;
+            }
+
             var fullViewHalf = antarcticaHalfMiles * FullViewOceanPadding;
             var minHalfMiles = MinVisibleWidthMiles * 0.5f;
             return Mathf.Lerp(fullViewHalf, minHalfMiles, zoomLevel);

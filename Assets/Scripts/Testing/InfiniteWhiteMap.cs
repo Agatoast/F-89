@@ -125,7 +125,14 @@ namespace F89.Testing
             var collider = ground.GetComponent<Collider>();
             if (collider != null)
             {
-                Destroy(collider);
+                if (Application.isPlaying)
+                {
+                    Destroy(collider);
+                }
+                else
+                {
+                    DestroyImmediate(collider);
+                }
             }
 
             groundRenderer = ground.GetComponent<Renderer>();

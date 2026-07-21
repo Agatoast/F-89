@@ -11,10 +11,17 @@ namespace F89.Flight
         private Vector3 baseMeshScale = Vector3.one;
         private Vector3 baseMeshPosition = new Vector3(0f, 0.01f, 0f);
         private float foreshortenVelocity;
+        private bool baseScaleCaptured;
 
         private void Reset()
         {
             visualRoot = transform;
+        }
+
+        private void Awake()
+        {
+            EnsureReferences();
+            CaptureBaseMeshTransformIfNeeded();
         }
 
         public void Configure(AircraftController aircraftController, Transform pivot, Transform meshTransform)
@@ -22,12 +29,7 @@ namespace F89.Flight
             controller = aircraftController;
             visualRoot = pivot;
             aircraftMesh = meshTransform;
-
-            if (aircraftMesh != null)
-            {
-                baseMeshScale = aircraftMesh.localScale;
-                baseMeshPosition = aircraftMesh.localPosition;
-            }
+            CaptureBaseMeshTransform(force: true);
 
             if (visualRoot != null)
             {
@@ -35,8 +37,57 @@ namespace F89.Flight
             }
         }
 
+        private void EnsureReferences()
+        {
+            if (visualRoot == null)
+            {
+                visualRoot = transform;
+            }
+
+            if (aircraftMesh == null && visualRoot != null)
+            {
+                var visual = visualRoot.Find("AircraftVisual");
+                if (visual != null)
+                {
+                    aircraftMesh = visual;
+                }
+            }
+
+            if (controller == null)
+            {
+                controller = GetComponentInParent<AircraftController>();
+            }
+        }
+
+        private void CaptureBaseMeshTransformIfNeeded()
+        {
+            if (!baseScaleCaptured)
+            {
+                CaptureBaseMeshTransform(force: false);
+            }
+        }
+
+        private void CaptureBaseMeshTransform(bool force)
+        {
+            EnsureReferences();
+            if (!force && baseScaleCaptured)
+            {
+                return;
+            }
+
+            if (aircraftMesh == null)
+            {
+                return;
+            }
+
+            baseMeshScale = aircraftMesh.localScale;
+            baseMeshPosition = aircraftMesh.localPosition;
+            baseScaleCaptured = true;
+        }
+
         private void LateUpdate()
         {
+            CaptureBaseMeshTransformIfNeeded();
             if (controller == null || controller.Profile == null || aircraftMesh == null)
             {
                 return;

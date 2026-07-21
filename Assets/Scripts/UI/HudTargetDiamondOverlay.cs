@@ -71,6 +71,7 @@ namespace F89.UI
 
             if (activeTarget != null
                 && activeTarget.IsAlive
+                && !IsCarrierTarget(activeTarget)
                 && IsTargetOnScreen(activeTarget, out var activeCenter))
             {
                 var diamondColor = activeTarget.IsFriendly ? FriendlyMarkerColor : hudColor;

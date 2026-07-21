@@ -11,9 +11,25 @@ namespace F89.EditorTools
         private const string FlightTestScenePath = "Assets/Scenes/FlightTest.unity";
         private const string MainMenuScenePath = "Assets/Scenes/MainMenu.unity";
 
+        private static bool IsEditorSceneSetupAllowed()
+        {
+            return !Application.isPlaying;
+        }
+
+        [MenuItem("F-89/Setup Main Menu Scene", true)]
+        private static bool ValidateSetupMainMenuScene()
+        {
+            return IsEditorSceneSetupAllowed();
+        }
+
         [MenuItem("F-89/Setup Main Menu Scene")]
         public static void CreateMainMenuScene()
         {
+            if (!EnsureEditorSceneSetupAllowed())
+            {
+                return;
+            }
+
             EnsureScenesFolder();
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -26,9 +42,20 @@ namespace F89.EditorTools
             Debug.Log($"Main menu scene saved to {MainMenuScenePath}.");
         }
 
+        [MenuItem("F-89/Setup Flight Test Scene", true)]
+        private static bool ValidateSetupFlightTestScene()
+        {
+            return IsEditorSceneSetupAllowed();
+        }
+
         [MenuItem("F-89/Setup Flight Test Scene")]
         public static void CreateFlightTestScene()
         {
+            if (!EnsureEditorSceneSetupAllowed())
+            {
+                return;
+            }
+
             EnsureScenesFolder();
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -48,17 +75,39 @@ namespace F89.EditorTools
             Debug.Log($"Flight test scene saved to {FlightTestScenePath}. Press Play to fly.");
         }
 
+        [MenuItem("F-89/Setup All Scenes", true)]
+        private static bool ValidateSetupAllScenes()
+        {
+            return IsEditorSceneSetupAllowed();
+        }
+
         [MenuItem("F-89/Setup All Scenes")]
         public static void CreateAllScenes()
         {
+            if (!EnsureEditorSceneSetupAllowed())
+            {
+                return;
+            }
+
             CreateMainMenuScene();
             CreateFlightTestScene();
             Debug.Log("F-89: Main menu and flight test scenes are ready.");
         }
 
+        [MenuItem("F-89/Open Main Menu Scene", true)]
+        private static bool ValidateOpenMainMenuScene()
+        {
+            return IsEditorSceneSetupAllowed();
+        }
+
         [MenuItem("F-89/Open Main Menu Scene")]
         public static void OpenMainMenuScene()
         {
+            if (!EnsureEditorSceneSetupAllowed())
+            {
+                return;
+            }
+
             if (!System.IO.File.Exists(MainMenuScenePath))
             {
                 CreateMainMenuScene();
@@ -67,9 +116,20 @@ namespace F89.EditorTools
             EditorSceneManager.OpenScene(MainMenuScenePath);
         }
 
+        [MenuItem("F-89/Open Flight Test Scene", true)]
+        private static bool ValidateOpenFlightTestScene()
+        {
+            return IsEditorSceneSetupAllowed();
+        }
+
         [MenuItem("F-89/Open Flight Test Scene")]
         public static void OpenFlightTestScene()
         {
+            if (!EnsureEditorSceneSetupAllowed())
+            {
+                return;
+            }
+
             if (!System.IO.File.Exists(FlightTestScenePath))
             {
                 CreateFlightTestScene();
@@ -80,7 +140,23 @@ namespace F89.EditorTools
 
         public static void CreateFlightTestSceneBatch()
         {
+            if (!EnsureEditorSceneSetupAllowed())
+            {
+                return;
+            }
+
             CreateAllScenes();
+        }
+
+        private static bool EnsureEditorSceneSetupAllowed()
+        {
+            if (!Application.isPlaying)
+            {
+                return true;
+            }
+
+            Debug.LogError("F-89: Stop Play mode before creating or opening scenes from the F-89 menu.");
+            return false;
         }
 
         private static void EnsureScenesFolder()
