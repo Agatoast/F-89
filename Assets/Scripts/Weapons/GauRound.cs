@@ -123,7 +123,7 @@ namespace F89.Weapons
                 return;
             }
 
-            if (Random.value > hitChance)
+            if (!target.IsGroundVehicle && Random.value > hitChance)
             {
                 return;
             }
@@ -133,47 +133,8 @@ namespace F89.Weapons
 
         private LockableTarget FindTargetAtAimPoint()
         {
-            var checkPoint = aimPoint;
-            checkPoint.y = 0f;
-
             var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
-            LockableTarget closest = null;
-            var closestDistance = float.MaxValue;
-
-            foreach (var target in targets)
-            {
-                if (target == null || !target.IsAlive)
-                {
-                    continue;
-                }
-
-                var targetPosition = target.transform.position;
-                targetPosition.y = 0f;
-                var delta = targetPosition - checkPoint;
-                var distance = delta.magnitude;
-                var targetRadius = GetTargetHitRadius(target);
-                if (distance > hitRadiusWorld + targetRadius || distance >= closestDistance)
-                {
-                    continue;
-                }
-
-                closestDistance = distance;
-                closest = target;
-            }
-
-            return closest;
-        }
-
-        private static float GetTargetHitRadius(LockableTarget target)
-        {
-            var collider = target.GetComponent<Collider>();
-            if (collider != null)
-            {
-                var extents = collider.bounds.extents;
-                return Mathf.Max(extents.x, extents.z);
-            }
-
-            return 1f;
+            return DirectFireTargetRules.FindClosestAtPoint(aimPoint, hitRadiusWorld, targets);
         }
     }
 }

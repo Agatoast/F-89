@@ -167,31 +167,7 @@ namespace F89.Weapons
             aimPoint.y = 0f;
 
             var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
-            LockableTarget closest = null;
-            var closestDistance = float.MaxValue;
-
-            foreach (var target in targets)
-            {
-                if (target == null || !target.IsAlive)
-                {
-                    continue;
-                }
-
-                var targetPosition = target.transform.position;
-                targetPosition.y = 0f;
-                var delta = targetPosition - aimPoint;
-                var distance = delta.magnitude;
-                var targetRadius = GetTargetHitRadius(target);
-                if (distance > hitRadius + targetRadius || distance >= closestDistance)
-                {
-                    continue;
-                }
-
-                closestDistance = distance;
-                closest = target;
-            }
-
-            return closest;
+            return DirectFireTargetRules.FindClosestAtPoint(aimPoint, hitRadius, targets);
         }
 
         private Vector3 GetHorizontalForward()
@@ -222,18 +198,6 @@ namespace F89.Weapons
 
             var t = Vector2.Dot(point - segmentStart, segment) / lengthSquared;
             return Mathf.Clamp01(t);
-        }
-
-        private static float GetTargetHitRadius(LockableTarget target)
-        {
-            var collider = target.GetComponent<Collider>();
-            if (collider != null)
-            {
-                var extents = collider.bounds.extents;
-                return Mathf.Max(extents.x, extents.z);
-            }
-
-            return 1f;
         }
     }
 }

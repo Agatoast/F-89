@@ -216,7 +216,8 @@ namespace F89.Weapons
             var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
             foreach (var target in targets)
             {
-                if (target == null || !target.IsAlive || !target.MatchesWeapon(config.ValidTargetKind))
+                if (!DirectFireTargetRules.CanBeDamaged(target)
+                    || !target.MatchesWeapon(config.ValidTargetKind))
                 {
                     continue;
                 }

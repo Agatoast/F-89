@@ -18,4 +18,4 @@ MonoBehaviour:
   roundSpeedMilesPerSecond: 0.66
   hitRadiusTics: 2
   hitChancePerRound: 0.85
-  startingRounds: 9999
+  startingRounds: 300

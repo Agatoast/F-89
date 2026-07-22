@@ -1,6 +1,7 @@
 using F89.CameraSystems;
 using F89.Controls;
 using F89.Core;
+using F89.Enemies;
 using F89.Flight;
 using F89.UI;
 using F89.Weapons;
@@ -76,6 +77,9 @@ namespace F89.Testing
             SetupCamera(player);
             CreatePauseController();
             CreateWeaponSystems(player);
+            EnsureCountermeasureSystems(player);
+            EnsureEnemySamSites(player.GetComponent<AircraftController>());
+            BasicTankSpawner.EnsureOutpostSouthTank(player.GetComponent<AircraftController>());
             CreateFlightHud(player);
             CreateAntarcticaMapOverlay(player);
             WeaponTestTargetSpawner.RemoveIfPresent();
@@ -158,6 +162,32 @@ namespace F89.Testing
             return config;
         }
 
+        private static EnemySamMissileConfig LoadEnemySamConfig()
+        {
+            var config = Resources.Load<EnemySamMissileConfig>("F89_EnemySamMissileConfig");
+            if (config != null)
+            {
+                return config;
+            }
+
+            config = ScriptableObject.CreateInstance<EnemySamMissileConfig>();
+            Debug.LogWarning("F-89: Using runtime enemy SAM defaults.");
+            return config;
+        }
+
+        private static FlareLoadoutConfig LoadFlareLoadoutConfig()
+        {
+            var config = Resources.Load<FlareLoadoutConfig>("F89_FlareLoadoutConfig");
+            if (config != null)
+            {
+                return config;
+            }
+
+            config = ScriptableObject.CreateInstance<FlareLoadoutConfig>();
+            Debug.LogWarning("F-89: Using runtime flare loadout defaults (48 flares).");
+            return config;
+        }
+
         private static FlightProfile LoadFlightProfile()
         {
             var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
@@ -236,7 +266,24 @@ namespace F89.Testing
             var aircraftVisual = AircraftVisualFactory.CreateVisual(visualPivot.transform, controller);
             bankVisual.Configure(controller, visualPivot.transform, aircraftVisual.transform);
 
+            EnsurePlayerLockableTarget(player);
+
             return player;
+        }
+
+        private static void EnsurePlayerLockableTarget(GameObject player)
+        {
+            var target = player.GetComponent<LockableTarget>();
+            if (target == null)
+            {
+                target = player.AddComponent<LockableTarget>();
+            }
+
+            target.Configure(
+                "F-89",
+                LockableTargetKind.Air,
+                TargetAffiliation.Friendly,
+                TargetUnitClass.PlayerAircraft);
         }
 
         private static void CreateWeaponSystems(GameObject player)
@@ -261,6 +308,11 @@ namespace F89.Testing
                 player.AddComponent<PlayerWeaponController>();
             }
 
+            if (player.GetComponent<FlareCountermeasureController>() == null)
+            {
+                player.AddComponent<FlareCountermeasureController>();
+            }
+
             var input = player.GetComponent<PlayerAircraftInput>();
             var aim9zConfig = LoadAim9zConfig();
             var agm88jConfig = LoadAgm88jConfig();
@@ -272,8 +324,10 @@ namespace F89.Testing
             var targetPaint = player.GetComponent<WeaponTargetPaint>();
             var gau27aGun = player.GetComponent<Gau27aGunController>();
             var weaponController = player.GetComponent<PlayerWeaponController>();
+            var flareController = player.GetComponent<FlareCountermeasureController>();
             var camera = Camera.main;
 
+            flareController?.Configure(controller, input, LoadFlareLoadoutConfig());
             lockController.Configure(controller, camera);
             targetPaint.Configure(controller, camera);
             weaponController.Configure(
@@ -326,13 +380,74 @@ namespace F89.Testing
         private static void EnsureWeaponSystems(GameObject player)
         {
             CreateWeaponSystems(player);
+            EnsureCountermeasureSystems(player);
             var controller = player.GetComponent<AircraftController>();
             var weaponController = player.GetComponent<PlayerWeaponController>();
+            EnsureEnemySamSites(controller);
+            BasicTankSpawner.EnsureOutpostSouthTank(controller);
             CreateFlightHud(player);
             if (weaponController != null && controller != null)
             {
                 var hud = Object.FindAnyObjectByType<FlightHud>();
                 hud?.Configure(controller, weaponController);
+            }
+        }
+
+        private static void EnsureCountermeasureSystems(GameObject player)
+        {
+            EnsurePlayerLockableTarget(player);
+
+            var controller = player.GetComponent<AircraftController>();
+            var input = player.GetComponent<PlayerAircraftInput>();
+            var flareController = player.GetComponent<FlareCountermeasureController>();
+            if (flareController == null)
+            {
+                flareController = player.AddComponent<FlareCountermeasureController>();
+            }
+
+            flareController.Configure(controller, input, LoadFlareLoadoutConfig());
+        }
+
+        private static void EnsureEnemySamSites(AircraftController player)
+        {
+            if (player == null || player.Profile == null || player.WorldMap == null)
+            {
+                return;
+            }
+
+            var playerTarget = player.GetComponent<LockableTarget>();
+            if (playerTarget == null)
+            {
+                return;
+            }
+
+            var samConfig = LoadEnemySamConfig();
+            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            var armed = 0;
+            foreach (var baseSite in bases)
+            {
+                if (baseSite == null
+                    || !baseSite.IsActive
+                    || baseSite.IsDestroyed
+                    || baseSite.Control != BaseControl.Hostile
+                    || baseSite.SiteKind != BaseSiteKind.Land
+                    || baseSite.BaseName == BasicTankSpawner.OutpostSouthBaseName)
+                {
+                    continue;
+                }
+
+                if (baseSite.GetComponent<EnemySamLauncher>() != null)
+                {
+                    continue;
+                }
+
+                var launcher = baseSite.gameObject.AddComponent<EnemySamLauncher>();
+                launcher.Configure(samConfig, player.WorldMap, player.Profile, playerTarget);
+                armed++;
+                if (armed >= 3)
+                {
+                    break;
+                }
             }
         }
 
@@ -348,6 +463,47 @@ namespace F89.Testing
             var controller = player.GetComponent<AircraftController>();
             var weaponController = player.GetComponent<PlayerWeaponController>();
             hud.Configure(controller, weaponController);
+            CreateAirspeedTapeHud(player);
+            CreateStoresPanelHud(player);
+            CreateFuelGaugeHud(player);
+        }
+
+        private static void CreateFuelGaugeHud(GameObject player)
+        {
+            var fuelGauge = Object.FindAnyObjectByType<FuelGaugeHud>();
+            if (fuelGauge == null)
+            {
+                var fuelObject = new GameObject("FuelGaugeHud");
+                fuelGauge = fuelObject.AddComponent<FuelGaugeHud>();
+            }
+
+            fuelGauge.Configure(player.GetComponent<AircraftController>());
+        }
+
+        private static void CreateStoresPanelHud(GameObject player)
+        {
+            var storesHud = Object.FindAnyObjectByType<StoresPanelHud>();
+            if (storesHud == null)
+            {
+                var storesObject = new GameObject("StoresPanelHud");
+                storesHud = storesObject.AddComponent<StoresPanelHud>();
+            }
+
+            storesHud.Configure(
+                player.GetComponent<PlayerWeaponController>(),
+                player.GetComponent<FlareCountermeasureController>());
+        }
+
+        private static void CreateAirspeedTapeHud(GameObject player)
+        {
+            var tapeHud = Object.FindAnyObjectByType<AirspeedTapeHud>();
+            if (tapeHud == null)
+            {
+                var tapeObject = new GameObject("AirspeedTapeHud");
+                tapeHud = tapeObject.AddComponent<AirspeedTapeHud>();
+            }
+
+            tapeHud.Configure(player.GetComponent<AircraftController>());
         }
 
         private static void EnsureAutopilotController(GameObject player)

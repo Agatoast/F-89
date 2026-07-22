@@ -13,16 +13,18 @@ namespace F89.Flight
 
         private Rigidbody body;
         private float currentSpeed;
+        private float currentSpeedMph;
         private float afterburnerFuelRemaining;
-        private float fuelRangeRemainingMiles;
+        private float afterburnerBaselineSpeedMph;
+        private bool afterburnerSpoolDownActive;
+        private float leftTankGallons;
+        private float rightTankGallons;
 
         public float CurrentSpeed => currentSpeed;
         public float CurrentSpeedTics => profile != null && profile.ticSizeWorldUnits > 0f
             ? currentSpeed / profile.ticSizeWorldUnits
             : 0f;
-        public float CurrentSpeedMph => worldMap != null
-            ? worldMap.TicsPerSecondToMph(CurrentSpeedTics)
-            : CurrentSpeedTics / 20f * 3600f;
+        public float CurrentSpeedMph => currentSpeedMph;
         public bool IsAfterburning { get; private set; }
         public bool CanUseAfterburner => afterburnerFuelRemaining > 0f;
         public float AfterburnerFuelRemaining => afterburnerFuelRemaining;
@@ -32,12 +34,25 @@ namespace F89.Flight
                 : afterburnerFuelRemaining / profile.afterburnerFuelCapacity;
         public FlightProfile Profile => profile;
         public WorldMapConfig WorldMap => worldMap;
-        public float FuelRangeRemainingMiles => fuelRangeRemainingMiles;
+        public float FuelRangeRemainingMiles => ProjectedRangeMiles;
+        public float ProjectedRangeMiles =>
+            worldMap == null || worldMap.maxFuelRangeMiles <= 0f || TotalFuelCapacityGallons <= 0f
+                ? 0f
+                : worldMap.maxFuelRangeMiles * (TotalFuelGallons / TotalFuelCapacityGallons);
         public float FuelRangeNormalized =>
             worldMap == null || worldMap.maxFuelRangeMiles <= 0f
                 ? 0f
-                : fuelRangeRemainingMiles / worldMap.maxFuelRangeMiles;
-        public bool IsOutOfFuel => worldMap != null && fuelRangeRemainingMiles <= 0f;
+                : ProjectedRangeMiles / worldMap.maxFuelRangeMiles;
+        public float LeftTankGallons => leftTankGallons;
+        public float RightTankGallons => rightTankGallons;
+        public float FuelGallonsPerTank => worldMap != null ? worldMap.fuelGallonsPerTank : 1350f;
+        public float TotalFuelCapacityGallons => FuelGallonsPerTank * 2f;
+        public float TotalFuelGallons => leftTankGallons + rightTankGallons;
+        public float LeftTankNormalized =>
+            FuelGallonsPerTank > 0f ? leftTankGallons / FuelGallonsPerTank : 0f;
+        public float RightTankNormalized =>
+            FuelGallonsPerTank > 0f ? rightTankGallons / FuelGallonsPerTank : 0f;
+        public bool IsOutOfFuel => TotalFuelGallons <= 0f;
         public bool IsAutopilotActive { get; private set; }
 
         public void ApplyAutopilotState(float speedWorld, bool autopilotActive)
@@ -46,6 +61,7 @@ namespace F89.Flight
             if (autopilotActive)
             {
                 currentSpeed = speedWorld;
+                SyncSpeedMphFromWorld();
                 IsAfterburning = false;
             }
         }
@@ -98,7 +114,14 @@ namespace F89.Flight
             }
 
             Refuel();
-            currentSpeed = profile.DefaultSpeedWorld;
+            currentSpeedMph = profile.startThrottleMph;
+            afterburnerBaselineSpeedMph = Mathf.Clamp(
+                currentSpeedMph,
+                profile.minThrottleMph,
+                profile.maxThrottleMph);
+            afterburnerSpoolDownActive = false;
+            IsAfterburning = false;
+            currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
         }
 
         private void OnValidate()
@@ -144,7 +167,8 @@ namespace F89.Flight
 
             if (worldMap != null)
             {
-                fuelRangeRemainingMiles = worldMap.maxFuelRangeMiles;
+                leftTankGallons = worldMap.fuelGallonsPerTank;
+                rightTankGallons = worldMap.fuelGallonsPerTank;
             }
         }
 
@@ -155,24 +179,20 @@ namespace F89.Flight
                 return;
             }
 
-            var autopilot = AutopilotController.Instance;
-            if (IsAutopilotActive && autopilot != null && autopilot.IsFlying)
-            {
-                var dt = Time.fixedDeltaTime;
-                var cruiseInput = new AircraftControlInput { throttleHeld = true };
-                UpdateFuel(cruiseInput, dt);
-                return;
-            }
-
             var input = inputSource.Current;
             var dtNormal = Time.fixedDeltaTime;
 
+            var autopilot = AutopilotController.Instance;
+            if (IsAutopilotActive && autopilot != null && autopilot.IsFlying)
+            {
+                UpdateFuel(dtNormal);
+                return;
+            }
+
             UpdateAfterburner(input, dtNormal);
             ApplyTurn(input, dtNormal);
-            UpdateFuel(input, dtNormal);
-
-            var targetSpeed = IsOutOfFuel ? 0f : ResolveTargetSpeed(input);
-            currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, profile.SpeedChangeRateWorld * dtNormal);
+            ApplyThrottle(input, dtNormal);
+            UpdateFuel(dtNormal);
 
             var forward = Flatten(transform.forward);
             if (forward.sqrMagnitude < 0.0001f)
@@ -183,21 +203,113 @@ namespace F89.Flight
             body.linearVelocity = forward.normalized * currentSpeed;
         }
 
-        private void UpdateFuel(AircraftControlInput input, float dt)
+        private void ApplyThrottle(AircraftControlInput input, float dt)
         {
-            if (worldMap == null || worldMap.TicsPerMile <= 0f || currentSpeed <= 0f)
+            if (IsOutOfFuel)
+            {
+                currentSpeedMph = 0f;
+                currentSpeed = 0f;
+                return;
+            }
+
+            if (IsAfterburning)
+            {
+                var rampRate = profile.throttleChangeMphPerSecond * profile.afterburnerThrottleChangeMultiplier;
+                currentSpeedMph = Mathf.MoveTowards(
+                    currentSpeedMph,
+                    profile.afterburnerMaxThrottleMph,
+                    rampRate * dt);
+            }
+            else if (afterburnerSpoolDownActive)
+            {
+                var decayRate = profile.throttleChangeMphPerSecond * 0.5f;
+                if (input.airbrakeHeld)
+                {
+                    currentSpeedMph -= decayRate * dt;
+                }
+                else if (input.throttleHeld)
+                {
+                    afterburnerSpoolDownActive = false;
+                    currentSpeedMph += profile.throttleChangeMphPerSecond * dt;
+                    currentSpeedMph = Mathf.Min(currentSpeedMph, profile.maxThrottleMph);
+                }
+                else
+                {
+                    currentSpeedMph = Mathf.MoveTowards(
+                        currentSpeedMph,
+                        afterburnerBaselineSpeedMph,
+                        decayRate * dt);
+                }
+
+                if (currentSpeedMph <= afterburnerBaselineSpeedMph + 0.5f)
+                {
+                    currentSpeedMph = afterburnerBaselineSpeedMph;
+                    afterburnerSpoolDownActive = false;
+                }
+            }
+            else
+            {
+                var changeRate = profile.throttleChangeMphPerSecond;
+                if (input.throttleHeld)
+                {
+                    currentSpeedMph += changeRate * dt;
+                }
+                else if (input.airbrakeHeld)
+                {
+                    currentSpeedMph -= changeRate * dt;
+                }
+
+                currentSpeedMph = Mathf.Clamp(
+                    currentSpeedMph,
+                    profile.minThrottleMph,
+                    profile.maxThrottleMph);
+            }
+
+            currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
+        }
+
+        private void UpdateFuel(float dt)
+        {
+            if (worldMap == null || worldMap.TicsPerMile <= 0f || currentSpeed <= 0f || profile == null)
             {
                 return;
             }
 
             var milesTraveled = worldMap.TicsToMiles(CurrentSpeedTics * dt);
-            var burnMultiplier = input.throttleHeld ? profile.throttleFuelMultiplier : 1f;
-            fuelRangeRemainingMiles = Mathf.Max(0f, fuelRangeRemainingMiles - milesTraveled * burnMultiplier);
+            var speedRatio = Mathf.InverseLerp(
+                profile.minThrottleMph,
+                profile.afterburnerMaxThrottleMph,
+                currentSpeedMph);
+            var burnMultiplier = Mathf.Lerp(1f, profile.throttleFuelMultiplier, speedRatio);
+            var totalCapacity = TotalFuelCapacityGallons;
+            if (totalCapacity <= 0f || worldMap.maxFuelRangeMiles <= 0f)
+            {
+                return;
+            }
+
+            var gallonsConsumed = milesTraveled / worldMap.maxFuelRangeMiles * totalCapacity * burnMultiplier;
+            var perTank = gallonsConsumed * 0.5f;
+            leftTankGallons = Mathf.Max(0f, leftTankGallons - perTank);
+            rightTankGallons = Mathf.Max(0f, rightTankGallons - perTank);
         }
 
         private void UpdateAfterburner(AircraftControlInput input, float dt)
         {
             var wantsAfterburner = input.afterburnerHeld && CanUseAfterburner;
+            if (wantsAfterburner && !IsAfterburning)
+            {
+                afterburnerBaselineSpeedMph = Mathf.Clamp(
+                    currentSpeedMph,
+                    profile.minThrottleMph,
+                    profile.maxThrottleMph);
+                afterburnerSpoolDownActive = false;
+            }
+
+            if (IsAfterburning && !wantsAfterburner)
+            {
+                afterburnerSpoolDownActive = true;
+            }
+
             IsAfterburning = wantsAfterburner;
 
             if (!IsAfterburning)
@@ -209,28 +321,21 @@ namespace F89.Flight
             if (afterburnerFuelRemaining < 0f)
             {
                 afterburnerFuelRemaining = 0f;
+                if (IsAfterburning)
+                {
+                    afterburnerSpoolDownActive = true;
+                }
+
                 IsAfterburning = false;
             }
         }
 
-        private float ResolveTargetSpeed(AircraftControlInput input)
+        private void SyncSpeedMphFromWorld()
         {
-            if (input.afterburnerHeld && CanUseAfterburner)
+            if (worldMap != null && profile != null)
             {
-                return profile.AfterburnerSpeedWorld;
+                currentSpeedMph = worldMap.WorldUnitsToMph(currentSpeed, profile.ticSizeWorldUnits);
             }
-
-            if (input.throttleHeld)
-            {
-                return profile.ThrottleSpeedWorld;
-            }
-
-            if (input.airbrakeHeld)
-            {
-                return profile.AirbrakeSpeedWorld;
-            }
-
-            return profile.DefaultSpeedWorld;
         }
 
         private void ApplyTurn(AircraftControlInput input, float dt)

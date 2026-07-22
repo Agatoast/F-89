@@ -19,6 +19,7 @@ namespace F89.Flight
     public static class RadarContactScanner
     {
         public const float RangeMiles = 150f;
+        public const float MidRangeBandMiles = 100f;
         public const float HostileDetectionMiles = 50f;
 
         public static void CollectVisibleContacts(

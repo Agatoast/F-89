@@ -40,3 +40,10 @@ sysinfo.txt
 # Crash reports
 crashlytics-build.properties
 crashlytics-symbol-upload*
+
+# Unity test / editor artifacts
+Assets/Resources/PerformanceTestRunInfo.json
+Assets/Resources/PerformanceTestRunSettings.json
+ProjectSettings/SceneTemplateSettings.json
+Assets/Settings/Build Profiles/
+Assets/Scenes *.meta

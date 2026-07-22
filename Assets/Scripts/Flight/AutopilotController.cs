@@ -21,7 +21,7 @@ namespace F89.Flight
             public Vector3 World { get; }
             public string Label { get; }
         }
-        public const float HostileBaseContactMiles = 50f;
+        public const float HostileBaseContactMiles = 40f;
         public const float HostileUnitContactMiles = 40f;
         public const float MinTimeWarpScale = 10f;
         public const float MaxTimeWarpScale = 50f;
@@ -117,7 +117,7 @@ namespace F89.Flight
             if (HasHostileContact())
             {
                 Debug.Log(
-                    "F-89: Autopilot blocked — hostile base within 50 MI or unit within 40 MI.");
+                    "F-89: Autopilot blocked — hostile contact within 40 MI.");
                 return;
             }
 
@@ -129,7 +129,7 @@ namespace F89.Flight
             IsSelectingDestination = false;
             IsFlying = true;
             aircraft?.ApplyAutopilotState(
-                aircraft.Profile != null ? aircraft.Profile.ThrottleSpeedWorld : 0f,
+                aircraft.Profile != null ? aircraft.Profile.AutopilotCruiseSpeedWorld(aircraft.WorldMap) : 0f,
                 true);
             mapOverlay?.SetAutopilotHudBearing(destinationWorld, destinationLabel);
             if (mapOverlay != null && AntarcticaMapOverlay.IsOpen)
@@ -188,6 +188,13 @@ namespace F89.Flight
             if (IsFlying && HasManualSteeringInput())
             {
                 Disengage("Manual steering — autopilot off.");
+                return;
+            }
+
+            if (IsFlying && HasManualThrottleInput())
+            {
+                SuspendAutopilot(closeMap: false);
+                ShowToast("Manual throttle — autopilot paused.");
                 return;
             }
 
@@ -322,7 +329,7 @@ namespace F89.Flight
             if (HasHostileContact())
             {
                 Debug.Log(
-                    "F-89: Autopilot blocked — hostile base within 50 MI or unit within 40 MI.");
+                    "F-89: Autopilot blocked — hostile contact within 40 MI.");
                 return;
             }
 
@@ -379,7 +386,7 @@ namespace F89.Flight
             IsSelectingDestination = false;
             IsFlying = true;
             aircraft?.ApplyAutopilotState(
-                aircraft.Profile != null ? aircraft.Profile.ThrottleSpeedWorld : 0f,
+                aircraft.Profile != null ? aircraft.Profile.AutopilotCruiseSpeedWorld(aircraft.WorldMap) : 0f,
                 true);
             mapOverlay?.BeginAutopilotFlight();
             Time.timeScale = currentTimeWarpScale;
@@ -455,7 +462,7 @@ namespace F89.Flight
             forward = transform.forward;
             forward.y = 0f;
             forward.Normalize();
-            var speed = profile.ThrottleSpeedWorld;
+            var speed = profile.AutopilotCruiseSpeedWorld(aircraft.WorldMap);
             body.linearVelocity = forward * speed;
             aircraft.ApplyAutopilotState(speed, true);
         }
@@ -466,6 +473,16 @@ namespace F89.Flight
                 || Input.GetKey(KeyCode.D)
                 || Input.GetKey(KeyCode.LeftArrow)
                 || Input.GetKey(KeyCode.RightArrow);
+        }
+
+        private static bool HasManualThrottleInput()
+        {
+            return Input.GetKey(KeyCode.W)
+                || Input.GetKey(KeyCode.UpArrow)
+                || Input.GetKey(KeyCode.S)
+                || Input.GetKey(KeyCode.DownArrow)
+                || Input.GetKey(KeyCode.LeftShift)
+                || Input.GetKey(KeyCode.RightShift);
         }
 
         private void SuspendAutopilot(bool closeMap = false)

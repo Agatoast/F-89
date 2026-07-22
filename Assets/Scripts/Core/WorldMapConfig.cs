@@ -19,6 +19,9 @@ namespace F89.Core
         [Tooltip("Maximum flight range on a full tank at cruise power.")]
         public float maxFuelRangeMiles = 1350f;
 
+        [Tooltip("Capacity of each wing tank in US gallons.")]
+        public float fuelGallonsPerTank = 1350f;
+
         public float GridSpacingTics => gridSpacingTics;
 
         public float TicsPerMile => gridSpacingTics / milesPerGrid;
@@ -38,6 +41,21 @@ namespace F89.Core
         public float TicsPerSecondToMph(float ticsPerSecond)
         {
             return TicsToMiles(ticsPerSecond) * 3600f;
+        }
+
+        public float MphToWorldUnits(float mph, float ticSizeWorldUnits)
+        {
+            return MilesPerSecondToWorldUnits(mph / 3600f, this, ticSizeWorldUnits);
+        }
+
+        public float WorldUnitsToMph(float worldSpeed, float ticSizeWorldUnits)
+        {
+            if (ticSizeWorldUnits <= 0f)
+            {
+                return 0f;
+            }
+
+            return TicsPerSecondToMph(worldSpeed / ticSizeWorldUnits);
         }
 
         public static float MilesPerSecondToWorldUnits(

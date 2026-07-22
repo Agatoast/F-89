@@ -41,12 +41,12 @@ namespace F89.Weapons
         [SerializeField] private Gau27aGunController gau27aGun;
         [SerializeField] private PlaneRadarOverlay radarOverlay;
 
-        private const int UnlimitedAmmoCount = 9999;
 
         private int aim9zRemaining;
         private int agm88jRemaining;
         private int gbu12Remaining;
         private int agm114Remaining;
+        private bool inventoryInitialized;
 
         public SelectedWeapon ActiveWeapon { get; private set; } = SelectedWeapon.None;
         public int Aim9zRemaining => aim9zRemaining;
@@ -77,7 +77,7 @@ namespace F89.Weapons
 
         public bool ShouldShowHudMarkerFor(LockableTarget target)
         {
-            if (target == null || !target.IsAlive)
+            if (target == null || !target.IsAlive || target.IsFlareDecoy || target.IsPlayerAircraft)
             {
                 return false;
             }
@@ -170,15 +170,16 @@ namespace F89.Weapons
             lockController = lockSystem;
             targetPaint = paint;
             gau27aGun = gun;
-            aim9zRemaining = UnlimitedAmmoCount;
-            agm88jRemaining = UnlimitedAmmoCount;
-            gbu12Remaining = UnlimitedAmmoCount;
-            agm114Remaining = UnlimitedAmmoCount;
-            gau27aGun?.Configure(gau27a, aircraftController, Camera.main);
-            if (gau27aGun != null)
+            if (!inventoryInitialized)
             {
-                gau27aGun.SetUnlimitedAmmo(true);
+                aim9zRemaining = aim9z != null ? aim9z.startingMissileCount : 0;
+                agm88jRemaining = agm88j != null ? agm88j.startingMissileCount : 0;
+                gbu12Remaining = gbu12 != null ? gbu12.startingBombCount : 0;
+                agm114Remaining = agm114 != null ? agm114.startingMissileCount : 0;
+                inventoryInitialized = true;
             }
+
+            gau27aGun?.Configure(gau27a, aircraftController, Camera.main);
         }
 
         public void SetRadarOverlay(PlaneRadarOverlay overlay)
@@ -417,7 +418,7 @@ namespace F89.Weapons
 
         private void TryFireMissile(IMissileWeaponConfig config, ref int remaining, Color missileColor, Vector2 aimScreen)
         {
-            if (config == null)
+            if (config == null || remaining <= 0)
             {
                 return;
             }
@@ -447,7 +448,7 @@ namespace F89.Weapons
                 accuracy,
                 launchVelocity);
 
-            remaining = UnlimitedAmmoCount;
+            remaining--;
             lockController.ClearLockAfterFire();
             Debug.Log(
                 $"{config.WeaponName} fired. Remaining: {remaining}. {(lockedShot ? "LOCKED" : "UNLOCKED")}. Accuracy: {accuracy:P0}");
@@ -455,7 +456,7 @@ namespace F89.Weapons
 
         private void TryDropGbu12(Vector2 aimScreen)
         {
-            if (gbu12Config == null)
+            if (gbu12Config == null || gbu12Remaining <= 0)
             {
                 return;
             }
@@ -483,7 +484,7 @@ namespace F89.Weapons
                 accuracy,
                 launchVelocity);
 
-            gbu12Remaining = UnlimitedAmmoCount;
+            gbu12Remaining--;
             lockController.ClearLockAfterFire();
             var targetLabel = lockedShot ? lockedTarget.TargetLabel : "unguided";
             Debug.Log(

@@ -4,14 +4,19 @@ namespace F89.Flight
 {
     public class AircraftBankVisual : MonoBehaviour
     {
+        private const float UnityPlaneHalfExtent = 5f;
+
         [SerializeField] private AircraftController controller;
         [SerializeField] private Transform visualRoot;
         [SerializeField] private Transform aircraftMesh;
 
+        private Vector3 basePivotPosition = Vector3.zero;
         private Vector3 baseMeshScale = Vector3.one;
         private Vector3 baseMeshPosition = new Vector3(0f, 0.01f, 0f);
-        private float foreshortenVelocity;
-        private bool baseScaleCaptured;
+        private Quaternion baseMeshRotation = Quaternion.identity;
+        private float currentRoll;
+        private float rollVelocity;
+        private bool baseTransformCaptured;
 
         private void Reset()
         {
@@ -21,7 +26,7 @@ namespace F89.Flight
         private void Awake()
         {
             EnsureReferences();
-            CaptureBaseMeshTransformIfNeeded();
+            CaptureBaseTransformsIfNeeded();
         }
 
         public void Configure(AircraftController aircraftController, Transform pivot, Transform meshTransform)
@@ -29,12 +34,7 @@ namespace F89.Flight
             controller = aircraftController;
             visualRoot = pivot;
             aircraftMesh = meshTransform;
-            CaptureBaseMeshTransform(force: true);
-
-            if (visualRoot != null)
-            {
-                visualRoot.localRotation = Quaternion.identity;
-            }
+            CaptureBaseTransforms(force: true);
         }
 
         private void EnsureReferences()
@@ -59,20 +59,25 @@ namespace F89.Flight
             }
         }
 
-        private void CaptureBaseMeshTransformIfNeeded()
+        private void CaptureBaseTransformsIfNeeded()
         {
-            if (!baseScaleCaptured)
+            if (!baseTransformCaptured)
             {
-                CaptureBaseMeshTransform(force: false);
+                CaptureBaseTransforms(force: false);
             }
         }
 
-        private void CaptureBaseMeshTransform(bool force)
+        private void CaptureBaseTransforms(bool force)
         {
             EnsureReferences();
-            if (!force && baseScaleCaptured)
+            if (!force && baseTransformCaptured)
             {
                 return;
+            }
+
+            if (visualRoot != null)
+            {
+                basePivotPosition = visualRoot.localPosition;
             }
 
             if (aircraftMesh == null)
@@ -82,13 +87,14 @@ namespace F89.Flight
 
             baseMeshScale = aircraftMesh.localScale;
             baseMeshPosition = aircraftMesh.localPosition;
-            baseScaleCaptured = true;
+            baseMeshRotation = aircraftMesh.localRotation;
+            baseTransformCaptured = true;
         }
 
         private void LateUpdate()
         {
-            CaptureBaseMeshTransformIfNeeded();
-            if (controller == null || controller.Profile == null || aircraftMesh == null)
+            CaptureBaseTransformsIfNeeded();
+            if (controller == null || controller.Profile == null || visualRoot == null || aircraftMesh == null)
             {
                 return;
             }
@@ -97,35 +103,34 @@ namespace F89.Flight
             var input = controller.GetComponent<F89.Controls.PlayerAircraftInput>();
             var turnInput = input != null ? input.Current.turn : 0f;
 
-            // Top-down flat mesh: real roll clips into the ground. Fake turn depth with foreshortening.
-            var targetForeshorten = Mathf.Abs(turnInput) * profile.turnForeshortenAtFullInput;
-            var foreshorten = Mathf.SmoothDamp(
-                GetCurrentForeshorten(),
-                targetForeshorten,
-                ref foreshortenVelocity,
+            // Roll the board around the nose-tail axis (player forward / local Z).
+            // Left turn: right wing up, left wing down.
+            var maxRoll = profile.turnForeshortenAtFullInput * 120f;
+            var targetRoll = -turnInput * maxRoll;
+            currentRoll = Mathf.SmoothDampAngle(
+                currentRoll,
+                targetRoll,
+                ref rollVelocity,
                 profile.bankSmoothTime);
 
-            if (visualRoot != null)
-            {
-                visualRoot.localRotation = Quaternion.identity;
-            }
+            var rollRad = currentRoll * Mathf.Deg2Rad;
+            var halfWidth = UnityPlaneHalfExtent * baseMeshScale.x;
 
-            var widthScale = 1f - foreshorten;
+            // Rotate around the fuselage axis through the board center.
+            visualRoot.localRotation = Quaternion.AngleAxis(currentRoll, Vector3.forward);
+
+            // Keep the lowered wing from clipping through the ground.
+            var groundClearance = halfWidth * Mathf.Abs(Mathf.Sin(rollRad));
+            visualRoot.localPosition = basePivotPosition + new Vector3(0f, groundClearance, 0f);
+
+            // Top-down foreshortening: wingspan narrows as the board tilts.
+            var widthScale = Mathf.Max(0.05f, Mathf.Abs(Mathf.Cos(rollRad)));
+            aircraftMesh.localRotation = baseMeshRotation;
+            aircraftMesh.localPosition = baseMeshPosition;
             aircraftMesh.localScale = new Vector3(
                 baseMeshScale.x * widthScale,
                 baseMeshScale.y,
                 baseMeshScale.z);
-            aircraftMesh.localPosition = baseMeshPosition + new Vector3(turnInput * profile.turnLateralShift, 0f, 0f);
-        }
-
-        private float GetCurrentForeshorten()
-        {
-            if (baseMeshScale.x <= 0f)
-            {
-                return 0f;
-            }
-
-            return 1f - aircraftMesh.localScale.x / baseMeshScale.x;
         }
     }
 }

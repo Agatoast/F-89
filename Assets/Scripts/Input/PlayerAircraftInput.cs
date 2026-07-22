@@ -19,13 +19,25 @@ namespace F89.Controls
         public bool selectGbu12Pressed;
         public bool selectAgm114Pressed;
         public bool selectGau27aPressed;
+        public bool flarePressed;
     }
 
+    [DefaultExecutionOrder(-100)]
     public class PlayerAircraftInput : MonoBehaviour
     {
         public AircraftControlInput Current { get; private set; }
 
         private void Update()
+        {
+            RefreshCurrent();
+        }
+
+        private void FixedUpdate()
+        {
+            RefreshCurrent();
+        }
+
+        private void RefreshCurrent()
         {
             if (GamePauseController.IsPaused
                 || AntarcticaMapOverlay.IsOpen)
@@ -61,10 +73,11 @@ namespace F89.Controls
                 firePressed = Input.GetMouseButtonDown(0),
                 fireHeld = Input.GetMouseButton(0),
                 selectAim9zPressed = Input.GetKeyDown(KeyCode.Alpha5),
-                selectAgm88jPressed = Input.GetKeyDown(KeyCode.Alpha2),
-                selectGbu12Pressed = Input.GetKeyDown(KeyCode.Alpha4),
-                selectAgm114Pressed = Input.GetKeyDown(KeyCode.Alpha3),
-                selectGau27aPressed = Input.GetKeyDown(KeyCode.Alpha1)
+                selectAgm88jPressed = Input.GetKeyDown(KeyCode.Alpha4),
+                selectGbu12Pressed = Input.GetKeyDown(KeyCode.Alpha3),
+                selectAgm114Pressed = Input.GetKeyDown(KeyCode.Alpha2),
+                selectGau27aPressed = Input.GetKeyDown(KeyCode.Alpha1),
+                flarePressed = Input.GetKeyDown(KeyCode.F)
             };
         }
     }

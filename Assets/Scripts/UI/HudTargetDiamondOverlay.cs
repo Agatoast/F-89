@@ -60,7 +60,7 @@ namespace F89.UI
                     continue;
                 }
 
-                if (IsCarrierTarget(target))
+                if (IsCarrierTarget(target) || target.IsFlareDecoy || target.IsPlayerAircraft)
                 {
                     continue;
                 }
@@ -107,16 +107,16 @@ namespace F89.UI
         {
             if (squareTexture == null)
             {
-                squareTexture = CreateSquareOutlineTexture(Mathf.RoundToInt(squareSize));
+                squareTexture = CreateCornerBracketTexture(Mathf.RoundToInt(squareSize));
             }
 
             if (diamondTexture == null)
             {
-                diamondTexture = CreateDiamondOutlineTexture(Mathf.RoundToInt(diamondSize));
+                diamondTexture = CreateCornerBracketTexture(Mathf.RoundToInt(diamondSize));
             }
         }
 
-        private static Texture2D CreateSquareOutlineTexture(int size)
+        private static Texture2D CreateCornerBracketTexture(int size, int thickness = 2)
         {
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
             texture.filterMode = FilterMode.Bilinear;
@@ -127,53 +127,123 @@ namespace F89.UI
                 pixels[i] = clear;
             }
 
-            for (var y = 0; y < size; y++)
-            {
-                for (var x = 0; x < size; x++)
-                {
-                    var onBorder = x == 0 || y == 0 || x == size - 1 || y == size - 1;
-                    var inHollow = x >= 2 && x <= size - 3 && y >= 2 && y <= size - 3;
-                    if (onBorder && !inHollow)
-                    {
-                        pixels[y * size + x] = Color.white;
-                    }
-                }
-            }
+            var armLength = Mathf.Clamp(Mathf.RoundToInt(size * 0.28f), thickness + 2, size / 2);
+            var cornerRadius = Mathf.Max(1f, thickness * 0.85f);
+
+            FillCornerBracket(
+                pixels,
+                size,
+                thickness,
+                armLength,
+                cornerRadius,
+                topLeft: true,
+                topRight: true,
+                bottomLeft: true,
+                bottomRight: true);
 
             texture.SetPixels(pixels);
             texture.Apply();
             return texture;
         }
 
-        private static Texture2D CreateDiamondOutlineTexture(int size)
+        private static void FillCornerBracket(
+            Color[] pixels,
+            int size,
+            int thickness,
+            int armLength,
+            float cornerRadius,
+            bool topLeft,
+            bool topRight,
+            bool bottomLeft,
+            bool bottomRight)
         {
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-            texture.filterMode = FilterMode.Bilinear;
-            var clear = new Color(0f, 0f, 0f, 0f);
-            var pixels = new Color[size * size];
-            for (var i = 0; i < pixels.Length; i++)
+            if (topLeft)
             {
-                pixels[i] = clear;
+                FillRect(pixels, size, 0, 0, armLength, thickness);
+                FillRect(pixels, size, 0, 0, thickness, armLength);
+                RoundOuterCorner(pixels, size, 0, 0, cornerRadius, 1f, 1f);
             }
 
-            var center = (size - 1) * 0.5f;
-            var radius = size * 0.42f;
-
-            for (var y = 0; y < size; y++)
+            if (topRight)
             {
-                for (var x = 0; x < size; x++)
+                FillRect(pixels, size, size - armLength, 0, armLength, thickness);
+                FillRect(pixels, size, size - thickness, 0, thickness, armLength);
+                RoundOuterCorner(pixels, size, size - 1, 0, cornerRadius, -1f, 1f);
+            }
+
+            if (bottomLeft)
+            {
+                FillRect(pixels, size, 0, size - thickness, armLength, thickness);
+                FillRect(pixels, size, 0, size - armLength, thickness, armLength);
+                RoundOuterCorner(pixels, size, 0, size - 1, cornerRadius, 1f, -1f);
+            }
+
+            if (bottomRight)
+            {
+                FillRect(pixels, size, size - armLength, size - thickness, armLength, thickness);
+                FillRect(pixels, size, size - thickness, size - armLength, thickness, armLength);
+                RoundOuterCorner(pixels, size, size - 1, size - 1, cornerRadius, -1f, -1f);
+            }
+        }
+
+        private static void FillRect(Color[] pixels, int size, int x, int y, int width, int height)
+        {
+            for (var py = y; py < y + height; py++)
+            {
+                if (py < 0 || py >= size)
                 {
-                    var diamondDistance = Mathf.Abs(x - center) / radius + Mathf.Abs(y - center) / radius;
-                    if (Mathf.Abs(diamondDistance - 1f) <= 0.12f)
+                    continue;
+                }
+
+                for (var px = x; px < x + width; px++)
+                {
+                    if (px < 0 || px >= size)
+                    {
+                        continue;
+                    }
+
+                    pixels[py * size + px] = Color.white;
+                }
+            }
+        }
+
+        private static void RoundOuterCorner(
+            Color[] pixels,
+            int size,
+            int cornerX,
+            int cornerY,
+            float radius,
+            float xSign,
+            float ySign)
+        {
+            var radiusSquared = radius * radius;
+            var minX = xSign > 0f ? cornerX : cornerX - Mathf.CeilToInt(radius);
+            var maxX = xSign > 0f ? cornerX + Mathf.CeilToInt(radius) : cornerX;
+            var minY = ySign > 0f ? cornerY : cornerY - Mathf.CeilToInt(radius);
+            var maxY = ySign > 0f ? cornerY + Mathf.CeilToInt(radius) : cornerY;
+
+            for (var y = minY; y <= maxY; y++)
+            {
+                if (y < 0 || y >= size)
+                {
+                    continue;
+                }
+
+                for (var x = minX; x <= maxX; x++)
+                {
+                    if (x < 0 || x >= size)
+                    {
+                        continue;
+                    }
+
+                    var dx = (x - cornerX) * xSign;
+                    var dy = (y - cornerY) * ySign;
+                    if (dx >= 0f && dy >= 0f && dx * dx + dy * dy <= radiusSquared)
                     {
                         pixels[y * size + x] = Color.white;
                     }
                 }
             }
-
-            texture.SetPixels(pixels);
-            texture.Apply();
-            return texture;
         }
     }
 }

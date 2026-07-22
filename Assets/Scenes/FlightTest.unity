@@ -3835,7 +3835,7 @@ Material:
     - _IceCrack: {r: 0.48, g: 0.56, b: 0.66, a: 1}
     - _IceMid: {r: 0.78, g: 0.83, b: 0.88, a: 1}
     - _IceShadow: {r: 0.62, g: 0.69, b: 0.78, a: 1}
-    - _OceanDeep: {r: 0.04, g: 0.18, b: 0.36, a: 1}
+    - _OceanDeep: {r: 0.23921569, g: 0.4862745, b: 0.8, a: 1}
     - _OceanHighlight: {r: 0.22, g: 0.48, b: 0.62, a: 1}
     - _OceanShallow: {r: 0.1, g: 0.34, b: 0.52, a: 1}
   m_BuildTextureStacks: []

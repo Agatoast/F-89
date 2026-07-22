@@ -1,6 +1,5 @@
-using F89.Core;
+using System.Collections.Generic;
 using F89.Flight;
-using F89.Testing;
 using F89.Weapons;
 using UnityEngine;
 
@@ -20,6 +19,9 @@ namespace F89.UI
         private Texture2D lineTexture;
 
         private const float MapBearingArrowDistancePixels = 400f;
+        private const float MissileIndicatorPerpendicularSpacing = 72f;
+        private const float MissileIndicatorRadialSpacing = 44f;
+        private const float MissileDirectionGroupDegrees = 14f;
         private const float CompassPixelsPerDegree = 4f;
         private const float CompassTickHeightPixels = 10f;
         private const float CompassLineThickness = 1.5f;
@@ -29,6 +31,21 @@ namespace F89.UI
         private const int CompassLabelFontSize = 12;
 
         private Texture2D compassWaypointMarkerTexture;
+        private readonly List<HomingMissile> incomingMissileThreats = new List<HomingMissile>();
+
+        private struct MissileIndicatorLayout
+        {
+            public HomingMissile Missile;
+            public Vector2 Direction;
+            public int SpreadIndex;
+            public int SpreadCount;
+        }
+
+        private readonly List<MissileIndicatorLayout> missileIndicatorLayouts = new List<MissileIndicatorLayout>();
+        private readonly List<(HomingMissile Missile, float Angle, Vector2 Direction)> missileDirectionScratch =
+            new List<(HomingMissile, float, Vector2)>();
+
+        private static readonly Color IncomingMissileIndicatorColor = new Color(0.92f, 0.15f, 0.1f);
 
         public void Configure(AircraftController aircraftController, PlayerWeaponController weaponController)
         {
@@ -66,13 +83,12 @@ namespace F89.UI
 
             EnsureStyles();
 
-            DrawTopLeftFlightData();
-            DrawMissionBrief();
-            DrawAutopilotToast();
+            DrawAutopilotAboveRadar();
+            DrawMissileAcquisitionWarning();
             DrawTopRightWeapons();
-            DrawBottomLeftGrid();
             DrawHeadingCompass();
             DrawMapBearingIndicator();
+            DrawIncomingMissileThreatIndicators();
         }
 
         private void DrawHeadingCompass()
@@ -290,6 +306,217 @@ namespace F89.UI
                 return;
             }
 
+            var etaSpeedMilesPerSecond = GetAircraftTravelSpeedMilesPerSecond(useAutopilotTimeWarp);
+            DrawWorldBearingIndicator(
+                targetWorld,
+                FlightHudColorPalette.Default,
+                etaSpeedMilesPerSecond,
+                stackIndex: 0,
+                stackCount: 1);
+        }
+
+        private void DrawIncomingMissileThreatIndicators()
+        {
+            if (aircraft?.Profile == null || aircraft.WorldMap == null)
+            {
+                return;
+            }
+
+            HomingMissile.CollectIncomingEnemyThreats(incomingMissileThreats);
+            BuildMissileIndicatorLayouts();
+            if (missileIndicatorLayouts.Count == 0)
+            {
+                return;
+            }
+
+            for (var i = 0; i < missileIndicatorLayouts.Count; i++)
+            {
+                var layout = missileIndicatorLayouts[i];
+                var missile = layout.Missile;
+                if (missile == null)
+                {
+                    continue;
+                }
+
+                DrawWorldBearingIndicator(
+                    missile.WorldPosition,
+                    IncomingMissileIndicatorColor,
+                    missile.SpeedMilesPerSecond,
+                    layout.SpreadIndex,
+                    layout.SpreadCount,
+                    layout.Direction,
+                    MissileIndicatorPerpendicularSpacing,
+                    MissileIndicatorRadialSpacing);
+            }
+        }
+
+        private void BuildMissileIndicatorLayouts()
+        {
+            missileIndicatorLayouts.Clear();
+            missileDirectionScratch.Clear();
+            if (incomingMissileThreats.Count == 0)
+            {
+                return;
+            }
+
+            var cam = Camera.main;
+            if (cam == null)
+            {
+                return;
+            }
+
+            var planePos = aircraft.transform.position;
+            planePos.y = 0f;
+            var planeScreen = cam.WorldToScreenPoint(planePos);
+            if (planeScreen.z <= 0f)
+            {
+                return;
+            }
+
+            var planeGui = HudTargetMarkerLayout.ScreenToGui(planeScreen);
+
+            for (var i = 0; i < incomingMissileThreats.Count; i++)
+            {
+                var missile = incomingMissileThreats[i];
+                if (missile == null)
+                {
+                    continue;
+                }
+
+                if (!TryGetThreatIndicatorDirection(cam, planeGui, missile.WorldPosition, out var direction))
+                {
+                    continue;
+                }
+
+                var angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+                missileDirectionScratch.Add((missile, angle, direction));
+            }
+
+            if (missileDirectionScratch.Count == 0)
+            {
+                return;
+            }
+
+            missileDirectionScratch.Sort((a, b) => a.Angle.CompareTo(b.Angle));
+
+            var groupStart = 0;
+            for (var i = 0; i <= missileDirectionScratch.Count; i++)
+            {
+                var endGroup = i == missileDirectionScratch.Count
+                    || Mathf.Abs(Mathf.DeltaAngle(
+                        missileDirectionScratch[groupStart].Angle,
+                        missileDirectionScratch[i].Angle)) > MissileDirectionGroupDegrees;
+
+                if (!endGroup)
+                {
+                    continue;
+                }
+
+                var groupCount = i - groupStart;
+                for (var j = groupStart; j < i; j++)
+                {
+                    var entry = missileDirectionScratch[j];
+                    missileIndicatorLayouts.Add(new MissileIndicatorLayout
+                    {
+                        Missile = entry.Missile,
+                        Direction = entry.Direction,
+                        SpreadIndex = j - groupStart,
+                        SpreadCount = groupCount
+                    });
+                }
+
+                groupStart = i;
+            }
+        }
+
+        private bool TryGetThreatIndicatorDirection(
+            Camera cam,
+            Vector2 planeGui,
+            Vector3 targetWorld,
+            out Vector2 direction)
+        {
+            direction = default;
+            targetWorld.y = 0f;
+            var planePos = aircraft.transform.position;
+            planePos.y = 0f;
+            var toTarget = targetWorld - planePos;
+            if (toTarget.sqrMagnitude < 0.01f)
+            {
+                return false;
+            }
+
+            var targetScreen = cam.WorldToScreenPoint(targetWorld);
+            if (targetScreen.z > 0f)
+            {
+                var targetGui = HudTargetMarkerLayout.ScreenToGui(targetScreen);
+                direction = targetGui - planeGui;
+            }
+            else
+            {
+                direction = GetCameraFallbackDirection(cam, toTarget.normalized);
+            }
+
+            if (direction.sqrMagnitude < 4f)
+            {
+                return false;
+            }
+
+            direction.Normalize();
+            return true;
+        }
+
+        private void DrawWorldBearingIndicator(
+            Vector3 targetWorld,
+            Color indicatorColor,
+            float etaSpeedMilesPerSecond,
+            int stackIndex,
+            int stackCount)
+        {
+            DrawWorldBearingIndicator(
+                targetWorld,
+                indicatorColor,
+                etaSpeedMilesPerSecond,
+                stackIndex,
+                stackCount,
+                fixedDirection: default,
+                hasFixedDirection: false,
+                perpendicularSpacing: 28f,
+                radialSpacing: 0f);
+        }
+
+        private void DrawWorldBearingIndicator(
+            Vector3 targetWorld,
+            Color indicatorColor,
+            float etaSpeedMilesPerSecond,
+            int stackIndex,
+            int stackCount,
+            Vector2 fixedDirection,
+            float perpendicularSpacing,
+            float radialSpacing)
+        {
+            DrawWorldBearingIndicator(
+                targetWorld,
+                indicatorColor,
+                etaSpeedMilesPerSecond,
+                stackIndex,
+                stackCount,
+                fixedDirection,
+                hasFixedDirection: true,
+                perpendicularSpacing,
+                radialSpacing);
+        }
+
+        private void DrawWorldBearingIndicator(
+            Vector3 targetWorld,
+            Color indicatorColor,
+            float etaSpeedMilesPerSecond,
+            int stackIndex,
+            int stackCount,
+            Vector2 fixedDirection,
+            bool hasFixedDirection,
+            float perpendicularSpacing,
+            float radialSpacing)
+        {
             var cam = Camera.main;
             if (cam == null || aircraft?.Profile == null || aircraft.WorldMap == null)
             {
@@ -310,7 +537,9 @@ namespace F89.UI
                 targetWorld,
                 aircraft.WorldMap,
                 aircraft.Profile.ticSizeWorldUnits);
-            var etaSeconds = GetTravelTimeSeconds(rangeMiles, useAutopilotTimeWarp);
+            var etaSeconds = etaSpeedMilesPerSecond > 0f
+                ? rangeMiles / etaSpeedMilesPerSecond
+                : 0f;
             var etaText = AntarcticaMapOverlay.FormatTravelEta(etaSeconds);
 
             var planeScreen = cam.WorldToScreenPoint(planePos);
@@ -320,28 +549,68 @@ namespace F89.UI
             }
 
             var planeGui = HudTargetMarkerLayout.ScreenToGui(planeScreen);
-            var targetScreen = cam.WorldToScreenPoint(targetWorld);
             Vector2 direction;
-            if (targetScreen.z > 0f)
+            if (hasFixedDirection)
             {
-                var targetGui = HudTargetMarkerLayout.ScreenToGui(targetScreen);
-                direction = targetGui - planeGui;
+                direction = fixedDirection;
             }
             else
             {
-                direction = GetCameraFallbackDirection(cam, toTarget.normalized);
+                var targetScreen = cam.WorldToScreenPoint(targetWorld);
+                if (targetScreen.z > 0f)
+                {
+                    var targetGui = HudTargetMarkerLayout.ScreenToGui(targetScreen);
+                    direction = targetGui - planeGui;
+                }
+                else
+                {
+                    direction = GetCameraFallbackDirection(cam, toTarget.normalized);
+                }
+
+                if (direction.sqrMagnitude < 4f)
+                {
+                    return;
+                }
+
+                direction.Normalize();
             }
 
-            if (direction.sqrMagnitude < 4f)
+            var perpendicular = new Vector2(-direction.y, direction.x);
+            var stackCenter = (stackCount - 1) * 0.5f;
+            var stackOffset = stackCount > 1
+                ? perpendicular * (stackIndex - stackCenter) * perpendicularSpacing
+                    + direction * (stackIndex - stackCenter) * radialSpacing
+                : Vector2.zero;
+            var arrowTip = planeGui + direction * MapBearingArrowDistancePixels + stackOffset;
+            DrawHudDirectionArrow(arrowTip, direction, indicatorColor);
+            DrawHudBearingLabel(arrowTip, direction, rangeMiles, etaText, indicatorColor);
+        }
+
+        private float GetAircraftTravelSpeedMilesPerSecond(bool autopilotTimeWarp)
+        {
+            if (aircraft?.Profile == null || aircraft.WorldMap == null)
             {
-                return;
+                return 0f;
             }
 
-            direction.Normalize();
-            var hudColor = FlightHudColorPalette.Current;
-            var arrowTip = planeGui + direction * MapBearingArrowDistancePixels;
-            DrawHudDirectionArrow(arrowTip, direction, hudColor);
-            DrawHudBearingLabel(arrowTip, direction, rangeMiles, etaText, hudColor);
+            var mph = autopilotTimeWarp
+                ? aircraft.Profile.AutopilotCruiseMph
+                : aircraft.CurrentSpeedMph;
+            if (mph <= 0f)
+            {
+                return 0f;
+            }
+
+            var milesPerSecond = mph / 3600f;
+            if (autopilotTimeWarp)
+            {
+                var warp = AutopilotController.Instance != null
+                    ? AutopilotController.Instance.TimeWarpScale
+                    : AutopilotController.DefaultTimeWarpScale;
+                milesPerSecond *= warp;
+            }
+
+            return milesPerSecond;
         }
 
         private static Vector2 GetCameraFallbackDirection(Camera cam, Vector3 worldDirection)
@@ -358,31 +627,6 @@ namespace F89.UI
             forward.Normalize();
             right.Normalize();
             return new Vector2(Vector3.Dot(worldDirection, right), -Vector3.Dot(worldDirection, forward));
-        }
-
-        private float GetTravelTimeSeconds(float rangeMiles, bool autopilotTimeWarp)
-        {
-            if (aircraft?.Profile == null || aircraft.WorldMap == null || rangeMiles <= 0f)
-            {
-                return 0f;
-            }
-
-            var mph = aircraft.WorldMap.TicsPerSecondToMph(aircraft.Profile.throttleSpeed);
-            if (mph <= 0f)
-            {
-                return 0f;
-            }
-
-            var milesPerSecond = mph / 3600f;
-            if (autopilotTimeWarp)
-            {
-                var warp = AutopilotController.Instance != null
-                    ? AutopilotController.Instance.TimeWarpScale
-                    : AutopilotController.DefaultTimeWarpScale;
-                milesPerSecond *= warp;
-            }
-
-            return rangeMiles / milesPerSecond;
         }
 
         private void DrawHudBearingLabel(
@@ -519,58 +763,24 @@ namespace F89.UI
             HudGuiUtility.DrawScreenLine(start, end, color, thickness, lineTexture);
         }
 
-        private void DrawTopLeftFlightData()
+        private void DrawAutopilotAboveRadar()
         {
-            var mode = aircraft.IsAutopilotActive && AutopilotController.Instance != null
-                ? $"AUTOPILOT {AutopilotController.Instance.TimeWarpScale:0}X"
-                : aircraft.IsOutOfFuel
-                ? "OUT OF FUEL"
-                : aircraft.IsAfterburning ? "AFTERBURNER" : "CRUISE";
-
-            var fuelLine = "FUEL ---";
-            if (aircraft.WorldMap != null)
-            {
-                fuelLine = aircraft.IsOutOfFuel
-                    ? "FUEL EMPTY"
-                    : $"FUEL {aircraft.FuelRangeRemainingMiles:0}/{aircraft.WorldMap.maxFuelRangeMiles:0} MI";
-            }
-
-            var abLine = aircraft.CanUseAfterburner
-                ? $"AB   {aircraft.AfterburnerFuelRemaining:0.0} S"
-                : "AB   EMPTY";
-
-            DrawPanel(
-                new Rect(16f, 16f, 220f, 96f),
-                "F-89\n" +
-                $"SPD  {aircraft.CurrentSpeedMph:0} MPH\n" +
-                $"MODE {mode}\n" +
-                $"{fuelLine}\n" +
-                abLine);
-        }
-
-        private void DrawMissionBrief()
-        {
-            var mission = AntarcticaMissionConfig.LoadOrDefault();
-            var objective = AntarcticaBaseSpawner.FindPrimaryMissionObjective();
-            var status = "HOSTILE";
-            if (objective == null)
-            {
-                status = "UNKNOWN";
-            }
-            else if (objective.IsDestroyed)
-            {
-                status = "DESTROYED";
-            }
-            else if (objective.Control == BaseControl.Friendly)
-            {
-                status = "CAPTURED";
-            }
-
             var autopilot = AutopilotController.Instance;
-            if (autopilot != null && autopilot.IsFlying)
+            if (autopilot == null)
+            {
+                return;
+            }
+
+            var scale = RadarMfdBezelRenderer.LayoutScale;
+            var hasToast = Time.unscaledTime <= autopilot.StatusToastUntil
+                && !string.IsNullOrEmpty(autopilot.StatusToast);
+            var toastPrefix = hasToast ? autopilot.StatusToast + "\n\n" : string.Empty;
+
+            if (autopilot.IsFlying)
             {
                 DrawPanel(
-                    new Rect(16f, 200f, 340f, 68f),
+                    PlaneRadarOverlay.GetRectAboveRadar(68f * scale),
+                    toastPrefix +
                     $"AUTOPILOT {autopilot.TimeWarpScale:0}X\n" +
                     $"DEST {autopilot.DestinationLabel}\n" +
                     $"ETA  {autopilot.DestinationDistanceMiles:0} MI\n" +
@@ -578,51 +788,53 @@ namespace F89.UI
                 return;
             }
 
-            if (autopilot != null && autopilot.CanResume)
+            if (autopilot.CanResume)
             {
                 DrawPanel(
-                    new Rect(16f, 200f, 340f, 56f),
+                    PlaneRadarOverlay.GetRectAboveRadar(56f * scale),
+                    toastPrefix +
                     $"AUTOPILOT PAUSED\n" +
                     $"DEST {autopilot.DestinationLabel}\n" +
                     $"P — RESUME");
                 return;
             }
 
-            DrawPanel(
-                new Rect(16f, 120f, 340f, 72f),
-                $"{mission.missionTitle}\n" +
-                $"HOME {mission.carrierName}\n" +
-                $"OBJ  {mission.firstObjectiveBaseName}  {status}");
+            if (hasToast)
+            {
+                DrawPanel(
+                    PlaneRadarOverlay.GetRectAboveRadar(36f * scale),
+                    autopilot.StatusToast);
+            }
         }
 
-        private void DrawAutopilotToast()
+        private void DrawMissileAcquisitionWarning()
         {
-            var autopilot = AutopilotController.Instance;
-            if (autopilot == null || Time.unscaledTime > autopilot.StatusToastUntil)
+            if (!MissileThreatNotifier.HasMissilesTargetingPlayer()
+                || !MissileThreatNotifier.ShouldBlinkVisible())
             {
                 return;
             }
 
             EnsureStyles();
-            var hudColor = FlightHudColorPalette.Current;
-            var toastStyle = HudStyleFactory.CreateLabel(
-                16,
+            var warningColor = new Color(1f, 0.35f, 0.1f);
+            var warningStyle = HudStyleFactory.CreateLabel(
+                18,
                 FontStyle.Bold,
                 TextAnchor.MiddleCenter,
-                hudColor);
+                warningColor);
 
-            var text = autopilot.StatusToast;
-            var size = toastStyle.CalcSize(new GUIContent(text));
+            const string text = "MISSILE ACQUISITION";
+            var size = warningStyle.CalcSize(new GUIContent(text));
             var rect = new Rect(
-                (Screen.width - size.x) * 0.5f - 16f,
-                52f,
-                size.x + 32f,
-                size.y + 12f);
+                (Screen.width - size.x) * 0.5f - 20f,
+                88f,
+                size.x + 40f,
+                size.y + 14f);
 
-            GUI.color = new Color(hudColor.r, hudColor.g, hudColor.b, 0.2f);
+            GUI.color = new Color(warningColor.r, warningColor.g, warningColor.b, 0.28f);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = hudColor;
-            GUI.Label(rect, text, toastStyle);
+            GUI.color = warningColor;
+            GUI.Label(rect, text, warningStyle);
             GUI.color = Color.white;
         }
 
@@ -644,16 +856,13 @@ namespace F89.UI
             };
 
             var status = GetWeaponStatusLine();
-            var gauRounds = weapons.Gau27aGun != null ? weapons.Gau27aGun.RoundsRemaining : 0;
 
             DrawPanel(
-                new Rect(Screen.width - 296f, 16f, 280f, 132f),
+                new Rect(Screen.width - 296f, 16f, 280f, 108f),
                 "WEAPONS\n" +
                 $"SEL  {selected}\n" +
                 $"TYPE {weapons.ActiveWeaponEngagementLabel}\n" +
-                $"STS  {status}\n" +
-                $"1 GAU {gauRounds}  2 SAW {weapons.Agm88jRemaining}  3 HELL {weapons.Agm114Remaining}\n" +
-                $"4 GBU {weapons.Gbu12Remaining}  5 AIM {weapons.Aim9zRemaining}");
+                $"STS  {status}");
         }
 
         private string GetWeaponStatusLine()
@@ -692,30 +901,6 @@ namespace F89.UI
                         : weapons.LockController.LockState.ToString().ToUpperInvariant(),
                 _ => "READY"
             };
-        }
-
-        private void DrawBottomLeftGrid()
-        {
-            if (aircraft.WorldMap == null || aircraft.Profile == null)
-            {
-                return;
-            }
-
-            var gridCell = aircraft.WorldMap.WorldPositionToGridCell(
-                aircraft.transform.position,
-                aircraft.Profile.ticSizeWorldUnits);
-
-            var autopilot = AutopilotController.Instance;
-            var controlHint = autopilot != null && autopilot.IsFlying
-                ? "M — MAP   P — CANCEL   TAB — HUD COLOR"
-                : autopilot != null && autopilot.CanResume
-                ? "M — MAP   P — RESUME   TAB — HUD COLOR"
-                : "M — MAP   P — AUTOPILOT   TAB — HUD COLOR";
-
-            DrawPanel(
-                new Rect(16f, Screen.height - 72f, 220f, 56f),
-                $"GRID ({gridCell.x}, {gridCell.y})\n" +
-                controlHint);
         }
 
         private void DrawPanel(Rect rect, string text)

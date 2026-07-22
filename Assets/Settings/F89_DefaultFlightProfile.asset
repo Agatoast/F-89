@@ -1,30 +1,63 @@
 %YAML 1.1
+
 %TAG !u! tag:unity3d.com,2011:
+
 --- !u!114 &11400000
+
 MonoBehaviour:
+
   m_ObjectHideFlags: 0
+
   m_CorrespondingSourceObject: {fileID: 0}
+
   m_PrefabInstance: {fileID: 0}
+
   m_PrefabAsset: {fileID: 0}
+
   m_GameObject: {fileID: 0}
+
   m_Enabled: 1
+
   m_EditorHideFlags: 0
+
   m_Script: {fileID: 11500000, guid: 8d72c68eb598ed9429eedb96e6ce10b4, type: 3}
+
   m_Name: F89_DefaultFlightProfile
+
   m_EditorClassIdentifier: Assembly-CSharp::F89.Flight.FlightProfile
-  defaultSpeed: 5
-  throttleSpeed: 6
-  airbrakeSpeed: 4
-  afterburnerSpeed: 8
+
+  minThrottleMph: 150
+
+  maxThrottleMph: 1200
+  afterburnerMaxThrottleMph: 1440
+
+  startThrottleMph: 900
+
+  autopilotCruiseMph: 900
+
+  throttleChangeMphPerSecond: 150
+
   ticSizeWorldUnits: 1
-  speedChangeRate: 8
+
+  afterburnerThrottleChangeMultiplier: 2
+
   afterburnerFuelCapacity: 50
+
   afterburnerFuelConsumption: 1
+
   throttleFuelMultiplier: 1.33
+
   throttleWeaponAccuracy: 0.8
+
   afterburnerWeaponAccuracy: 0.5
+
   turnRate: 45
+
   turnForeshortenAtFullInput: 0.25
-  turnLateralShift: 0.03
+
+  turnLateralShift: 0.1
+
   bankSmoothTime: 0.12
+
   pitchDuringAfterburner: 10
+

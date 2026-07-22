@@ -19,7 +19,7 @@ namespace F89.Weapons
         [Range(0f, 1f)] public float hitChancePerRound = 0.85f;
 
         [Header("Loadout")]
-        public int startingRounds = 9999;
+        public int startingRounds = 300;
 
         public string WeaponName => "GAU-27A";
         public WeaponAimMode AimMode => WeaponAimMode.ForwardOnly;

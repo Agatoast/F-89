@@ -5,7 +5,7 @@ Shader "F89/ProceduralFlightGround"
         _LandMask ("Land Mask Map", 2D) = "white" {}
         _MapHalfSizeWorld ("Map Half Size (world units)", Float) = 30000
 
-        _OceanDeep ("Ocean Deep", Color) = (0.04, 0.18, 0.36, 1)
+        _OceanDeep ("Ocean Deep", Color) = (0.239, 0.486, 0.800, 1)
         _OceanShallow ("Ocean Shallow", Color) = (0.10, 0.34, 0.52, 1)
         _OceanHighlight ("Ocean Highlight", Color) = (0.22, 0.48, 0.62, 1)
         _WaveScale ("Wave Scale", Float) = 0.012

@@ -848,7 +848,9 @@ namespace F89.UI
                 return 0f;
             }
 
-            var mph = worldMap.TicsPerSecondToMph(aircraft.Profile.throttleSpeed);
+            var mph = autopilotTimeWarp
+                ? aircraft.Profile.AutopilotCruiseMph
+                : aircraft.CurrentSpeedMph;
             if (mph <= 0f)
             {
                 return 0f;

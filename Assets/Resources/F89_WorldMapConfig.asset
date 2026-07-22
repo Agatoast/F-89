@@ -16,3 +16,4 @@ MonoBehaviour:
   milesPerGrid: 1
   antarcticaSizeMiles: 3000
   maxFuelRangeMiles: 1350
+  fuelGallonsPerTank: 1350

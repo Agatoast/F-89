@@ -67,9 +67,9 @@ namespace F89.Flight
             if (controller.IsAfterburning && controller.Profile != null)
             {
                 var speedRatio = Mathf.InverseLerp(
-                    controller.Profile.DefaultSpeedWorld,
-                    controller.Profile.AfterburnerSpeedWorld,
-                    controller.CurrentSpeed);
+                    controller.Profile.minThrottleMph,
+                    controller.Profile.afterburnerMaxThrottleMph,
+                    controller.CurrentSpeedMph);
                 targetIntensity = Mathf.Lerp(0.55f, 1f, speedRatio);
                 var flicker = 0.82f + 0.18f * Mathf.PerlinNoise(Time.time * flameFlickerSpeed, 0.37f);
                 targetIntensity *= flicker;
