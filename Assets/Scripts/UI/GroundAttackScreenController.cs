@@ -9,33 +9,18 @@ namespace F89.UI
     {
         private void OnGUI()
         {
-            DrawTitle();
-            DrawPlaceholder();
+            DrawHudOverlay();
             DrawReturnButton();
         }
 
-        private static void DrawTitle()
+        private static void DrawHudOverlay()
         {
-            var titleStyle = HudStyleFactory.CreateLabel(
-                28,
-                FontStyle.Bold,
-                TextAnchor.UpperCenter,
-                Color.white);
-            GUI.Label(new Rect(0f, 72f, Screen.width, 40f), "Ground Attack", titleStyle);
-        }
-
-        private static void DrawPlaceholder()
-        {
-            var messageStyle = HudStyleFactory.CreateLabel(
-                16,
-                FontStyle.Normal,
-                TextAnchor.UpperCenter,
-                Color.white,
-                wordWrap: true);
+            var hudStyle = HudStyleFactory.CreateLabel(14, FontStyle.Normal, TextAnchor.UpperLeft, Color.white);
             GUI.Label(
-                new Rect(Screen.width * 0.2f, Screen.height * 0.38f, Screen.width * 0.6f, 80f),
-                "Character ground combat screen — coming soon.",
-                messageStyle);
+                new Rect(16f, 16f, 520f, 24f),
+                $"Ground Ops  |  Kills: {LandGroundSceneController.SessionKills}  Score: {LandGroundSceneController.SessionScore}",
+                hudStyle);
+            GUI.Label(new Rect(16f, 40f, 520f, 24f), "WASD move, mouse aim, click to fire.", hudStyle);
         }
 
         private static void DrawReturnButton()
@@ -44,7 +29,7 @@ namespace F89.UI
             const float buttonHeight = 40f;
             var buttonX = (Screen.width - buttonWidth) * 0.5f;
 
-            if (GUI.Button(new Rect(buttonX, Screen.height * 0.58f, buttonWidth, buttonHeight), "Return to Flight"))
+            if (GUI.Button(new Rect(buttonX, Screen.height - buttonHeight - 24f, buttonWidth, buttonHeight), "Return to Flight"))
             {
                 ReturnToFlight();
             }
@@ -52,7 +37,20 @@ namespace F89.UI
 
         private static void ReturnToFlight()
         {
-            LandCombatModule.ExitToFlight(LandGroundSessionResult.Empty);
+            var result = new LandGroundSessionResult
+            {
+                CompletedVoluntarily = true,
+                TroopsKilled = LandGroundSceneController.SessionKills,
+                ScoreEarned = LandGroundSceneController.SessionScore
+            };
+
+            var save = CharacterSessionState.ActiveSave;
+            if (save != null)
+            {
+                CharacterSaveRepository.RecordGroundSession(save, result);
+            }
+
+            LandCombatModule.ExitToFlight(result);
 
             var returnScene = GameScenes.FlightTest;
             if (LandMissionHandoffState.TryConsumeReturnToFlight(out var snapshot, out _))

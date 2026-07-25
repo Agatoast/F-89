@@ -1,4 +1,5 @@
 using F89.Core;
+using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -19,6 +20,7 @@ namespace F89.UI
         private void OnGUI()
         {
             EnsureStyles();
+            CharacterGearSession.Bind(CharacterSessionState.ActiveSave);
             DrawPageBackground();
             DrawBackButton();
 
@@ -109,72 +111,8 @@ namespace F89.UI
         private void DrawLoadoutPanel(Rect rect)
         {
             DrawWireBox(rect, 2f);
-
-            var headerRect = new Rect(rect.x + rect.width * 0.28f, rect.y + 10f, rect.width * 0.44f, 34f);
-            DrawRoundedHeader(headerRect, "Research and Development");
-
-            GUI.Label(new Rect(rect.x + 16f, rect.y + 58f, rect.width * 0.18f, 60f), "Researched\nTech", labelStyle);
-            GUI.Label(new Rect(rect.x + 16f, rect.y + 130f, rect.width * 0.18f, 60f), "Available\nArmory", labelStyle);
-            GUI.Label(new Rect(rect.xMax - rect.width * 0.18f - 16f, rect.y + 90f, rect.width * 0.18f, 40f), "Inventory", labelStyle);
-
-            var figureRect = new Rect(
-                rect.x + rect.width * 0.28f,
-                rect.y + 52f,
-                rect.width * 0.44f,
-                rect.height - 68f);
-            DrawWireBox(figureRect, 1.5f);
-            DrawSilhouette(figureRect);
-            DrawEquipmentSlots(figureRect);
-        }
-
-        private void DrawSilhouette(Rect rect)
-        {
-            var centerX = rect.x + rect.width * 0.5f;
-            var headY = rect.y + rect.height * 0.14f;
-            var hipY = rect.y + rect.height * 0.58f;
-            var footY = rect.y + rect.height * 0.88f;
-            var shoulderY = rect.y + rect.height * 0.24f;
-            var handY = rect.y + rect.height * 0.48f;
-            var shoulderSpan = rect.width * 0.22f;
-            var hipSpan = rect.width * 0.12f;
-
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX, headY + 16f), new Vector2(centerX, hipY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX - shoulderSpan, shoulderY), new Vector2(centerX + shoulderSpan, shoulderY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX - shoulderSpan, shoulderY), new Vector2(centerX - shoulderSpan - 8f, handY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX + shoulderSpan, shoulderY), new Vector2(centerX + shoulderSpan + 8f, handY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX - hipSpan, hipY), new Vector2(centerX - hipSpan, footY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX + hipSpan, hipY), new Vector2(centerX + hipSpan, footY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX - hipSpan, footY), new Vector2(centerX + hipSpan, footY), Color.black, 2f, Texture2D.whiteTexture);
-
-            GUI.color = Color.black;
-            GUI.DrawTexture(new Rect(centerX - 12f, headY, 24f, 24f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
-
-        private static void DrawEquipmentSlots(Rect figureRect)
-        {
-            var slot = Mathf.Min(figureRect.width, figureRect.height) * 0.11f;
-            var positions = new[]
-            {
-                new Vector2(0.5f, 0.08f),
-                new Vector2(0.28f, 0.16f),
-                new Vector2(0.72f, 0.16f),
-                new Vector2(0.5f, 0.34f),
-                new Vector2(0.18f, 0.44f),
-                new Vector2(0.82f, 0.44f),
-                new Vector2(0.32f, 0.62f),
-                new Vector2(0.68f, 0.62f),
-                new Vector2(0.5f, 0.82f)
-            };
-
-            foreach (var position in positions)
-            {
-                var center = new Vector2(
-                    figureRect.x + figureRect.width * position.x,
-                    figureRect.y + figureRect.height * position.y);
-                var slotRect = new Rect(center.x - slot * 0.5f, center.y - slot * 0.5f, slot, slot);
-                DrawWireBox(slotRect, 1.5f);
-            }
+            var inner = new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f);
+            LandCharacterGearPanelUi.Draw(inner);
         }
 
         private void DrawNextMissionButton()

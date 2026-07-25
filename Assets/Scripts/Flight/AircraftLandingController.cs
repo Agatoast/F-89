@@ -1,6 +1,7 @@
 using F89.Controls;
-using F89.UI;
+using F89.Core;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace F89.Flight
 {
@@ -129,7 +130,18 @@ namespace F89.Flight
                 body.linearVelocity = Vector3.zero;
             }
 
-            Time.timeScale = 0f;
+            var snapshot = new LandSortieSnapshot
+            {
+                IsValid = true,
+                AircraftWorldPosition = transform.position,
+                AircraftWorldRotation = transform.rotation,
+                FuelNormalized = 1f,
+                ReturnSceneName = GameScenes.FlightTest
+            };
+
+            LandMissionHandoffState.BeginEnterFromFlight(snapshot);
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(GameScenes.GroundAttack);
         }
     }
 }

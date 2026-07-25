@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using F89.Core;
+using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -333,6 +334,7 @@ namespace F89.UI
             }
 
             CharacterSessionState.ActiveSave = save;
+            CharacterGearSession.Bind(save);
             CharacterSaveRepository.SetLastSelectedSaveId(save.Id);
             CharacterSaveRepository.TouchLastPlayed(save);
             SceneManager.LoadScene(GameScenes.CharacterPage);

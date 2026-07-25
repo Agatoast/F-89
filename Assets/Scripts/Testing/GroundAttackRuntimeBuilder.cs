@@ -19,6 +19,7 @@ namespace F89.Testing
         public static void Build()
         {
             LandCombatRuntimeBootstrap.BootstrapScene();
+            LandGroundSceneBuilder.BuildIfNeeded();
 
             var root = new GameObject("GroundAttackScreen");
             root.AddComponent<GroundAttackScreenController>();

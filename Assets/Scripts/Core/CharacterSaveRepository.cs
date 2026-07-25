@@ -56,6 +56,7 @@ namespace F89.Core
                 HighestAward = MilitaryMedalIds.DefaultForNewCharacter
             };
 
+            EnsureGearInitialized(save);
             cachedSaves.Add(save);
             WriteToDisk();
             return save;
@@ -170,6 +171,61 @@ namespace F89.Core
             WriteToDisk();
         }
 
+        public static void EnsureGearInitialized(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            save.Loadout ??= new CharacterLoadoutSaveData();
+            save.Vault ??= new CharacterVaultSaveData();
+            if (save.Vault.SlotCount <= 0)
+            {
+                save.Vault.SlotCount = CharacterVaultSaveData.DefaultSlotCount;
+            }
+
+            NormalizeLoadoutInventory(save.Loadout);
+            NormalizeVaultItems(save.Vault);
+        }
+
+        public static void WriteGear(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            EnsureLoaded();
+            EnsureGearInitialized(save);
+            WriteToDisk();
+        }
+
+        public static void RecordGroundSession(CharacterSaveData save, LandGroundSessionResult result)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            EnsureLoaded();
+            if (result.TroopsKilled > 0)
+            {
+                save.EnemyTroopsKilled += result.TroopsKilled;
+            }
+
+            if (result.ScoreEarned > 0)
+            {
+                save.TotalScore += result.ScoreEarned;
+                if (result.ScoreEarned > save.BestMissionScore)
+                {
+                    save.BestMissionScore = result.ScoreEarned;
+                }
+            }
+
+            WriteToDisk();
+        }
+
         private static void EnsureLoaded()
         {
             if (isLoaded)
@@ -204,6 +260,7 @@ namespace F89.Core
             PurgeLegacyDemoSaves();
             ClearAllSavesOnce();
             NormalizeLoadedAwards();
+            NormalizeLoadedGear();
 
             if (cachedSaves.Count == 0)
             {
@@ -307,6 +364,83 @@ namespace F89.Core
             }
 
             return trimmed;
+        }
+
+        private static void NormalizeLoadedGear()
+        {
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null)
+                {
+                    continue;
+                }
+
+                var beforeLoadout = save.Loadout?.Inventory?.Length ?? -1;
+                EnsureGearInitialized(save);
+                var afterLoadout = save.Loadout?.Inventory?.Length ?? -1;
+                if (beforeLoadout != afterLoadout)
+                {
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                WriteToDisk();
+            }
+        }
+
+        private static void NormalizeLoadoutInventory(CharacterLoadoutSaveData loadout)
+        {
+            if (loadout == null)
+            {
+                return;
+            }
+
+            const int mainSlotCount = 24;
+            if (loadout.Inventory == null || loadout.Inventory.Length < mainSlotCount)
+            {
+                var resized = new CharacterGearInstanceSaveData[mainSlotCount];
+                if (loadout.Inventory != null)
+                {
+                    for (var i = 0; i < loadout.Inventory.Length && i < resized.Length; i++)
+                    {
+                        resized[i] = loadout.Inventory[i];
+                    }
+                }
+
+                loadout.Inventory = resized;
+            }
+        }
+
+        private static void NormalizeVaultItems(CharacterVaultSaveData vault)
+        {
+            if (vault == null)
+            {
+                return;
+            }
+
+            if (vault.SlotCount <= 0)
+            {
+                vault.SlotCount = CharacterVaultSaveData.DefaultSlotCount;
+            }
+
+            if (vault.Items != null && vault.Items.Length == vault.SlotCount)
+            {
+                return;
+            }
+
+            var resized = new CharacterGearInstanceSaveData[vault.SlotCount];
+            if (vault.Items != null)
+            {
+                for (var i = 0; i < vault.Items.Length && i < resized.Length; i++)
+                {
+                    resized[i] = vault.Items[i];
+                }
+            }
+
+            vault.Items = resized;
         }
 
         private static void WriteToDisk()

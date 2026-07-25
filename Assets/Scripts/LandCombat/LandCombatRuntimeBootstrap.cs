@@ -11,6 +11,7 @@ namespace F89.LandCombat
         public static void BootstrapScene()
         {
             Time.timeScale = 1f;
+            CharacterGearSession.Bind(CharacterSessionState.ActiveSave);
             LandCombatModule.EnterFromHandoff();
         }
     }

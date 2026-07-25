@@ -17,6 +17,8 @@ namespace F89.Core
         public string PortraitId = string.Empty;
         public string VehicleKillSummary = string.Empty;
         public string TroopKillSummary = string.Empty;
+        public CharacterLoadoutSaveData Loadout = new CharacterLoadoutSaveData();
+        public CharacterVaultSaveData Vault = new CharacterVaultSaveData();
 
         public string VehicleKillDisplay =>
             string.IsNullOrWhiteSpace(VehicleKillSummary)
