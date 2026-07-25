@@ -1,4 +1,5 @@
 using F89.Core;
+using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -45,9 +46,24 @@ namespace F89.UI
 
             if (GUI.Button(new Rect(buttonX, Screen.height * 0.58f, buttonWidth, buttonHeight), "Return to Flight"))
             {
-                Time.timeScale = 1f;
-                SceneManager.LoadScene(GameScenes.FlightTest);
+                ReturnToFlight();
             }
+        }
+
+        private static void ReturnToFlight()
+        {
+            LandCombatModule.ExitToFlight(LandGroundSessionResult.Empty);
+
+            var returnScene = GameScenes.FlightTest;
+            if (LandMissionHandoffState.TryConsumeReturnToFlight(out var snapshot, out _))
+            {
+                returnScene = string.IsNullOrEmpty(snapshot.ReturnSceneName)
+                    ? GameScenes.FlightTest
+                    : snapshot.ReturnSceneName;
+            }
+
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(returnScene);
         }
     }
 }

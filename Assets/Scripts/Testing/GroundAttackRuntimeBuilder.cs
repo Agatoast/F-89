@@ -1,3 +1,4 @@
+using F89.LandCombat;
 using F89.UI;
 using UnityEngine;
 
@@ -17,7 +18,7 @@ namespace F89.Testing
 
         public static void Build()
         {
-            Time.timeScale = 1f;
+            LandCombatRuntimeBootstrap.BootstrapScene();
 
             var root = new GameObject("GroundAttackScreen");
             root.AddComponent<GroundAttackScreenController>();
