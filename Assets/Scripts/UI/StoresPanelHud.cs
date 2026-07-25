@@ -7,6 +7,7 @@ namespace F89.UI
     {
         private const float RowFontScale = 0.72f * 0.7f;
         private const float WireIconScale = 0.2f;
+        private const float WeaponIconOffsetXPx = -5f;
 
         private enum StoreWireIcon
         {
@@ -71,7 +72,7 @@ namespace F89.UI
 
         private void DrawStoresPanel(Color hudColor)
         {
-            var layout = RadarMfdBezelRenderer.ComputeBottomLeftLayout();
+            var layout = RadarMfdBezelRenderer.ComputeTopRightLayout();
             var bezel = RadarMfdBezelRenderer.GetStoresBezelTexture(layout);
             var scope = layout.ScopeRect;
             var s = RadarMfdBezelRenderer.LayoutScale;
@@ -212,6 +213,8 @@ namespace F89.UI
             {
                 return;
             }
+
+            rect = new Rect(rect.x + WeaponIconOffsetXPx, rect.y, rect.width, rect.height);
 
             var iconName = GetIconResourceName(icon);
             if (StoresWeaponIconLibrary.TryGetIcon(iconName, out var texture))
@@ -362,7 +365,7 @@ namespace F89.UI
 
         private void EnsureStyles(int rowFontSize)
         {
-            if (rowStyle != null && lastRowFontSize == rowFontSize)
+            if (rowStyle != null && countStyle != null && lastRowFontSize == rowFontSize)
             {
                 return;
             }

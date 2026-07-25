@@ -244,6 +244,11 @@ namespace F89.Flight
 
         private void FixedUpdate()
         {
+            if (GamePauseController.IsPaused)
+            {
+                return;
+            }
+
             if (!IsFlying || aircraft == null || body == null || !hasDestination)
             {
                 return;
@@ -297,16 +302,9 @@ namespace F89.Flight
                 return;
             }
 
-            if (hasDestination && Time.frameCount != suspendInputFrame)
+            if (CanResume)
             {
-                if (mapOverlay == null)
-                {
-                    mapOverlay = Object.FindAnyObjectByType<AntarcticaMapOverlay>();
-                }
-
-                if (mapOverlay != null
-                    && mapOverlay.HasAutopilotMapTarget
-                    && mapOverlay.TryEngageAutopilotToMapTarget())
+                if (Time.frameCount == suspendInputFrame)
                 {
                     return;
                 }

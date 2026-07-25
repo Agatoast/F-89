@@ -1,5 +1,6 @@
 using F89.Controls;
 using F89.Core;
+using F89.UI;
 using UnityEngine;
 
 namespace F89.Flight
@@ -15,7 +16,6 @@ namespace F89.Flight
         private float currentSpeed;
         private float currentSpeedMph;
         private float afterburnerFuelRemaining;
-        private float afterburnerBaselineSpeedMph;
         private bool afterburnerSpoolDownActive;
         private float leftTankGallons;
         private float rightTankGallons;
@@ -54,6 +54,23 @@ namespace F89.Flight
             FuelGallonsPerTank > 0f ? rightTankGallons / FuelGallonsPerTank : 0f;
         public bool IsOutOfFuel => TotalFuelGallons <= 0f;
         public bool IsAutopilotActive { get; private set; }
+        public bool IsLandingLocked { get; private set; }
+
+        public void SetLandingLocked(bool locked)
+        {
+            IsLandingLocked = locked;
+            if (locked)
+            {
+                IsAutopilotActive = false;
+                IsAfterburning = false;
+                currentSpeed = 0f;
+                currentSpeedMph = 0f;
+                if (body != null)
+                {
+                    body.linearVelocity = Vector3.zero;
+                }
+            }
+        }
 
         public void ApplyAutopilotState(float speedWorld, bool autopilotActive)
         {
@@ -101,6 +118,21 @@ namespace F89.Flight
             InitializeFlightState();
         }
 
+        private void Start()
+        {
+            TryApplyMissionCarrierLaunch();
+        }
+
+        public void TryApplyMissionCarrierLaunch()
+        {
+            if (!FlightMissionLaunchState.TryConsumeCarrierLaunch())
+            {
+                return;
+            }
+
+            ApplyCarrierTakeoffLaunch(FlightMissionLaunchState.CarrierTakeoffSpeedMph);
+        }
+
         private void InitializeFlightState()
         {
             if (body == null)
@@ -115,13 +147,36 @@ namespace F89.Flight
 
             Refuel();
             currentSpeedMph = profile.startThrottleMph;
-            afterburnerBaselineSpeedMph = Mathf.Clamp(
-                currentSpeedMph,
+            afterburnerSpoolDownActive = false;
+            IsAfterburning = false;
+            currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
+        }
+
+        public void ApplyCarrierTakeoffLaunch(float speedMph)
+        {
+            if (profile == null)
+            {
+                return;
+            }
+
+            currentSpeedMph = Mathf.Clamp(
+                speedMph,
                 profile.minThrottleMph,
                 profile.maxThrottleMph);
             afterburnerSpoolDownActive = false;
             IsAfterburning = false;
             currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
+
+            if (body != null)
+            {
+                var forward = Flatten(transform.forward);
+                if (forward.sqrMagnitude < 0.0001f)
+                {
+                    forward = Vector3.forward;
+                }
+
+                body.linearVelocity = forward.normalized * currentSpeed;
+            }
         }
 
         private void OnValidate()
@@ -179,6 +234,25 @@ namespace F89.Flight
                 return;
             }
 
+            if (GamePauseController.IsPaused)
+            {
+                body.linearVelocity = Vector3.zero;
+                return;
+            }
+
+            if (IsLandingLocked)
+            {
+                currentSpeed = 0f;
+                currentSpeedMph = 0f;
+                body.linearVelocity = Vector3.zero;
+                return;
+            }
+
+            if (AircraftLandingController.IsLandingActive)
+            {
+                return;
+            }
+
             var input = inputSource.Current;
             var dtNormal = Time.fixedDeltaTime;
 
@@ -225,25 +299,18 @@ namespace F89.Flight
                 var decayRate = profile.throttleChangeMphPerSecond * 0.5f;
                 if (input.airbrakeHeld)
                 {
-                    currentSpeedMph -= decayRate * dt;
-                }
-                else if (input.throttleHeld)
-                {
-                    afterburnerSpoolDownActive = false;
-                    currentSpeedMph += profile.throttleChangeMphPerSecond * dt;
-                    currentSpeedMph = Mathf.Min(currentSpeedMph, profile.maxThrottleMph);
+                    currentSpeedMph -= profile.throttleChangeMphPerSecond * dt;
                 }
                 else
                 {
-                    currentSpeedMph = Mathf.MoveTowards(
-                        currentSpeedMph,
-                        afterburnerBaselineSpeedMph,
-                        decayRate * dt);
+                    currentSpeedMph -= decayRate * dt;
                 }
 
-                if (currentSpeedMph <= afterburnerBaselineSpeedMph + 0.5f)
+                currentSpeedMph = Mathf.Max(currentSpeedMph, profile.minThrottleMph);
+
+                if (currentSpeedMph <= profile.maxThrottleMph + 0.5f)
                 {
-                    currentSpeedMph = afterburnerBaselineSpeedMph;
+                    currentSpeedMph = Mathf.Min(currentSpeedMph, profile.maxThrottleMph);
                     afterburnerSpoolDownActive = false;
                 }
             }
@@ -298,16 +365,12 @@ namespace F89.Flight
             var wantsAfterburner = input.afterburnerHeld && CanUseAfterburner;
             if (wantsAfterburner && !IsAfterburning)
             {
-                afterburnerBaselineSpeedMph = Mathf.Clamp(
-                    currentSpeedMph,
-                    profile.minThrottleMph,
-                    profile.maxThrottleMph);
                 afterburnerSpoolDownActive = false;
             }
 
             if (IsAfterburning && !wantsAfterburner)
             {
-                afterburnerSpoolDownActive = true;
+                afterburnerSpoolDownActive = currentSpeedMph > profile.maxThrottleMph + 0.5f;
             }
 
             IsAfterburning = wantsAfterburner;
@@ -323,7 +386,7 @@ namespace F89.Flight
                 afterburnerFuelRemaining = 0f;
                 if (IsAfterburning)
                 {
-                    afterburnerSpoolDownActive = true;
+                    afterburnerSpoolDownActive = currentSpeedMph > profile.maxThrottleMph + 0.5f;
                 }
 
                 IsAfterburning = false;

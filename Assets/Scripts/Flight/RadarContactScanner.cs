@@ -21,11 +21,23 @@ namespace F89.Flight
         public const float RangeMiles = 150f;
         public const float MidRangeBandMiles = 100f;
         public const float HostileDetectionMiles = 50f;
+        public const float ShortRangeMiles = 25f;
+        public const float ShortRangeBandMiles = 5f;
 
         public static void CollectVisibleContacts(
             Vector3 observerPosition,
             WorldMapConfig worldMap,
             float ticSizeWorldUnits,
+            List<RadarContact> results)
+        {
+            CollectVisibleContacts(observerPosition, worldMap, ticSizeWorldUnits, null, results);
+        }
+
+        public static void CollectVisibleContacts(
+            Vector3 observerPosition,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits,
+            float? rangeCapMiles,
             List<RadarContact> results)
         {
             results.Clear();
@@ -34,14 +46,15 @@ namespace F89.Flight
                 return;
             }
 
-            CollectLockableTargets(observerPosition, worldMap, ticSizeWorldUnits, results);
-            CollectBases(observerPosition, worldMap, ticSizeWorldUnits, results);
+            CollectLockableTargets(observerPosition, worldMap, ticSizeWorldUnits, rangeCapMiles, results);
+            CollectBases(observerPosition, worldMap, ticSizeWorldUnits, rangeCapMiles, results);
         }
 
         private static void CollectLockableTargets(
             Vector3 observerPosition,
             WorldMapConfig worldMap,
             float ticSizeWorldUnits,
+            float? rangeCapMiles,
             List<RadarContact> results)
         {
             var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
@@ -59,6 +72,10 @@ namespace F89.Flight
                     ticSizeWorldUnits);
 
                 var maxRange = target.IsFriendly ? RangeMiles : HostileDetectionMiles;
+                if (rangeCapMiles.HasValue)
+                {
+                    maxRange = Mathf.Min(maxRange, rangeCapMiles.Value);
+                }
                 if (distanceMiles > maxRange)
                 {
                     continue;
@@ -81,6 +98,7 @@ namespace F89.Flight
             Vector3 observerPosition,
             WorldMapConfig worldMap,
             float ticSizeWorldUnits,
+            float? rangeCapMiles,
             List<RadarContact> results)
         {
             var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
@@ -99,6 +117,10 @@ namespace F89.Flight
 
                 var isHostile = baseSite.Control == BaseControl.Hostile;
                 var maxRange = isHostile ? HostileDetectionMiles : RangeMiles;
+                if (rangeCapMiles.HasValue)
+                {
+                    maxRange = Mathf.Min(maxRange, rangeCapMiles.Value);
+                }
                 if (distanceMiles > maxRange)
                 {
                     continue;

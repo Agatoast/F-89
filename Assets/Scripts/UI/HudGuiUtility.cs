@@ -45,5 +45,15 @@ namespace F89.UI
 
             GUI.color = Color.white;
         }
+
+        public static void DrawWireBox(Rect rect, float thickness)
+        {
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+        }
     }
 }

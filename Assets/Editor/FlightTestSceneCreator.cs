@@ -8,6 +8,7 @@ namespace F89.EditorTools
 {
     public static class FlightTestSceneCreator
     {
+        private const string LoadingScreenScenePath = "Assets/Scenes/LoadingScreen.unity";
         private const string FlightTestScenePath = "Assets/Scenes/FlightTest.unity";
         private const string MainMenuScenePath = "Assets/Scenes/MainMenu.unity";
 
@@ -33,10 +34,11 @@ namespace F89.EditorTools
             EnsureScenesFolder();
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            MainMenuRuntimeBuilder.Build();
+            StartPageRuntimeBuilder.Build();
 
             EditorSceneManager.SaveScene(scene, MainMenuScenePath);
-            EnsureSceneInBuildSettings(MainMenuScenePath, 0);
+            EnsureLoadingScreenIsFirstBuildScene();
+            EnsureSceneInBuildSettings(MainMenuScenePath, 1);
             AssetDatabase.SaveAssets();
 
             Debug.Log($"Main menu scene saved to {MainMenuScenePath}.");
@@ -68,8 +70,9 @@ namespace F89.EditorTools
             lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
             EditorSceneManager.SaveScene(scene, FlightTestScenePath);
-            EnsureSceneInBuildSettings(MainMenuScenePath, 0);
-            EnsureSceneInBuildSettings(FlightTestScenePath, 1);
+            EnsureLoadingScreenIsFirstBuildScene();
+            EnsureSceneInBuildSettings(MainMenuScenePath, 1);
+            EnsureSceneInBuildSettings(FlightTestScenePath, 5);
             AssetDatabase.SaveAssets();
 
             Debug.Log($"Flight test scene saved to {FlightTestScenePath}. Press Play to fly.");
@@ -165,6 +168,16 @@ namespace F89.EditorTools
             {
                 AssetDatabase.CreateFolder("Assets", "Scenes");
             }
+        }
+
+        private static void EnsureLoadingScreenIsFirstBuildScene()
+        {
+            if (!System.IO.File.Exists(LoadingScreenScenePath))
+            {
+                return;
+            }
+
+            EnsureSceneInBuildSettings(LoadingScreenScenePath, 0);
         }
 
         private static void EnsureSceneInBuildSettings(string scenePath, int buildIndex)

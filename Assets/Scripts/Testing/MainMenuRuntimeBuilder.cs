@@ -1,60 +1,91 @@
 using F89.Core;
-using F89.UI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace F89.Testing
 {
-    public static class MainMenuRuntimeBuilder
+    public static class SceneBootstrap
     {
-        public static void BuildIfNeeded()
+        private static bool isInitialized;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void Initialize()
         {
-            if (Object.FindAnyObjectByType<MainMenuController>() != null)
+            if (isInitialized)
             {
                 return;
             }
 
-            Build();
+            isInitialized = true;
+            SceneManager.sceneLoaded += HandleSceneLoaded;
+            BootstrapActiveScene();
         }
 
-        public static void Build()
+        private static void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            BootstrapActiveScene();
+        }
+
+        private static void BootstrapActiveScene()
         {
             Time.timeScale = 1f;
-
-            var menuRoot = new GameObject("MainMenu");
-            menuRoot.AddComponent<MainMenuController>();
-
-            SetupCamera();
-        }
-
-        private static void SetupCamera()
-        {
-            var camera = Camera.main;
-            if (camera == null)
-            {
-                var cameraObject = new GameObject("Main Camera");
-                cameraObject.tag = "MainCamera";
-                camera = cameraObject.AddComponent<Camera>();
-                cameraObject.AddComponent<AudioListener>();
-            }
-
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.12f, 0.14f, 0.18f);
-            camera.transform.position = new Vector3(0f, 0f, -10f);
-        }
-    }
-
-    public static class SceneBootstrap
-    {
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void OnSceneLoaded()
-        {
-            Time.timeScale = 1f;
+            GameSettings.Load();
+            GameKeyBindings.Load();
+            EnsurePauseController();
+            RemoveLegacyMainMenuRoots();
 
             var sceneName = SceneManager.GetActiveScene().name;
-            if (sceneName == GameScenes.MainMenu)
+            if (sceneName == GameScenes.LoadingScreen)
             {
-                MainMenuRuntimeBuilder.BuildIfNeeded();
+                LoadingScreenRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.MainMenu || sceneName == GameScenes.StartPage)
+            {
+                StartPageRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.SelectionPage)
+            {
+                SelectionPageRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.CharacterPage)
+            {
+                CharacterPageRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.MissionBriefing)
+            {
+                MissionBriefingRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.CharacterLoadout)
+            {
+                CharacterLoadoutRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.AircraftLoadout)
+            {
+                AircraftLoadoutRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.MenuSubpage)
+            {
+                MenuSubpageRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.GroundAttack)
+            {
+                GroundAttackRuntimeBuilder.BuildIfNeeded();
                 return;
             }
 
@@ -64,11 +95,34 @@ namespace F89.Testing
             }
         }
 
+        private static void RemoveLegacyMainMenuRoots()
+        {
+            var roots = SceneManager.GetActiveScene().GetRootGameObjects();
+            for (var i = 0; i < roots.Length; i++)
+            {
+                if (roots[i].name == "MainMenu")
+                {
+                    Object.Destroy(roots[i]);
+                }
+            }
+        }
+
         private static bool ShouldBootstrapGameplayInEditorScene(string sceneName)
         {
             return string.IsNullOrEmpty(sceneName)
                 || sceneName == "Untitled"
                 || sceneName.StartsWith("Temp");
+        }
+
+        private static void EnsurePauseController()
+        {
+            if (Object.FindAnyObjectByType<F89.UI.GamePauseController>() != null)
+            {
+                return;
+            }
+
+            var pauseObject = new GameObject("GamePauseController");
+            pauseObject.AddComponent<F89.UI.GamePauseController>();
         }
     }
 }

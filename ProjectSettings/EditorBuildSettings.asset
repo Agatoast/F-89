@@ -6,9 +6,34 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/LoadingScreen.unity
+    guid: 3baf3bdc5fa4467786f3563a297fe0d6
+  - enabled: 1
     path: Assets/Scenes/MainMenu.unity
     guid: 5e7d5d834905e2541a3c050c5873354b
   - enabled: 1
+    path: Assets/Scenes/SelectionPage.unity
+    guid: 79ae7bc463a94aca85f9e323f20e4466
+  - enabled: 1
+    path: Assets/Scenes/CharacterPage.unity
+    guid: a4ea31e0e82849e7a5fd064237ace05a
+  - enabled: 1
+    path: Assets/Scenes/MissionBriefing.unity
+    guid: c8f2a1b3d4e5467890abcdef12345678
+  - enabled: 1
+    path: Assets/Scenes/CharacterLoadout.unity
+    guid: d7e3b2a1c4f5467890abcdef98765432
+  - enabled: 1
+    path: Assets/Scenes/AircraftLoadout.unity
+    guid: e1f4c3b2a5d6478091abcdef23456789
+  - enabled: 1
+    path: Assets/Scenes/MenuSubpage.unity
+    guid: ea1ff173e9e245aa81b0c5809426124c
+  - enabled: 1
     path: Assets/Scenes/FlightTest.unity
     guid: b07b27445799d98448b7d4663d47dc11
-  m_configObjects: {}
+  - enabled: 1
+    path: Assets/Scenes/GroundAttack.unity
+    guid: 23a2256c40064b84b6c0e048766912d0
+  m_configObjects:
+    com.unity.play-mode-start-scene: {fileID: 102900000, guid: 3baf3bdc5fa4467786f3563a297fe0d6, type: 3}

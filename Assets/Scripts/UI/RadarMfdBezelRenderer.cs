@@ -37,6 +37,30 @@ namespace F89.UI
 
         public static Layout ComputeLayout()
         {
+            return ComputeBottomLeftLayout();
+        }
+
+        public static Layout ComputeTopRightLayout()
+        {
+            var scopeRadius = DisplayDiameter * 0.5f;
+            var scopeBandHeight = ScopeEdgeGap + DisplayDiameter + ScopeEdgeGap;
+            var assemblyWidth = CornerRockerSize * 2f + SideColumnWidth * 2f + DisplayDiameter;
+            var assemblyHeight = CornerRockerSize * 2f + scopeBandHeight;
+            var assemblyLeft = Screen.width - assemblyWidth;
+            var scopeLeft = assemblyLeft + CornerRockerSize + SideColumnWidth;
+            var scopeTop = CornerRockerSize + ScopeEdgeGap;
+
+            return new Layout
+            {
+                AssemblyRect = new Rect(assemblyLeft, 0f, assemblyWidth, assemblyHeight),
+                ScopeRect = new Rect(scopeLeft, scopeTop, DisplayDiameter, DisplayDiameter),
+                ScopeCenter = new Vector2(scopeLeft + scopeRadius, scopeTop + scopeRadius),
+                ScopeRadius = scopeRadius
+            };
+        }
+
+        public static Layout ComputeBottomRightLayout()
+        {
             var scopeRadius = DisplayDiameter * 0.5f;
             var scopeBandHeight = ScopeEdgeGap + DisplayDiameter + ScopeEdgeGap;
             var assemblyWidth = CornerRockerSize * 2f + SideColumnWidth * 2f + DisplayDiameter;
@@ -94,7 +118,7 @@ namespace F89.UI
 
         public static int GetStoresPanelFontSize()
         {
-            var stores = ComputeBottomLeftLayout();
+            var stores = ComputeTopRightLayout();
             var scope = stores.ScopeRect;
             const float rowCount = 6f;
             const float rowFontScale = 0.72f * 0.7f;

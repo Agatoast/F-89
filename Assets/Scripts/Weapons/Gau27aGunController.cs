@@ -31,6 +31,11 @@ namespace F89.Weapons
             UpdateCrosshairPosition();
         }
 
+        public void SetRounds(int rounds)
+        {
+            roundsRemaining = Mathf.Clamp(rounds, 0, AircraftLoadoutState.MaxGunRounds);
+        }
+
         public void SetUnlimitedAmmo(bool enabled)
         {
             unlimitedAmmo = enabled;

@@ -19,7 +19,7 @@ namespace F89.UI
 
         public static Color Default => Colors[0];
 
-        /// <summary>Fixed color for MFD panels. Ignores Tab palette cycling.</summary>
+        /// <summary>Fixed color for MFD panels. Ignores HUD palette cycling (`).</summary>
         public static Color Mfd => Default;
 
         public static string CurrentHex => ColorUtility.ToHtmlStringRGB(Current);

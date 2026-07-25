@@ -22,6 +22,7 @@ namespace F89.Testing
                 WeaponTestTargetSpawner.RemoveIfPresent();
                 AntarcticaBaseSpawner.SpawnIfNeeded();
                 AntarcticaBaseSpawner.TryMovePlayerToCarrier(existingPlayer.transform);
+                ApplyMissionLaunchIfNeeded(existingPlayer);
                 return null;
             }
 
@@ -65,6 +66,7 @@ namespace F89.Testing
             grid.Configure(player.transform, profile.ticSizeWorldUnits, worldMap);
             CreateAntarcticaMapOverlay(player.gameObject);
             EnsureAutopilotController(player.gameObject);
+            EnsureLandingController(player.gameObject);
         }
 
         public static GameObject Build()
@@ -75,7 +77,6 @@ namespace F89.Testing
             AntarcticaBaseSpawner.SpawnIfNeeded();
             var player = CreatePlayer(profile, worldMap);
             SetupCamera(player);
-            CreatePauseController();
             CreateWeaponSystems(player);
             EnsureCountermeasureSystems(player);
             EnsureEnemySamSites(player.GetComponent<AircraftController>());
@@ -92,6 +93,8 @@ namespace F89.Testing
             }
 
             grid.Configure(player.transform, profile.ticSizeWorldUnits, worldMap);
+
+            ApplyMissionLaunchIfNeeded(player.GetComponent<AircraftController>());
 
             Debug.Log("F-89 flight test ready. Launch from USS Martin Van Buren. Mission 1: capture Palmer Station.");
             return player;
@@ -257,6 +260,7 @@ namespace F89.Testing
             var controller = player.AddComponent<AircraftController>();
             controller.Configure(profile, input, worldMap);
             EnsureAutopilotController(player);
+            EnsureLandingController(player);
 
             var visualPivot = new GameObject("VisualPivot");
             visualPivot.transform.SetParent(player.transform, false);
@@ -342,6 +346,8 @@ namespace F89.Testing
                 targetPaint,
                 gau27aGun);
 
+            AircraftLoadoutState.ApplyToWeaponController(weaponController);
+
             if (Object.FindAnyObjectByType<WeaponReticleHud>() == null)
             {
                 var reticleObject = new GameObject("WeaponReticleHud");
@@ -356,18 +362,26 @@ namespace F89.Testing
                 diamonds.Configure(weaponController, controller, camera);
             }
 
-            if (Object.FindAnyObjectByType<PlaneRadarOverlay>() == null)
+            var longRangeRadar = FindLongRangeRadarOverlay();
+            if (longRangeRadar == null)
             {
                 var radarObject = new GameObject("PlaneRadarOverlay");
-                var radar = radarObject.AddComponent<PlaneRadarOverlay>();
-                radar.Configure(controller, lockController, weaponController);
-                weaponController.SetRadarOverlay(radar);
+                longRangeRadar = radarObject.AddComponent<PlaneRadarOverlay>();
+            }
+
+            longRangeRadar.Configure(controller, lockController, weaponController, PlaneRadarOverlay.RadarScopeKind.LongRange);
+            weaponController.SetRadarOverlay(longRangeRadar);
+
+            if (Object.FindAnyObjectByType<ShortRangeRadarOverlay>() == null)
+            {
+                var shortRadarObject = new GameObject("ShortRangeRadarOverlay");
+                var shortRadar = shortRadarObject.AddComponent<ShortRangeRadarOverlay>();
+                shortRadar.ConfigureShortRange(controller, lockController, weaponController);
             }
             else
             {
-                var radar = Object.FindAnyObjectByType<PlaneRadarOverlay>();
-                radar?.Configure(controller, lockController, weaponController);
-                weaponController.SetRadarOverlay(radar);
+                Object.FindAnyObjectByType<ShortRangeRadarOverlay>()
+                    ?.ConfigureShortRange(controller, lockController, weaponController);
             }
 
             var hud = Object.FindAnyObjectByType<FlightHud>();
@@ -508,14 +522,18 @@ namespace F89.Testing
 
         private static void EnsureAutopilotController(GameObject player)
         {
-            var autopilot = player.GetComponent<AutopilotController>();
-            if (autopilot == null)
+            if (player.GetComponent<AutopilotController>() == null)
             {
-                autopilot = player.AddComponent<AutopilotController>();
+                player.AddComponent<AutopilotController>();
             }
+        }
 
-            var mapOverlay = Object.FindAnyObjectByType<AntarcticaMapOverlay>();
-            autopilot.Configure(mapOverlay);
+        private static void EnsureLandingController(GameObject player)
+        {
+            if (player.GetComponent<AircraftLandingController>() == null)
+            {
+                player.AddComponent<AircraftLandingController>();
+            }
         }
 
         private static void CreateAntarcticaMapOverlay(GameObject player)
@@ -563,15 +581,28 @@ namespace F89.Testing
             camera.transform.rotation = Quaternion.Euler(62f, 0f, 0f);
         }
 
-        private static void CreatePauseController()
+        private static PlaneRadarOverlay FindLongRangeRadarOverlay()
         {
-            if (Object.FindAnyObjectByType<GamePauseController>() != null)
+            var overlays = Object.FindObjectsByType<PlaneRadarOverlay>(FindObjectsSortMode.None);
+            foreach (var overlay in overlays)
+            {
+                if (overlay != null && overlay.ScopeKind == PlaneRadarOverlay.RadarScopeKind.LongRange)
+                {
+                    return overlay;
+                }
+            }
+
+            return null;
+        }
+
+        private static void ApplyMissionLaunchIfNeeded(AircraftController aircraft)
+        {
+            if (aircraft == null || !FlightMissionLaunchState.LaunchFromCarrier)
             {
                 return;
             }
 
-            var pauseObject = new GameObject("GamePauseController");
-            pauseObject.AddComponent<GamePauseController>();
+            aircraft.TryApplyMissionCarrierLaunch();
         }
     }
 }

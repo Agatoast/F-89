@@ -47,3 +47,6 @@ Assets/Resources/PerformanceTestRunSettings.json
 ProjectSettings/SceneTemplateSettings.json
 Assets/Settings/Build Profiles/
 Assets/Scenes *.meta
+
+# Local standalone builds (publish via GitHub Releases instead)
+zF-89 Executable versions/

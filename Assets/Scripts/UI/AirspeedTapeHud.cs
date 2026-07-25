@@ -20,7 +20,14 @@ namespace F89.UI
         private GUIStyle tickLabelStyle;
         private GUIStyle speedReadoutStyle;
         private GUIStyle headerStyle;
+        private GUIStyle landButtonStyle;
         private Color lastHudColor = Color.clear;
+
+        private struct TapeLayout
+        {
+            public Rect TapeRect;
+            public float Scale;
+        }
 
         public void Configure(AircraftController aircraftController)
         {
@@ -38,22 +45,42 @@ namespace F89.UI
                 return;
             }
 
-            if (Event.current.type != EventType.Repaint)
+            EnsureStyles();
+            var hudColor = FlightHudColorPalette.Current;
+            var currentSpeed = aircraft.CurrentSpeedMph;
+            var layout = ComputeTapeLayout();
+
+            if (Event.current.type == EventType.Repaint)
             {
-                return;
+                DrawTape(hudColor, currentSpeed, layout);
             }
 
-            EnsureStyles();
-            DrawTape(FlightHudColorPalette.Current, aircraft.CurrentSpeedMph);
+            if (AircraftLanding.CanLand(currentSpeed))
+            {
+                DrawLandButton(hudColor);
+            }
         }
 
-        private void DrawTape(Color hudColor, float currentSpeed)
+        private static TapeLayout ComputeTapeLayout()
         {
             var scale = LayoutScale;
             var tapeWidth = TapeWidth * scale;
             var tapeHeight = TapeHeight * scale;
             var centerY = Screen.height * 0.5f;
-            var tapeRect = new Rect(LeftMargin, centerY - tapeHeight * 0.5f, tapeWidth, tapeHeight);
+
+            return new TapeLayout
+            {
+                TapeRect = new Rect(LeftMargin, centerY - tapeHeight * 0.5f, tapeWidth, tapeHeight),
+                Scale = scale
+            };
+        }
+
+        private void DrawTape(Color hudColor, float currentSpeed, TapeLayout layout)
+        {
+            var scale = layout.Scale;
+            var tapeWidth = layout.TapeRect.width;
+            var tapeHeight = layout.TapeRect.height;
+            var tapeRect = layout.TapeRect;
             var pixelsPerMph = tapeHeight / VisibleSpanMph;
             var windowHeight = WindowHeight * scale;
             var minSpeed = currentSpeed - VisibleSpanMph * 0.5f;
@@ -132,6 +159,42 @@ namespace F89.UI
             }
 
             GUI.EndGroup();
+        }
+
+        private void DrawLandButton(Color hudColor)
+        {
+            const float horizontalPadding = 28f;
+            const float verticalPadding = 18f;
+            const float bottomMargin = 24f;
+
+            landButtonStyle.normal.textColor = hudColor;
+            landButtonStyle.hover.textColor = hudColor;
+            landButtonStyle.active.textColor = hudColor;
+
+            const string label = "Click to Land";
+            var textSize = landButtonStyle.CalcSize(new GUIContent(label));
+            var buttonWidth = textSize.x + horizontalPadding * 2f;
+            var buttonHeight = textSize.y + verticalPadding * 2f;
+            var buttonRect = new Rect(
+                (Screen.width - buttonWidth) * 0.5f,
+                Screen.height - buttonHeight - bottomMargin,
+                buttonWidth,
+                buttonHeight);
+
+            if (Event.current.type == EventType.Repaint)
+            {
+                var previous = GUI.color;
+                GUI.color = new Color(hudColor.r, hudColor.g, hudColor.b, 0.18f);
+                GUI.DrawTexture(buttonRect, Texture2D.whiteTexture);
+                GUI.color = hudColor;
+                GUI.Label(buttonRect, label, landButtonStyle);
+                GUI.color = previous;
+            }
+
+            if (GUI.Button(buttonRect, GUIContent.none, GUIStyle.none))
+            {
+                AircraftLanding.TryLand(aircraft);
+            }
         }
 
         private static void DrawChevron(Vector2 tip, float size, bool pointsRight, Color color)
@@ -238,7 +301,7 @@ namespace F89.UI
                     SpeedNumberColor);
             }
 
-            if (headerStyle != null && hudColor == lastHudColor)
+            if (headerStyle != null && landButtonStyle != null && hudColor == lastHudColor)
             {
                 return;
             }
@@ -248,6 +311,11 @@ namespace F89.UI
                 Mathf.Max(8, Mathf.RoundToInt(9f * scale)),
                 FontStyle.Bold,
                 TextAnchor.MiddleLeft,
+                hudColor);
+            landButtonStyle = HudStyleFactory.CreateLabel(
+                Mathf.Max(9, Mathf.RoundToInt(11f * scale * 10f)),
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
                 hudColor);
         }
     }

@@ -65,15 +65,20 @@ namespace F89.Weapons
             _ => HudTargetFilter.None
         };
 
-        public float ActiveWeaponRangeMiles => ActiveWeapon switch
+        public float ActiveWeaponRangeMiles => GetWeaponRangeMiles(ActiveWeapon);
+
+        public float GetWeaponRangeMiles(SelectedWeapon weapon)
         {
-            SelectedWeapon.Aim9z => aim9zConfig != null ? aim9zConfig.rangeMiles : 0f,
-            SelectedWeapon.Agm88jSiaw => agm88jConfig != null ? agm88jConfig.rangeMiles : 0f,
-            SelectedWeapon.Agm114Hellfire => agm114Config != null ? agm114Config.rangeMiles : 0f,
-            SelectedWeapon.Gbu12Paveway => gbu12Config != null ? gbu12Config.rangeMiles : 0f,
-            SelectedWeapon.Gau27a => gau27aConfig != null ? gau27aConfig.maxRangeMiles : 0f,
-            _ => 0f
-        };
+            return weapon switch
+            {
+                SelectedWeapon.Aim9z => aim9zConfig != null ? aim9zConfig.rangeMiles : 0f,
+                SelectedWeapon.Agm88jSiaw => agm88jConfig != null ? agm88jConfig.rangeMiles : 0f,
+                SelectedWeapon.Agm114Hellfire => agm114Config != null ? agm114Config.rangeMiles : 0f,
+                SelectedWeapon.Gbu12Paveway => gbu12Config != null ? gbu12Config.rangeMiles : 0f,
+                SelectedWeapon.Gau27a => gau27aConfig != null ? gau27aConfig.maxRangeMiles : 0f,
+                _ => 0f
+            };
+        }
 
         public bool ShouldShowHudMarkerFor(LockableTarget target)
         {
@@ -182,6 +187,16 @@ namespace F89.Weapons
             gau27aGun?.Configure(gau27a, aircraftController, Camera.main);
         }
 
+        public void ApplySortieLoadout(int aim9z, int agm88j, int gbu12, int agm114, int gauRounds)
+        {
+            aim9zRemaining = Mathf.Max(0, aim9z);
+            agm88jRemaining = Mathf.Max(0, agm88j);
+            gbu12Remaining = Mathf.Max(0, gbu12);
+            agm114Remaining = Mathf.Max(0, agm114);
+            inventoryInitialized = true;
+            gau27aGun?.SetRounds(gauRounds);
+        }
+
         public void SetRadarOverlay(PlaneRadarOverlay overlay)
         {
             radarOverlay = overlay;
@@ -189,7 +204,10 @@ namespace F89.Weapons
 
         private void Update()
         {
-            if (inputSource == null || aircraft == null || lockController == null)
+            if (GamePauseController.IsPaused
+                || inputSource == null
+                || aircraft == null
+                || lockController == null)
             {
                 return;
             }
@@ -202,6 +220,11 @@ namespace F89.Weapons
             if (ActiveWeapon == SelectedWeapon.Gau27a && gau27aGun != null)
             {
                 lockController.SetActiveWeapon(null);
+                if (input.cycleTargetPressed)
+                {
+                    TryCycleTarget();
+                }
+
                 lockController.UpdateLockProgress(false);
                 gau27aGun.UpdateCrosshairFromMouse(rawAimScreen);
                 gau27aGun.TryFire(
@@ -219,6 +242,11 @@ namespace F89.Weapons
             else
             {
                 lockController.SetActiveWeapon(null);
+            }
+
+            if (input.cycleTargetPressed)
+            {
+                TryCycleTarget();
             }
 
             HandleTargetSelectionClick(input, rawAimScreen, lockWeapon != null ? FireActiveWeapon : null, aimScreen);
@@ -281,6 +309,56 @@ namespace F89.Weapons
             }
 
             return radarOverlay;
+        }
+
+        private void TryCycleTarget()
+        {
+            if (ActiveWeapon == SelectedWeapon.None
+                || aircraft == null
+                || lockController == null)
+            {
+                return;
+            }
+
+            var rangeMiles = ActiveWeaponRangeMiles;
+            if (rangeMiles <= 0f)
+            {
+                return;
+            }
+
+            var profile = aircraft.Profile;
+            var worldMap = aircraft.WorldMap;
+            if (profile == null || worldMap == null)
+            {
+                return;
+            }
+
+            lockController.TryCycleNextTargetInRange(
+                rangeMiles,
+                worldMap,
+                profile.ticSizeWorldUnits,
+                IsCycleCandidate);
+        }
+
+        private bool IsCycleCandidate(LockableTarget target)
+        {
+            if (!ShouldShowHudMarkerFor(target))
+            {
+                return false;
+            }
+
+            if (ActiveWeapon == SelectedWeapon.Gau27a)
+            {
+                return DirectFireTargetRules.CanBeDamaged(target);
+            }
+
+            if (target.IsFriendly)
+            {
+                return false;
+            }
+
+            var lockWeapon = GetActiveLockWeapon();
+            return lockWeapon != null && target.MatchesWeapon(lockWeapon.ValidTargetKind);
         }
 
         private void FireActiveWeapon(Vector2 aimScreen)

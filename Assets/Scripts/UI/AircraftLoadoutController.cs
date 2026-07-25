@@ -1,0 +1,1022 @@
+using F89.Core;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace F89.UI
+{
+    public class AircraftLoadoutController : MonoBehaviour
+    {
+        private const string MockupResourcePath = "Loadout/plane_loadout";
+        private static readonly Color HudYellow = new Color(1f, 0.88f, 0f);
+
+        private GUIStyle loadoutValueStyle;
+        private GUIStyle weaponCounterStyle;
+        private GUIStyle gunCounterFieldStyle;
+
+        private Texture2D mockupTexture;
+        private Rect mockupRect;
+        private bool showBailOutConfirm;
+        private bool showOverweightWarning;
+        private bool isDraggingWeapon;
+        private bool isEditingGunRounds;
+        private bool gunRoundsFocusPending;
+        private string gunRoundsEditText = string.Empty;
+        private Rect gunRoundsEditRect;
+
+        private enum GunRoundsEditSource
+        {
+            None = 0,
+            Plane = 1,
+            Tray = 2
+        }
+
+        private GunRoundsEditSource gunRoundsEditSource;
+        private const float GunCounterTextPaddingPx = 2f;
+        private int gunRoundsEditFontSize = 14;
+        private bool gunRoundsSelectAllPending;
+        private AircraftLoadoutWeapon dragWeapon;
+        private readonly HardpointHit[] hardpointHits = new HardpointHit[24];
+        private int hardpointHitCount;
+        private int heldGunArrowIndex = -1;
+        private float gunArrowHoldStartTime;
+        private float nextGunArrowRepeatTime;
+
+        private const float GunArrowInitialRepeatDelaySeconds = 0.3f;
+        private const float GunArrowMaxRepeatIntervalSeconds = 0.16f;
+        private const float GunArrowMinRepeatIntervalSeconds = 0.008f;
+        private const float GunArrowRepeatRampSeconds = 0.9f;
+
+        private struct NormalizedRect
+        {
+            public float X;
+            public float Y;
+            public float W;
+            public float H;
+
+            public Rect ToScreenRect(Rect imageRect)
+            {
+                return new Rect(
+                    imageRect.x + X * imageRect.width,
+                    imageRect.y + Y * imageRect.height,
+                    W * imageRect.width,
+                    H * imageRect.height);
+            }
+        }
+
+        private enum HardpointSlotType
+        {
+            LinkedPair,
+            WingTip
+        }
+
+        private struct HardpointHit
+        {
+            public Rect Rect;
+            public Vector2 CenterPx;
+            public int HardpointNumber;
+            public HardpointSlotType SlotType;
+            public int PairIndex;
+        }
+
+        private static readonly NormalizedRect CurrentLoadoutValueRect = new NormalizedRect { X = 0.403f, Y = 0.908f, W = 0.20f, H = 0.06f };
+        private static readonly NormalizedRect BailOutButtonRect = new NormalizedRect { X = 0.735f, Y = 0.885f, W = 0.115f, H = 0.075f };
+        private static readonly NormalizedRect StartMissionButtonRect = new NormalizedRect { X = 0.855f, Y = 0.885f, W = 0.125f, H = 0.075f };
+
+        private void OnEnable()
+        {
+            AircraftLoadoutState.ResetForNewSortie();
+            mockupTexture = Resources.Load<Texture2D>(MockupResourcePath);
+            ResetDragState();
+        }
+
+        private void Update()
+        {
+            UpdateHeldGunArrowRepeat();
+        }
+
+        private void OnGUI()
+        {
+            EnsureStyles();
+            DrawMockupBackground();
+            if (mockupTexture == null)
+            {
+                return;
+            }
+
+            hardpointHitCount = 0;
+            BuildHardpointHitRects();
+            HandleDragAndDropInput();
+            DrawAssignedWeaponIcons();
+            DrawWeaponTrayCounters();
+            DrawCurrentLoadoutValue();
+            RegisterInteractiveRegions();
+            DrawGunRoundsEditOverlay();
+            if (!showOverweightWarning && !showBailOutConfirm)
+            {
+                DrawDraggedWeapon();
+            }
+
+            if (showBailOutConfirm)
+            {
+                var dialogResult = BailOutConfirmDialog.Draw(true);
+                if (dialogResult == BailOutConfirmDialog.Result.Confirmed)
+                {
+                    ConfirmBailOut();
+                }
+                else if (dialogResult == BailOutConfirmDialog.Result.Cancelled)
+                {
+                    showBailOutConfirm = false;
+                }
+            }
+            else if (showOverweightWarning)
+            {
+                if (LoadoutOverweightDialog.Draw(true))
+                {
+                    showOverweightWarning = false;
+                }
+            }
+        }
+
+        private void ResetDragState()
+        {
+            isDraggingWeapon = false;
+            dragWeapon = AircraftLoadoutWeapon.None;
+            heldGunArrowIndex = -1;
+            CancelGunRoundsEdit();
+        }
+
+        private void DrawMockupBackground()
+        {
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            if (mockupTexture == null)
+            {
+                return;
+            }
+
+            mockupRect = GetFullscreenImageRect(mockupTexture);
+            GUI.DrawTexture(mockupRect, mockupTexture, ScaleMode.StretchToFill, true);
+        }
+
+        private void EnsureMockupRect()
+        {
+            if (mockupTexture != null)
+            {
+                mockupRect = GetFullscreenImageRect(mockupTexture);
+            }
+        }
+
+        private void BuildHardpointHitRects()
+        {
+            var textureWidth = mockupTexture.width;
+            var textureHeight = mockupTexture.height;
+
+            for (var i = 0; i < AircraftLoadoutLayout.LinkedHardpointPairCount; i++)
+            {
+                var pair = AircraftLoadoutLayout.GetLinkedHardpointPair(i);
+                AddHardpointHit(
+                    pair.LeftCenterPx,
+                    AircraftLoadoutLayout.HardpointHitRect(
+                        pair.LeftCenterPx,
+                        mockupRect,
+                        textureWidth,
+                        textureHeight,
+                        AircraftLoadoutLayout.GetHardpointHitExtraBottomPx(pair.LeftNumber),
+                        pair.LeftNumber),
+                    pair.LeftNumber,
+                    HardpointSlotType.LinkedPair,
+                    i);
+                AddHardpointHit(
+                    pair.RightCenterPx,
+                    AircraftLoadoutLayout.HardpointHitRect(
+                        pair.RightCenterPx,
+                        mockupRect,
+                        textureWidth,
+                        textureHeight,
+                        AircraftLoadoutLayout.GetHardpointHitExtraBottomPx(pair.RightNumber),
+                        pair.RightNumber),
+                    pair.RightNumber,
+                    HardpointSlotType.LinkedPair,
+                    i);
+            }
+
+            AddHardpointHit(
+                AircraftLoadoutLayout.LeftWingTipCenterPx,
+                AircraftLoadoutLayout.HardpointHitRect(AircraftLoadoutLayout.LeftWingTipCenterPx, mockupRect, textureWidth, textureHeight),
+                hardpointNumber: 0,
+                HardpointSlotType.WingTip,
+                pairIndex: 0);
+            AddHardpointHit(
+                AircraftLoadoutLayout.RightWingTipCenterPx,
+                AircraftLoadoutLayout.HardpointHitRect(AircraftLoadoutLayout.RightWingTipCenterPx, mockupRect, textureWidth, textureHeight),
+                hardpointNumber: 0,
+                HardpointSlotType.WingTip,
+                pairIndex: 0);
+        }
+
+        private void AddHardpointHit(
+            Vector2 centerPx,
+            Rect rect,
+            int hardpointNumber,
+            HardpointSlotType slotType,
+            int pairIndex)
+        {
+            if (hardpointHitCount >= hardpointHits.Length)
+            {
+                return;
+            }
+
+            hardpointHits[hardpointHitCount++] = new HardpointHit
+            {
+                Rect = rect,
+                CenterPx = centerPx,
+                HardpointNumber = hardpointNumber,
+                SlotType = slotType,
+                PairIndex = pairIndex
+            };
+        }
+
+        private void HandleDragAndDropInput()
+        {
+            if (showBailOutConfirm || showOverweightWarning)
+            {
+                return;
+            }
+
+            HandleGunArrowInput();
+            HandleGunCounterInput();
+
+            if (isEditingGunRounds)
+            {
+                return;
+            }
+
+            var currentEvent = Event.current;
+            if (currentEvent.type == EventType.Used)
+            {
+                return;
+            }
+
+            var textureWidth = mockupTexture.width;
+            var textureHeight = mockupTexture.height;
+
+            if (currentEvent.type == EventType.MouseDown && currentEvent.button == 0)
+            {
+                if (isDraggingWeapon)
+                {
+                    if (TryDropDraggedWeapon(currentEvent.mousePosition)
+                        || !TryFindHardpointHit(currentEvent.mousePosition, out _))
+                    {
+                        ResetDragState();
+                    }
+
+                    currentEvent.Use();
+                    return;
+                }
+
+                if (TryBeginTrayDrag(textureWidth, textureHeight, currentEvent.mousePosition))
+                {
+                    currentEvent.Use();
+                    return;
+                }
+
+                if (TryBeginHardpointDrag(currentEvent.mousePosition))
+                {
+                    currentEvent.Use();
+                }
+
+                return;
+            }
+
+            if (currentEvent.type == EventType.MouseDrag && isDraggingWeapon)
+            {
+                currentEvent.Use();
+                return;
+            }
+
+            if (currentEvent.type == EventType.MouseUp && currentEvent.button == 0 && isDraggingWeapon)
+            {
+                if (TryDropDraggedWeapon(currentEvent.mousePosition))
+                {
+                    ResetDragState();
+                }
+
+                currentEvent.Use();
+            }
+        }
+
+        private bool TryBeginHardpointDrag(Vector2 mousePosition)
+        {
+            if (!TryFindHardpointHit(mousePosition, out var hit))
+            {
+                return false;
+            }
+
+            var weapon = GetHardpointWeapon(hit);
+            if (weapon == AircraftLoadoutWeapon.None)
+            {
+                return false;
+            }
+
+            ClearHardpoint(hit);
+            isDraggingWeapon = true;
+            dragWeapon = weapon;
+            return true;
+        }
+
+        private bool TryBeginTrayDrag(int textureWidth, int textureHeight, Vector2 mousePosition)
+        {
+            foreach (var slot in AircraftLoadoutLayout.WeaponTraySlots)
+            {
+                if (slot.ShowGunRounds)
+                {
+                    continue;
+                }
+
+                var pickRect = AircraftLoadoutLayout.WeaponPickRect(slot, mockupRect, textureWidth, textureHeight);
+                if (!pickRect.Contains(mousePosition))
+                {
+                    continue;
+                }
+
+                isDraggingWeapon = true;
+                dragWeapon = slot.Weapon;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryDropDraggedWeapon(Vector2 mousePosition)
+        {
+            if (dragWeapon == AircraftLoadoutWeapon.None)
+            {
+                return false;
+            }
+
+            if (!TryFindHardpointHit(mousePosition, out var hit))
+            {
+                return false;
+            }
+
+            return TryAssignWeaponToHardpoint(hit, dragWeapon);
+        }
+
+        private bool TryFindHardpointHit(Vector2 mousePosition, out HardpointHit hit)
+        {
+            hit = default;
+            var bestDistanceSq = float.MaxValue;
+            var found = false;
+            var scale = mockupRect.width / mockupTexture.width;
+            var mockupYPx = (mousePosition.y - mockupRect.y) / mockupRect.height * mockupTexture.height;
+
+            for (var i = 0; i < hardpointHitCount; i++)
+            {
+                var candidate = hardpointHits[i];
+                if (AircraftLoadoutLayout.IsFuselageHardpoint(candidate.HardpointNumber)
+                    && !AircraftLoadoutLayout.MatchesFuselageHardpointBand(candidate.HardpointNumber, mockupYPx))
+                {
+                    continue;
+                }
+
+                var slopPx = candidate.HardpointNumber > 0
+                    ? AircraftLoadoutLayout.GetHardpointHitSlopPx(candidate.HardpointNumber)
+                    : AircraftLoadoutLayout.HardpointHitSlopPx * 0.5f;
+                var slop = slopPx * scale;
+                var expandedRect = candidate.Rect;
+                expandedRect.xMin -= slop;
+                expandedRect.yMin -= slop;
+                expandedRect.xMax += slop;
+                expandedRect.yMax += slop;
+
+                var minTopPx = AircraftLoadoutLayout.GetHardpointHitMinTopPx(candidate.HardpointNumber);
+                if (minTopPx > 0f)
+                {
+                    var minTopScreen = AircraftLoadoutLayout.GetHardpointHitMinTopScreenY(
+                        minTopPx,
+                        mockupRect,
+                        mockupTexture.height);
+                    expandedRect.yMin = Mathf.Max(expandedRect.yMin, minTopScreen);
+                }
+
+                if (!expandedRect.Contains(mousePosition))
+                {
+                    continue;
+                }
+
+                var center = candidate.Rect.center;
+                var distanceSq = (center - mousePosition).sqrMagnitude;
+                if (distanceSq >= bestDistanceSq)
+                {
+                    continue;
+                }
+
+                bestDistanceSq = distanceSq;
+                hit = candidate;
+                found = true;
+            }
+
+            return found;
+        }
+
+        private void ShowOverweightWarning()
+        {
+            ResetDragState();
+            Cursor.visible = true;
+            showOverweightWarning = true;
+        }
+
+        private bool TryAssignWeaponToHardpoint(HardpointHit hit, AircraftLoadoutWeapon weapon)
+        {
+            switch (hit.SlotType)
+            {
+                case HardpointSlotType.LinkedPair:
+                    if (AircraftLoadoutState.WouldExceedMaxLoadoutForLinkedPair(hit.PairIndex, weapon))
+                    {
+                        ShowOverweightWarning();
+                        return false;
+                    }
+
+                    if (!AircraftLoadoutState.CanAssignToLinkedPair(hit.PairIndex, weapon))
+                    {
+                        return false;
+                    }
+
+                    AircraftLoadoutState.AssignLinkedPair(hit.PairIndex, weapon);
+                    return true;
+                case HardpointSlotType.WingTip:
+                    if (AircraftLoadoutState.WouldExceedMaxLoadoutForWingTip(weapon))
+                    {
+                        ShowOverweightWarning();
+                        return false;
+                    }
+
+                    if (!AircraftLoadoutState.CanAssignToWingTip(weapon))
+                    {
+                        return false;
+                    }
+
+                    AircraftLoadoutState.AssignWingTip(weapon);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static AircraftLoadoutWeapon GetHardpointWeapon(HardpointHit hit)
+        {
+            switch (hit.SlotType)
+            {
+                case HardpointSlotType.LinkedPair:
+                    return AircraftLoadoutState.GetLinkedPairWeapon(hit.PairIndex);
+                case HardpointSlotType.WingTip:
+                    return AircraftLoadoutState.WingTipWeapon;
+                default:
+                    return AircraftLoadoutWeapon.None;
+            }
+        }
+
+        private static void ClearHardpoint(HardpointHit hit)
+        {
+            switch (hit.SlotType)
+            {
+                case HardpointSlotType.LinkedPair:
+                    AircraftLoadoutState.AssignLinkedPair(hit.PairIndex, AircraftLoadoutWeapon.None);
+                    break;
+                case HardpointSlotType.WingTip:
+                    AircraftLoadoutState.AssignWingTip(AircraftLoadoutWeapon.None);
+                    break;
+            }
+        }
+
+        private void EnsureStyles()
+        {
+            if (loadoutValueStyle != null && weaponCounterStyle != null && gunCounterFieldStyle != null)
+            {
+                return;
+            }
+
+            loadoutValueStyle = HudStyleFactory.CreateLabel(36, FontStyle.Bold, TextAnchor.UpperCenter, HudYellow);
+            weaponCounterStyle = HudStyleFactory.CreateLabel(28, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
+            gunCounterFieldStyle = HudStyleFactory.CreateLabel(28, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
+            gunCounterFieldStyle.normal.background = Texture2D.whiteTexture;
+            gunCounterFieldStyle.focused.background = Texture2D.whiteTexture;
+            gunCounterFieldStyle.active.background = Texture2D.whiteTexture;
+            gunCounterFieldStyle.hover.background = Texture2D.whiteTexture;
+        }
+
+        private void DrawWeaponTrayCounters()
+        {
+            var textureWidth = mockupTexture.width;
+            var textureHeight = mockupTexture.height;
+
+            foreach (var slot in AircraftLoadoutLayout.WeaponTraySlots)
+            {
+                var rect = AircraftLoadoutLayout.WeaponCounterRect(slot, mockupRect, textureWidth, textureHeight);
+                if (slot.ShowGunRounds)
+                {
+                    DrawGunRoundsCounter(rect, GunRoundsEditSource.Tray);
+                    continue;
+                }
+
+                DrawCounter(rect, AircraftLoadoutState.GetMountedCount(slot.Weapon).ToString());
+            }
+
+            var gunRect = AircraftLoadoutLayout.GunCounterRect(mockupRect, textureWidth, textureHeight);
+            DrawGunRoundsCounter(gunRect, GunRoundsEditSource.Plane);
+        }
+
+        private void DrawGunRoundsCounter(Rect containerRect, GunRoundsEditSource source)
+        {
+            var displayText = isEditingGunRounds
+                ? gunRoundsEditText
+                : AircraftLoadoutState.GunRounds.ToString();
+
+            if (isEditingGunRounds && gunRoundsEditSource == source)
+            {
+                return;
+            }
+
+            DrawCounter(containerRect, displayText);
+        }
+
+        private void BeginGunRoundsEdit(GunRoundsEditSource source, Rect containerRect)
+        {
+            isEditingGunRounds = true;
+            gunRoundsEditSource = source;
+            gunRoundsEditText = AircraftLoadoutState.GunRounds.ToString();
+            gunRoundsFocusPending = true;
+            gunRoundsSelectAllPending = true;
+            heldGunArrowIndex = -1;
+            GetGunRoundsTextRect(containerRect, gunRoundsEditText, gunCounterFieldStyle, out gunRoundsEditFontSize);
+            gunRoundsEditRect = GetGunRoundsTextRect(containerRect, gunRoundsEditText, gunCounterFieldStyle, out _);
+        }
+
+        private static Rect GetGunRoundsTextRect(Rect containerRect, string text, GUIStyle style, out int fontSize)
+        {
+            fontSize = Mathf.Clamp(Mathf.RoundToInt(containerRect.height * 0.48f), 14, 32);
+            style.fontSize = fontSize;
+
+            var content = new GUIContent(string.IsNullOrEmpty(text) ? "0" : text);
+            var contentSize = style.CalcSize(content);
+            while (style.fontSize > 12 && contentSize.x > containerRect.width - GunCounterTextPaddingPx * 2f)
+            {
+                style.fontSize--;
+                contentSize = style.CalcSize(content);
+            }
+
+            fontSize = style.fontSize;
+            var paddedWidth = contentSize.x + GunCounterTextPaddingPx * 2f;
+            var paddedHeight = contentSize.y + GunCounterTextPaddingPx * 2f;
+            return new Rect(
+                containerRect.x + (containerRect.width - paddedWidth) * 0.5f,
+                containerRect.y + (containerRect.height - paddedHeight) * 0.5f,
+                paddedWidth,
+                paddedHeight);
+        }
+
+        private void DrawGunRoundsEditOverlay()
+        {
+            if (!isEditingGunRounds || mockupTexture == null)
+            {
+                return;
+            }
+
+            var textureWidth = mockupTexture.width;
+            var textureHeight = mockupTexture.height;
+            var containerRect = gunRoundsEditSource == GunRoundsEditSource.Tray
+                ? GetGunTrayCounterRect(textureWidth, textureHeight)
+                : AircraftLoadoutLayout.GunCounterRect(mockupRect, textureWidth, textureHeight);
+
+            gunRoundsEditRect = GetGunRoundsTextRect(containerRect, gunRoundsEditText, gunCounterFieldStyle, out _);
+            DrawEditableGunCounter(gunRoundsEditRect);
+        }
+
+        private Rect GetGunTrayCounterRect(int textureWidth, int textureHeight)
+        {
+            foreach (var slot in AircraftLoadoutLayout.WeaponTraySlots)
+            {
+                if (slot.ShowGunRounds)
+                {
+                    return AircraftLoadoutLayout.WeaponCounterRect(slot, mockupRect, textureWidth, textureHeight);
+                }
+            }
+
+            return Rect.zero;
+        }
+
+        private void DrawEditableGunCounter(Rect rect)
+        {
+            gunCounterFieldStyle.fontSize = gunRoundsEditFontSize;
+
+            GUI.SetNextControlName("GunRoundsField");
+            var editedText = GUI.TextField(rect, gunRoundsEditText, 4, gunCounterFieldStyle);
+            gunRoundsEditText = FilterGunRoundsInput(editedText);
+
+            if (gunRoundsFocusPending || GUI.GetNameOfFocusedControl() != "GunRoundsField")
+            {
+                GUI.FocusControl("GunRoundsField");
+                gunRoundsFocusPending = false;
+            }
+
+            if (gunRoundsSelectAllPending && Event.current.type == EventType.Repaint)
+            {
+                var textEditor = (TextEditor)GUIUtility.GetStateObject(typeof(TextEditor), GUIUtility.keyboardControl);
+                textEditor.SelectAll();
+                gunRoundsSelectAllPending = false;
+            }
+
+            if (Event.current.type == EventType.KeyDown)
+            {
+                if (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter)
+                {
+                    CommitGunRoundsEdit();
+                    Event.current.Use();
+                }
+                else if (Event.current.keyCode == KeyCode.Escape)
+                {
+                    CancelGunRoundsEdit();
+                    Event.current.Use();
+                }
+            }
+        }
+
+        private static string FilterGunRoundsInput(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return string.Empty;
+            }
+
+            var filtered = string.Empty;
+            foreach (var character in text)
+            {
+                if (character >= '0' && character <= '9')
+                {
+                    filtered += character;
+                }
+            }
+
+            if (filtered.Length > 4)
+            {
+                filtered = filtered.Substring(0, 4);
+            }
+
+            return filtered;
+        }
+
+        private void HandleGunCounterInput()
+        {
+            if (isDraggingWeapon || showBailOutConfirm || showOverweightWarning || mockupTexture == null)
+            {
+                return;
+            }
+
+            var currentEvent = Event.current;
+
+            if (isEditingGunRounds)
+            {
+                if (currentEvent.type == EventType.MouseDown
+                    && currentEvent.button == 0
+                    && !gunRoundsEditRect.Contains(currentEvent.mousePosition))
+                {
+                    CommitGunRoundsEdit();
+                    currentEvent.Use();
+                }
+
+                return;
+            }
+
+            if (currentEvent.type != EventType.MouseDown || currentEvent.button != 0)
+            {
+                return;
+            }
+
+            if (IsMouseOverGunArrow(currentEvent.mousePosition))
+            {
+                return;
+            }
+
+            EnsureMockupRect();
+            var textureWidth = mockupTexture.width;
+            var textureHeight = mockupTexture.height;
+
+            var gunRect = AircraftLoadoutLayout.GunCounterRect(mockupRect, textureWidth, textureHeight);
+            if (TryBeginGunRoundsEditAt(gunRect, GunRoundsEditSource.Plane, currentEvent.mousePosition))
+            {
+                currentEvent.Use();
+                return;
+            }
+
+            foreach (var slot in AircraftLoadoutLayout.WeaponTraySlots)
+            {
+                if (!slot.ShowGunRounds)
+                {
+                    continue;
+                }
+
+                var trayRect = AircraftLoadoutLayout.WeaponCounterRect(slot, mockupRect, textureWidth, textureHeight);
+                if (TryBeginGunRoundsEditAt(trayRect, GunRoundsEditSource.Tray, currentEvent.mousePosition))
+                {
+                    currentEvent.Use();
+                    return;
+                }
+            }
+        }
+
+        private bool TryBeginGunRoundsEditAt(Rect containerRect, GunRoundsEditSource source, Vector2 mousePosition)
+        {
+            var displayText = AircraftLoadoutState.GunRounds.ToString();
+            var textRect = GetGunRoundsTextRect(containerRect, displayText, weaponCounterStyle, out _);
+            if (!textRect.Contains(mousePosition))
+            {
+                return false;
+            }
+
+            BeginGunRoundsEdit(source, containerRect);
+            return true;
+        }
+
+        private bool IsMouseOverGunArrow(Vector2 mousePosition)
+        {
+            if (mockupTexture == null)
+            {
+                return false;
+            }
+
+            EnsureMockupRect();
+            var textureWidth = mockupTexture.width;
+            var textureHeight = mockupTexture.height;
+
+            for (var i = 0; i < AircraftLoadoutLayout.GunArrowHits.Length; i++)
+            {
+                var hit = AircraftLoadoutLayout.GunArrowHits[i];
+                var rect = AircraftLoadoutLayout.GunArrowHitRect(hit, mockupRect, textureWidth, textureHeight);
+                if (rect.Contains(mousePosition))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void CommitGunRoundsEdit()
+        {
+            if (!isEditingGunRounds)
+            {
+                return;
+            }
+
+            isEditingGunRounds = false;
+            gunRoundsEditSource = GunRoundsEditSource.None;
+            gunRoundsFocusPending = false;
+            gunRoundsSelectAllPending = false;
+            GUI.FocusControl(null);
+
+            int rounds;
+            if (string.IsNullOrEmpty(gunRoundsEditText))
+            {
+                rounds = 0;
+            }
+            else if (!int.TryParse(gunRoundsEditText, out rounds))
+            {
+                gunRoundsEditText = AircraftLoadoutState.GunRounds.ToString();
+                return;
+            }
+
+            if (!AircraftLoadoutState.TrySetGunRounds(rounds))
+            {
+                gunRoundsEditText = AircraftLoadoutState.GunRounds.ToString();
+                ShowOverweightWarning();
+                return;
+            }
+
+            gunRoundsEditText = AircraftLoadoutState.GunRounds.ToString();
+        }
+
+        private void CancelGunRoundsEdit()
+        {
+            isEditingGunRounds = false;
+            gunRoundsEditSource = GunRoundsEditSource.None;
+            gunRoundsFocusPending = false;
+            gunRoundsSelectAllPending = false;
+            gunRoundsEditText = AircraftLoadoutState.GunRounds.ToString();
+            GUI.FocusControl(null);
+        }
+
+        private void DrawCounter(Rect rect, string countText)
+        {
+            var fontSize = Mathf.Clamp(Mathf.RoundToInt(rect.height * 0.48f), 14, 32);
+            weaponCounterStyle.fontSize = fontSize;
+
+            var contentSize = weaponCounterStyle.CalcSize(new GUIContent(countText));
+            while (weaponCounterStyle.fontSize > 12 && contentSize.x > rect.width - 2f)
+            {
+                weaponCounterStyle.fontSize--;
+                contentSize = weaponCounterStyle.CalcSize(new GUIContent(countText));
+            }
+
+            GUI.Label(rect, countText, weaponCounterStyle);
+        }
+
+        private void DrawAssignedWeaponIcons()
+        {
+            var textureWidth = mockupTexture.width;
+            var textureHeight = mockupTexture.height;
+
+            for (var i = 0; i < AircraftLoadoutLayout.LinkedHardpointPairCount; i++)
+            {
+                var pair = AircraftLoadoutLayout.GetLinkedHardpointPair(i);
+                var weapon = AircraftLoadoutState.GetLinkedPairWeapon(i);
+                DrawHardpointWeapon(pair.LeftCenterPx, weapon, textureWidth, textureHeight);
+                DrawHardpointWeapon(pair.RightCenterPx, weapon, textureWidth, textureHeight);
+            }
+
+            DrawHardpointWeapon(AircraftLoadoutLayout.LeftWingTipCenterPx, AircraftLoadoutState.WingTipWeapon, textureWidth, textureHeight);
+            DrawHardpointWeapon(AircraftLoadoutLayout.RightWingTipCenterPx, AircraftLoadoutState.WingTipWeapon, textureWidth, textureHeight);
+        }
+
+        private void DrawHardpointWeapon(Vector2 centerPx, AircraftLoadoutWeapon weapon, int textureWidth, int textureHeight)
+        {
+            if (weapon == AircraftLoadoutWeapon.None)
+            {
+                return;
+            }
+
+            var rect = AircraftLoadoutLayout.HardpointRect(centerPx, mockupRect, textureWidth, textureHeight);
+            var maskVerticalPadding = AircraftLoadoutLayout.HardpointMaskVerticalPaddingPx / textureHeight * mockupRect.height;
+            LoadoutWeaponIconLibrary.DrawHardpointMount(rect, weapon, maskVerticalPadding);
+        }
+
+        private void DrawCurrentLoadoutValue()
+        {
+            var rect = CurrentLoadoutValueRect.ToScreenRect(mockupRect);
+            GUI.Label(rect, $"{AircraftLoadoutState.ComputeCurrentLoadoutLbs():N0} lbs", loadoutValueStyle);
+        }
+
+        private void RegisterInteractiveRegions()
+        {
+            if (isDraggingWeapon || showBailOutConfirm || showOverweightWarning)
+            {
+                heldGunArrowIndex = -1;
+                CancelGunRoundsEdit();
+                return;
+            }
+
+            var bailRect = BailOutButtonRect.ToScreenRect(mockupRect);
+            if (GUI.Button(bailRect, GUIContent.none, GUIStyle.none))
+            {
+                showBailOutConfirm = true;
+            }
+
+            var startRect = StartMissionButtonRect.ToScreenRect(mockupRect);
+            if (!showBailOutConfirm && GUI.Button(startRect, GUIContent.none, GUIStyle.none))
+            {
+                StartMission();
+            }
+        }
+
+        private void HandleGunArrowInput()
+        {
+            if (isDraggingWeapon || showBailOutConfirm || showOverweightWarning || isEditingGunRounds || mockupTexture == null)
+            {
+                return;
+            }
+
+            var currentEvent = Event.current;
+            if (currentEvent.type == EventType.MouseUp && currentEvent.button == 0)
+            {
+                heldGunArrowIndex = -1;
+                return;
+            }
+
+            if (currentEvent.type != EventType.MouseDown || currentEvent.button != 0)
+            {
+                return;
+            }
+
+            EnsureMockupRect();
+            var textureWidth = mockupTexture.width;
+            var textureHeight = mockupTexture.height;
+
+            for (var i = 0; i < AircraftLoadoutLayout.GunArrowHits.Length; i++)
+            {
+                var hit = AircraftLoadoutLayout.GunArrowHits[i];
+                var rect = AircraftLoadoutLayout.GunArrowHitRect(hit, mockupRect, textureWidth, textureHeight);
+                if (!rect.Contains(currentEvent.mousePosition))
+                {
+                    continue;
+                }
+
+                AircraftLoadoutState.AdjustGunRounds(hit.RoundDelta);
+                heldGunArrowIndex = i;
+                gunArrowHoldStartTime = Time.unscaledTime;
+                nextGunArrowRepeatTime = Time.unscaledTime + GunArrowInitialRepeatDelaySeconds;
+                currentEvent.Use();
+                return;
+            }
+        }
+
+        private void UpdateHeldGunArrowRepeat()
+        {
+            if (heldGunArrowIndex < 0)
+            {
+                return;
+            }
+
+            if (!Input.GetMouseButton(0)
+                || mockupTexture == null
+                || isDraggingWeapon
+                || isEditingGunRounds
+                || showBailOutConfirm
+                || showOverweightWarning)
+            {
+                heldGunArrowIndex = -1;
+                return;
+            }
+
+            if (Time.unscaledTime < nextGunArrowRepeatTime)
+            {
+                return;
+            }
+
+            var heldHit = AircraftLoadoutLayout.GunArrowHits[heldGunArrowIndex];
+            AircraftLoadoutState.AdjustGunRounds(heldHit.RoundDelta);
+            nextGunArrowRepeatTime = Time.unscaledTime + GetGunArrowRepeatInterval();
+        }
+
+        private float GetGunArrowRepeatInterval()
+        {
+            var holdDuration = Time.unscaledTime - gunArrowHoldStartTime;
+            var ramp = Mathf.Clamp01(holdDuration / GunArrowRepeatRampSeconds);
+            ramp *= ramp;
+            return Mathf.Lerp(GunArrowMaxRepeatIntervalSeconds, GunArrowMinRepeatIntervalSeconds, ramp);
+        }
+
+        private void DrawDraggedWeapon()
+        {
+            if (!isDraggingWeapon || dragWeapon == AircraftLoadoutWeapon.None)
+            {
+                return;
+            }
+
+            var currentEvent = Event.current;
+            if (currentEvent.type != EventType.Repaint
+                && currentEvent.type != EventType.MouseDrag
+                && currentEvent.type != EventType.MouseDown
+                && currentEvent.type != EventType.MouseUp)
+            {
+                return;
+            }
+
+            var dragRect = AircraftLoadoutLayout.HardpointRectAtScreenPoint(
+                currentEvent.mousePosition,
+                mockupTexture.width,
+                mockupTexture.height,
+                mockupRect);
+
+            LoadoutWeaponIconLibrary.DrawWeaponIcon(
+                dragRect,
+                dragWeapon,
+                LoadoutWeaponIconLibrary.GetHardpointMountSizeMultiplier(dragWeapon));
+        }
+
+        private static void StartMission()
+        {
+            AircraftLoadoutState.MarkConfigured();
+            Time.timeScale = 1f;
+            FlightMissionLaunchState.BeginCarrierLaunch();
+            SceneManager.LoadScene(GameScenes.FlightTest);
+        }
+
+        private static void ConfirmBailOut()
+        {
+            var save = CharacterSessionState.ActiveSave;
+            if (save != null)
+            {
+                CharacterSaveRepository.ApplyScorePenalty(save, MissionBriefingState.BailOutScorePenalty);
+            }
+
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(GameScenes.CharacterPage);
+        }
+
+        private static Rect GetFullscreenImageRect(Texture2D texture)
+        {
+            var screenAspect = (float)Screen.width / Screen.height;
+            var textureAspect = (float)texture.width / (float)texture.height;
+
+            if (textureAspect > screenAspect)
+            {
+                var height = Screen.width / textureAspect;
+                return new Rect(0f, (Screen.height - height) * 0.5f, Screen.width, height);
+            }
+
+            var width = Screen.height * textureAspect;
+            return new Rect((Screen.width - width) * 0.5f, 0f, width, Screen.height);
+        }
+    }
+}

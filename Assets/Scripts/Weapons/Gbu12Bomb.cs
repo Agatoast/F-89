@@ -227,7 +227,17 @@ namespace F89.Weapons
                     continue;
                 }
 
-                target.RegisterHit(config.WeaponName, target == guidedTarget);
+                var isGuidedTarget = target == guidedTarget;
+                if (isGuidedTarget)
+                {
+                    var effectiveChance = config.lockHitChance * accuracyMultiplier;
+                    if (Random.value > effectiveChance)
+                    {
+                        continue;
+                    }
+                }
+
+                target.RegisterHit(config.WeaponName, isGuidedTarget);
                 hits++;
             }
 

@@ -14,7 +14,7 @@ namespace F89.UI
         private const float GeoMapWidthScale = 1.44f;
         private const float FullViewOceanPadding = 1.06f;
         private const float ScrollSensitivity = 0.1f;
-        private const float HeaderHeight = 36f;
+        private const float HeaderHeight = 20f;
         private const float MapMargin = 24f;
 
         [SerializeField] private AircraftController aircraft;
@@ -25,7 +25,6 @@ namespace F89.UI
         private bool isDraggingPan;
         private Vector2 lastDragMouse;
         private GUIStyle headerStyle;
-        private GUIStyle infoStyle;
         private GUIStyle carrierMapLabelStyle;
         private GUIStyle baseRangeLabelStyle;
         private GUIStyle mapRangeLabelStyle;
@@ -600,40 +599,7 @@ namespace F89.UI
             GUI.DrawTexture(new Rect(mapPanel.x, 0f, mapPanel.width, HeaderHeight), Texture2D.whiteTexture);
             GUI.color = hudColor;
 
-            var headerText = IsAutopilotFlightMode
-                ? "AUTOPILOT — EN ROUTE"
-                : IsAutopilotSelectMode
-                    ? "AUTOPILOT — SELECT DESTINATION"
-                    : "ANTARCTICA MAP";
-            var closeHint = IsAutopilotFlightMode
-                ? "M — HUD   P — CANCEL"
-                : IsAutopilotSelectMode
-                    ? "P — CANCEL"
-                    : "M — CLOSE";
-            var infoText = closeHint;
-            if (IsAutopilotFlightMode && autopilot != null)
-            {
-                infoText =
-                    $"DEST {autopilot.DestinationLabel}   " +
-                    $"{autopilot.TimeWarpScale:0}X   " +
-                    $"- / = — SPEED   CTRL+CLICK — ADD WP   RIGHT-CLICK — CANCEL AP   {closeHint}";
-            }
-            else if (IsAutopilotSelectMode)
-            {
-                var speedHint = autopilot != null ? $"{autopilot.TimeWarpScale:0}X   - / = — SPEED   " : string.Empty;
-                var routeHint = mapRoute.Count > 0 ? $"P — GO ({mapRoute.Count} WP)   " : string.Empty;
-                infoText += $"   {speedHint}{routeHint}CTRL+CLICK — ADD WP   HOVER — PREVIEW   CLICK — ENGAGE";
-            }
-            else
-            {
-                var waypointHint = HasAutopilotMapTarget
-                    ? "   P — GO TO ROUTE   SHIFT+P — SELECT DEST"
-                    : string.Empty;
-                infoText += $"   HOVER BASE — NAME   CLICK BASE — SELECT   CLICK MAP — SET WP   CTRL+CLICK — ADD ROUTE WP   RIGHT-CLICK — CANCEL AP / REMOVE WP{waypointHint}   SHIFT+CLICK — LOG";
-            }
-
-            GUI.Label(new Rect(mapPanel.x, 2f, mapPanel.width, 16f), headerText, headerStyle);
-            GUI.Label(new Rect(mapPanel.x, 16f, mapPanel.width, HeaderHeight - 16f), infoText, infoStyle);
+            GUI.Label(new Rect(mapPanel.x, 0f, mapPanel.width, HeaderHeight), "ANTARCTICA MAP", headerStyle);
             GUI.color = Color.white;
         }
 
@@ -1483,7 +1449,7 @@ namespace F89.UI
             DrawScreenLine(noseGui, tailRightGui, Color.black, outlineThickness);
             DrawScreenLine(tailLeftGui, tailRightGui, Color.black, outlineThickness);
 
-            DrawMapOutlinedDot(guiPoint, 7f, Color.white, outlineThickness);
+            DrawMapOutlinedDot(guiPoint, 7f * AircraftLandingController.VisualScaleMultiplier, Color.white, outlineThickness);
         }
 
         /// <summary>
@@ -1522,10 +1488,11 @@ namespace F89.UI
             }
 
             var worldUnitsPerMile = GetWorldUnitsPerMile();
+            var markerScale = AircraftLandingController.VisualScaleMultiplier;
             const float sizeScale = 0.5f;
-            var noseDistWorld = Mathf.Max(0.35f, GetVisibleWidthMiles() * 0.015f) * sizeScale * worldUnitsPerMile;
-            var tailDistWorld = Mathf.Max(0.25f, GetVisibleWidthMiles() * 0.01f) * sizeScale * worldUnitsPerMile;
-            var wingSpanWorld = Mathf.Max(0.2f, GetVisibleWidthMiles() * 0.008f) * sizeScale * worldUnitsPerMile;
+            var noseDistWorld = Mathf.Max(0.35f, GetVisibleWidthMiles() * 0.015f) * sizeScale * worldUnitsPerMile * markerScale;
+            var tailDistWorld = Mathf.Max(0.25f, GetVisibleWidthMiles() * 0.01f) * sizeScale * worldUnitsPerMile * markerScale;
+            var wingSpanWorld = Mathf.Max(0.2f, GetVisibleWidthMiles() * 0.008f) * sizeScale * worldUnitsPerMile * markerScale;
             var right = new Vector3(forward.z, 0f, -forward.x);
 
             var noseWorld = position + forward * noseDistWorld;
@@ -2492,17 +2459,14 @@ namespace F89.UI
             }
 
             var hudColor = FlightHudColorPalette.Current;
-            if (headerStyle != null && infoStyle != null)
+            if (headerStyle != null)
             {
                 headerStyle.normal.textColor = hudColor;
-                infoStyle.normal.textColor = hudColor;
                 headerStyle.alignment = TextAnchor.MiddleCenter;
-                infoStyle.alignment = TextAnchor.MiddleCenter;
                 return;
             }
 
             headerStyle = HudStyleFactory.CreateLabel(16, FontStyle.Bold, TextAnchor.MiddleCenter, hudColor);
-            infoStyle = HudStyleFactory.CreateLabel(12, FontStyle.Bold, TextAnchor.MiddleCenter, hudColor, wordWrap: true);
         }
     }
 }

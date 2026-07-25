@@ -7,6 +7,12 @@ namespace F89.UI
 {
     public class PlaneRadarOverlay : MonoBehaviour
     {
+        public enum RadarScopeKind
+        {
+            LongRange,
+            ShortRange
+        }
+
         private const float PanelGapFromRadar = 8f * RadarMfdBezelRenderer.LayoutScale;
         private const float BlipHitRadius = 28f * RadarMfdBezelRenderer.LayoutScale;
         private const float ContactRefreshSeconds = 0.2f;
@@ -35,6 +41,9 @@ namespace F89.UI
         [SerializeField] private AircraftController aircraft;
         [SerializeField] private MissileLockController lockController;
         [SerializeField] private PlayerWeaponController weaponController;
+        [SerializeField] private RadarScopeKind scopeKind = RadarScopeKind.LongRange;
+
+        public RadarScopeKind ScopeKind => scopeKind;
 
         private readonly List<RadarContact> contacts = new List<RadarContact>();
         private readonly List<RadarBlipLayout> blipLayouts = new List<RadarBlipLayout>();
@@ -51,8 +60,8 @@ namespace F89.UI
         private Texture2D circleBorderTexture;
         private Texture2D dotTexture;
         private Texture2D outerRingTexture;
-        private Texture2D midRingTexture;
-        private Texture2D innerRingTexture;
+        private Texture2D[] bandRingTextures = System.Array.Empty<Texture2D>();
+        private RadarScopeKind cachedTextureScope = (RadarScopeKind)(-1);
         private int cachedTextureDiameter = -1;
 
         private struct RadarBlipLayout
@@ -93,9 +102,19 @@ namespace F89.UI
             MissileLockController lockController,
             PlayerWeaponController weapons)
         {
+            Configure(aircraftController, lockController, weapons, RadarScopeKind.LongRange);
+        }
+
+        public void Configure(
+            AircraftController aircraftController,
+            MissileLockController lockController,
+            PlayerWeaponController weapons,
+            RadarScopeKind kind)
+        {
             aircraft = aircraftController;
             this.lockController = lockController;
             weaponController = weapons;
+            scopeKind = kind;
         }
 
         private void Update()
@@ -116,6 +135,7 @@ namespace F89.UI
                     aircraft.transform.position,
                     aircraft.WorldMap,
                     aircraft.Profile.ticSizeWorldUnits,
+                    GetRangeCapMiles(),
                     contacts);
             }
 
@@ -143,7 +163,7 @@ namespace F89.UI
                 return;
             }
 
-            var bezelLayout = RadarMfdBezelRenderer.ComputeLayout();
+            var bezelLayout = GetBezelLayout();
             var layout = MfdLayout.From(bezelLayout);
             var center = layout.ScopeCenter;
             var displayRadius = layout.ScopeRadius;
@@ -204,7 +224,8 @@ namespace F89.UI
                     osbLabelStyle);
             }
 
-            GUI.Label(new Rect(scopeRect.x, scopeRect.yMax - 18f * s, scopeRect.width, 14f * s), "RDY", ringLabelStyle);
+            var rangeLabel = scopeKind == RadarScopeKind.ShortRange ? "25 MI" : "RDY";
+            GUI.Label(new Rect(scopeRect.x, scopeRect.yMax - 18f * s, scopeRect.width, 14f * s), rangeLabel, ringLabelStyle);
 
             for (var i = 0; i < BottomOsbLabels.Length; i++)
             {
@@ -232,7 +253,7 @@ namespace F89.UI
             annotationStyle.normal.textColor = hudColor;
             mfdLabelStyle.normal.textColor = hudColor;
 
-            GUI.Label(new Rect(scope.x + 4f * s, scope.y + 8f * s, 28f * s, 36f * s), "▲\n150\n▼", annotationStyle);
+            GUI.Label(new Rect(scope.x + 4f * s, scope.y + 8f * s, 28f * s, 36f * s), $"▲\n{Mathf.RoundToInt(GetRangeMiles())}\n▼", annotationStyle);
             GUI.Label(new Rect(scope.x + 4f * s, scope.y + 52f * s, 28f * s, 16f * s), "A 6", mfdLabelStyle);
             GUI.Label(new Rect(scope.x + 4f * s, scope.y + 70f * s, 28f * s, 16f * s), "4 B", mfdLabelStyle);
             GUI.Label(new Rect(scope.x + 4f * s, scope.y + 88f * s, 28f * s, 16f * s), "M 4", mfdLabelStyle);
@@ -339,48 +360,46 @@ namespace F89.UI
         private void DrawRangeRings(Vector2 center, float displayRadius)
         {
             var hudColor = FlightHudColorPalette.Mfd;
-            var rangeScale = displayRadius / RadarContactScanner.RangeMiles;
-            var innerRadius = RadarContactScanner.HostileDetectionMiles * rangeScale;
-            var midRadius = RadarContactScanner.MidRangeBandMiles * rangeScale;
-            var innerSize = innerRadius * 2f;
-            var midSize = midRadius * 2f;
-
+            var rangeMiles = GetRangeMiles();
+            var rangeScale = displayRadius / rangeMiles;
+            var bandMiles = GetRangeBandMiles();
             var outerSize = displayRadius * 2f;
+
             GUI.color = new Color(hudColor.r, hudColor.g, hudColor.b, 0.55f);
             GUI.DrawTexture(
                 new Rect(center.x - displayRadius, center.y - displayRadius, outerSize, outerSize),
                 outerRingTexture);
-            GUI.DrawTexture(
-                new Rect(center.x - midRadius, center.y - midRadius, midSize, midSize),
-                midRingTexture);
-            GUI.DrawTexture(
-                new Rect(center.x - innerRadius, center.y - innerRadius, innerSize, innerSize),
-                innerRingTexture);
+
+            for (var i = 0; i < bandMiles.Length && i < bandRingTextures.Length; i++)
+            {
+                var bandRadius = bandMiles[i] * rangeScale;
+                var bandSize = bandRadius * 2f;
+                GUI.DrawTexture(
+                    new Rect(center.x - bandRadius, center.y - bandRadius, bandSize, bandSize),
+                    bandRingTextures[i]);
+            }
+
             GUI.color = Color.white;
 
             ringLabelStyle.normal.textColor = hudColor;
-
-            var midLabel = "100 MI ID";
-            var midSizeLabel = ringLabelStyle.CalcSize(new GUIContent(midLabel));
-            GUI.Label(
-                new Rect(
-                    center.x - midSizeLabel.x * 0.5f,
-                    center.y + midRadius + 4f,
-                    midSizeLabel.x,
-                    midSizeLabel.y),
-                midLabel,
-                ringLabelStyle);
-
-            var innerLabel = "50 MI ID";
-            var innerSizeLabel = ringLabelStyle.CalcSize(new GUIContent(innerLabel));
-            GUI.Label(
-                new Rect(
-                    center.x - innerSizeLabel.x * 0.5f,
-                    center.y + innerRadius + 4f,
-                    innerSizeLabel.x,
-                    innerSizeLabel.y),
-                innerLabel,
-                ringLabelStyle);
+            for (var i = 0; i < bandMiles.Length; i++)
+            {
+                var bandRadius = bandMiles[i] * rangeScale;
+                var label = scopeKind == RadarScopeKind.ShortRange
+                    ? $"{bandMiles[i]:0} MI"
+                    : i == 0
+                        ? "50 MI ID"
+                        : "100 MI ID";
+                var labelSize = ringLabelStyle.CalcSize(new GUIContent(label));
+                GUI.Label(
+                    new Rect(
+                        center.x - labelSize.x * 0.5f,
+                        center.y + bandRadius + 4f,
+                        labelSize.x,
+                        labelSize.y),
+                    label,
+                    ringLabelStyle);
+            }
         }
 
         private void DrawContacts(Vector2 center, float displayRadius)
@@ -429,7 +448,7 @@ namespace F89.UI
                 return;
             }
 
-            var scale = displayRadius / RadarContactScanner.RangeMiles;
+            var scale = displayRadius / GetRangeMiles();
             var worldUnitsPerMile = GetWorldUnitsPerMile();
 
             foreach (var missile in incomingMissiles)
@@ -465,6 +484,7 @@ namespace F89.UI
                     aircraft.transform.position,
                     aircraft.WorldMap,
                     aircraft.Profile.ticSizeWorldUnits,
+                    GetRangeCapMiles(),
                     contacts);
             }
         }
@@ -477,7 +497,7 @@ namespace F89.UI
                 return;
             }
 
-            var scale = displayRadius / RadarContactScanner.RangeMiles;
+            var scale = displayRadius / GetRangeMiles();
             var worldUnitsPerMile = GetWorldUnitsPerMile();
 
             foreach (var contact in contacts)
@@ -544,7 +564,7 @@ namespace F89.UI
             var guiOffset = new Vector2(rightMiles * scale, -forwardMiles * scale);
             guiCenter = radarCenter + guiOffset;
 
-            var maxRadius = RadarContactScanner.RangeMiles * scale;
+            var maxRadius = GetRangeMiles() * scale;
             return guiOffset.magnitude <= maxRadius + 0.5f;
         }
 
@@ -565,7 +585,7 @@ namespace F89.UI
                 return false;
             }
 
-            var layout = MfdLayout.From(RadarMfdBezelRenderer.ComputeLayout());
+            var layout = MfdLayout.From(GetBezelLayout());
             if (Vector2.Distance(guiPoint, layout.ScopeCenter) > layout.ScopeRadius + BlipHitRadius)
             {
                 return false;
@@ -599,7 +619,7 @@ namespace F89.UI
                 return false;
             }
 
-            var layout = MfdLayout.From(RadarMfdBezelRenderer.ComputeLayout());
+            var layout = MfdLayout.From(GetBezelLayout());
             var center = layout.ScopeCenter;
             var displayRadius = layout.ScopeRadius;
 
@@ -638,12 +658,12 @@ namespace F89.UI
 
         private static MfdLayout GetMfdLayout()
         {
-            return MfdLayout.From(RadarMfdBezelRenderer.ComputeLayout());
+            return MfdLayout.From(RadarMfdBezelRenderer.ComputeBottomLeftLayout());
         }
 
         public static Rect GetRectAboveRadar(float height)
         {
-            var layout = MfdLayout.From(RadarMfdBezelRenderer.ComputeLayout());
+            var layout = MfdLayout.From(RadarMfdBezelRenderer.ComputeBottomLeftLayout());
             return new Rect(
                 layout.AssemblyRect.x,
                 layout.AssemblyRect.y - PanelGapFromRadar - height,
@@ -724,7 +744,7 @@ namespace F89.UI
         private void EnsureTextures()
         {
             var diameter = Mathf.RoundToInt(RadarMfdBezelRenderer.DisplayDiameter);
-            if (cachedTextureDiameter == diameter)
+            if (cachedTextureScope == scopeKind && cachedTextureDiameter == diameter)
             {
                 return;
             }
@@ -733,13 +753,59 @@ namespace F89.UI
             circleBorderTexture = CreateCircleBorderTexture(diameter, 2f);
             dotTexture = CreateFilledCircleTexture(Mathf.RoundToInt(24f * RadarMfdBezelRenderer.LayoutScale), 1f);
             outerRingTexture = CreateDottedCircleTexture(diameter, 5);
-            var midDiameter = Mathf.RoundToInt(
-                RadarMfdBezelRenderer.DisplayDiameter * (RadarContactScanner.MidRangeBandMiles / RadarContactScanner.RangeMiles));
-            midRingTexture = CreateDottedCircleTexture(midDiameter, 4);
-            var innerDiameter = Mathf.RoundToInt(
-                RadarMfdBezelRenderer.DisplayDiameter * (RadarContactScanner.HostileDetectionMiles / RadarContactScanner.RangeMiles));
-            innerRingTexture = CreateDottedCircleTexture(innerDiameter, 4);
+
+            var bandMiles = GetRangeBandMiles();
+            bandRingTextures = new Texture2D[bandMiles.Length];
+            for (var i = 0; i < bandMiles.Length; i++)
+            {
+                var bandDiameter = Mathf.RoundToInt(
+                    RadarMfdBezelRenderer.DisplayDiameter * (bandMiles[i] / GetRangeMiles()));
+                bandRingTextures[i] = CreateDottedCircleTexture(bandDiameter, 4);
+            }
+
+            cachedTextureScope = scopeKind;
             cachedTextureDiameter = diameter;
+        }
+
+        private RadarMfdBezelRenderer.Layout GetBezelLayout()
+        {
+            return scopeKind == RadarScopeKind.ShortRange
+                ? RadarMfdBezelRenderer.ComputeBottomRightLayout()
+                : RadarMfdBezelRenderer.ComputeBottomLeftLayout();
+        }
+
+        private float? GetRangeCapMiles()
+        {
+            return scopeKind == RadarScopeKind.ShortRange
+                ? RadarContactScanner.ShortRangeMiles
+                : null;
+        }
+
+        private float GetRangeMiles()
+        {
+            return scopeKind == RadarScopeKind.ShortRange
+                ? RadarContactScanner.ShortRangeMiles
+                : RadarContactScanner.RangeMiles;
+        }
+
+        private float[] GetRangeBandMiles()
+        {
+            if (scopeKind == RadarScopeKind.ShortRange)
+            {
+                return new[]
+                {
+                    RadarContactScanner.ShortRangeBandMiles,
+                    RadarContactScanner.ShortRangeBandMiles * 2f,
+                    RadarContactScanner.ShortRangeBandMiles * 3f,
+                    RadarContactScanner.ShortRangeBandMiles * 4f
+                };
+            }
+
+            return new[]
+            {
+                RadarContactScanner.HostileDetectionMiles,
+                RadarContactScanner.MidRangeBandMiles
+            };
         }
 
         private static Texture2D CreateFilledCircleTexture(int diameter, float edgeSoftness)

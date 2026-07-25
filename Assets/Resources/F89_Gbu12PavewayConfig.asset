@@ -20,6 +20,7 @@ MonoBehaviour:
   maxBeepInterval: 0.6
   minBeepInterval: 0.14
   terminalGuidanceMiles: 1
+  lockHitChance: 0.88
   blastRadiusTics: 1.5
   maxScatterTicsAtZeroAccuracy: 3
   startingBombCount: 4

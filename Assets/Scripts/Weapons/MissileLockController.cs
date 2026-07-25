@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using F89.Audio;
+using F89.Core;
 using F89.Flight;
 using UnityEngine;
 
@@ -200,6 +202,82 @@ namespace F89.Weapons
             {
                 EnsureAudio();
                 TriggerIffFriendResponse(target);
+            }
+
+            RestartLockProgressForSelection();
+            return true;
+        }
+
+        public bool TryCycleNextTargetInRange(
+            float rangeMiles,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits,
+            System.Predicate<LockableTarget> includeTarget)
+        {
+            if (aircraft == null || worldMap == null || rangeMiles <= 0f || includeTarget == null)
+            {
+                return false;
+            }
+
+            var candidates = new List<LockableTarget>();
+            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var observer = aircraft.transform.position;
+
+            foreach (var target in targets)
+            {
+                if (target == null
+                    || !target.IsAlive
+                    || !includeTarget(target)
+                    || !WeaponLockRange.IsWithinRange(
+                        observer,
+                        target.transform.position,
+                        rangeMiles,
+                        worldMap,
+                        ticSizeWorldUnits))
+                {
+                    continue;
+                }
+
+                candidates.Add(target);
+            }
+
+            if (candidates.Count == 0)
+            {
+                return false;
+            }
+
+            candidates.Sort((a, b) =>
+            {
+                var distanceA = CombatThreatRange.DistanceMiles(
+                    observer,
+                    a.transform.position,
+                    worldMap,
+                    ticSizeWorldUnits);
+                var distanceB = CombatThreatRange.DistanceMiles(
+                    observer,
+                    b.transform.position,
+                    worldMap,
+                    ticSizeWorldUnits);
+                return distanceA.CompareTo(distanceB);
+            });
+
+            var currentIndex = SelectedTarget != null ? candidates.IndexOf(SelectedTarget) : -1;
+            var nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % candidates.Count;
+            var nextTarget = candidates[nextIndex];
+
+            if (lockWeapon != null && !IsSelectableTarget(nextTarget))
+            {
+                return false;
+            }
+
+            SelectedTarget = nextTarget;
+
+            if (lockWeapon != null
+                && nextTarget.RespondsWithIff
+                && nextTarget.MatchesWeapon(lockWeapon.ValidTargetKind))
+            {
+                EnsureAudio();
+                TriggerIffFriendResponse(nextTarget);
             }
 
             RestartLockProgressForSelection();

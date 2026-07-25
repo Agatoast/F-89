@@ -24,6 +24,7 @@ namespace F89.Weapons
         public float terminalGuidanceMiles = 1f;
 
         [Header("Impact")]
+        [Range(0f, 1f)] public float lockHitChance = 0.88f;
         public float blastRadiusTics = 1.5f;
         [Tooltip("Max random impact scatter at 0% firing accuracy, in tics.")]
         public float maxScatterTicsAtZeroAccuracy = 3f;

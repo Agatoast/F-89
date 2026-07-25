@@ -1,3 +1,4 @@
+using F89.Core;
 using F89.Flight;
 using F89.UI;
 using UnityEngine;
@@ -20,6 +21,7 @@ namespace F89.Controls
         public bool selectAgm114Pressed;
         public bool selectGau27aPressed;
         public bool flarePressed;
+        public bool cycleTargetPressed;
     }
 
     [DefaultExecutionOrder(-100)]
@@ -52,12 +54,12 @@ namespace F89.Controls
         private static AircraftControlInput ReadLegacyInput()
         {
             var turn = 0f;
-            if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))
+            if (GameKeyBindings.IsHeld(GameKeyBindingIds.TurnLeft))
             {
                 turn -= 1f;
             }
 
-            if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))
+            if (GameKeyBindings.IsHeld(GameKeyBindingIds.TurnRight))
             {
                 turn += 1f;
             }
@@ -65,19 +67,20 @@ namespace F89.Controls
             return new AircraftControlInput
             {
                 turn = turn,
-                throttleHeld = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow),
-                airbrakeHeld = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow),
-                afterburnerHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift),
+                throttleHeld = GameKeyBindings.IsHeld(GameKeyBindingIds.Throttle),
+                airbrakeHeld = GameKeyBindings.IsHeld(GameKeyBindingIds.Airbrake),
+                afterburnerHeld = GameKeyBindings.IsHeld(GameKeyBindingIds.Afterburner),
                 aimScreenPosition = Input.mousePosition,
                 hasAimScreenPosition = true,
-                firePressed = Input.GetMouseButtonDown(0),
-                fireHeld = Input.GetMouseButton(0),
-                selectAim9zPressed = Input.GetKeyDown(KeyCode.Alpha5),
-                selectAgm88jPressed = Input.GetKeyDown(KeyCode.Alpha4),
-                selectGbu12Pressed = Input.GetKeyDown(KeyCode.Alpha3),
-                selectAgm114Pressed = Input.GetKeyDown(KeyCode.Alpha2),
-                selectGau27aPressed = Input.GetKeyDown(KeyCode.Alpha1),
-                flarePressed = Input.GetKeyDown(KeyCode.F)
+                firePressed = GameKeyBindings.WasPressed(GameKeyBindingIds.Fire),
+                fireHeld = GameKeyBindings.IsHeld(GameKeyBindingIds.Fire),
+                selectAim9zPressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAim9z),
+                selectAgm88jPressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAgm88j),
+                selectGbu12Pressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectGbu12),
+                selectAgm114Pressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAgm114),
+                selectGau27aPressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectGau27a),
+                flarePressed = GameKeyBindings.WasPressed(GameKeyBindingIds.Flare),
+                cycleTargetPressed = GameKeyBindings.WasPressed(GameKeyBindingIds.CycleTarget)
             };
         }
     }
