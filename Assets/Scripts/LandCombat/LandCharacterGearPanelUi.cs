@@ -169,7 +169,7 @@ namespace F89.LandCombat
             var item = CharacterGearSession.ActiveLoadout.Inventory[index];
             if (LandLoadoutSlots.IsValidItem(item))
             {
-                GUI.Label(cell, CharacterGearSession.Catalog.GetDisplayName(item), HudStyleFactory.CreateLabel(10, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black, wordWrap: true));
+                DrawItemLabel(cell, item, 10);
             }
 
             if (!GUI.Button(cell, GUIContent.none, GUIStyle.none))
@@ -186,7 +186,7 @@ namespace F89.LandCombat
             var item = LandLoadoutSlots.GetEquipped(CharacterGearSession.ActiveLoadout, slot);
             if (LandLoadoutSlots.IsValidItem(item))
             {
-                GUI.Label(cell, CharacterGearSession.Catalog.GetDisplayName(item), HudStyleFactory.CreateLabel(9, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black, wordWrap: true));
+                DrawItemLabel(cell, item, 9);
             }
             else
             {
@@ -207,7 +207,7 @@ namespace F89.LandCombat
             var item = LandGearSaveMapper.ToRuntimeInstance(vault.Items[index]);
             if (LandLoadoutSlots.IsValidItem(item))
             {
-                GUI.Label(cell, CharacterGearSession.Catalog.GetDisplayName(item), HudStyleFactory.CreateLabel(9, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black, wordWrap: true));
+                DrawItemLabel(cell, item, 9);
             }
 
             if (!GUI.Button(cell, GUIContent.none, GUIStyle.none))
@@ -216,6 +216,21 @@ namespace F89.LandCombat
             }
 
             HandleVaultClick(index);
+        }
+
+        private static void DrawItemLabel(Rect cell, LandGearInstance item, int nameFontSize)
+        {
+            var catalog = CharacterGearSession.Catalog;
+            var nameStyle = HudStyleFactory.CreateLabel(nameFontSize, FontStyle.Bold, TextAnchor.UpperCenter, Color.black, wordWrap: true);
+            var statStyle = HudStyleFactory.CreateLabel(Mathf.Max(7, nameFontSize - 2), FontStyle.Normal, TextAnchor.LowerCenter, Color.black, wordWrap: true);
+            var nameRect = new Rect(cell.x, cell.y + 2f, cell.width, cell.height * 0.55f);
+            var statRect = new Rect(cell.x, cell.y + cell.height * 0.45f, cell.width, cell.height * 0.5f);
+
+            GUI.Label(nameRect, catalog.GetDisplayName(item), nameStyle);
+            if (catalog.TryGetWeaponSummary(item, out var summary))
+            {
+                GUI.Label(statRect, summary, statStyle);
+            }
         }
 
         private static void HandleInventoryClick(int index)

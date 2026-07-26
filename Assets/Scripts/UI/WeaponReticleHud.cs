@@ -1,6 +1,8 @@
+using F89.Core;
 using F89.Controls;
 using F89.Weapons;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace F89.UI
 {
@@ -37,7 +39,9 @@ namespace F89.UI
 
         private void Update()
         {
-            var shouldHideCursor = !GamePauseController.IsPaused && !AntarcticaMapOverlay.IsOpen;
+            var shouldHideCursor = GameScenes.IsGameplayScene(SceneManager.GetActiveScene().name)
+                && !GamePauseController.IsPaused
+                && !AntarcticaMapOverlay.IsOpen;
             if (shouldHideCursor)
             {
                 if (!gameplayCursorHidden)

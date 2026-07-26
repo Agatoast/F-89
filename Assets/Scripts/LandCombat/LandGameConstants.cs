@@ -5,6 +5,10 @@ namespace F89.LandCombat
         public const float PlayerMoveSpeed = 6f;
         public const float PlayerMaxHealth = 100f;
         public const float WorldUnitsPerTile = 1f;
+        public const float WorldUnitsPerMile = 20f;
+        public const float ArenaSizeMiles = 1f;
+        public const float ArenaSizeWorldUnits = 20f;
+        public const float ArenaHalfSizeWorldUnits = 10f;
         public const int ProjectilePoolSize = 256;
         public const float DefaultProjectileLifetime = 4f;
         public const int PackSlotCount = 12;

@@ -17,6 +17,7 @@ namespace F89.Core
         public string PortraitId = string.Empty;
         public string VehicleKillSummary = string.Empty;
         public string TroopKillSummary = string.Empty;
+        public string[] EarnedRibbonIds = Array.Empty<string>();
         public CharacterLoadoutSaveData Loadout = new CharacterLoadoutSaveData();
         public CharacterVaultSaveData Vault = new CharacterVaultSaveData();
 

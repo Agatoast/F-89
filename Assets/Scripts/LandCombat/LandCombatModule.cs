@@ -26,18 +26,19 @@ namespace F89.LandCombat
 
         public static void ExitToFlight(LandGroundSessionResult result)
         {
-            if (!IsActive)
+            var returnSnapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
+            if (!returnSnapshot.IsValid)
             {
+                Debug.LogError(
+                    "[LandCombat] Exit requested without a stored landing snapshot — cannot restore flight position.");
                 return;
             }
 
-            var returnSnapshot = LandSortieSnapshot.Empty;
-            returnSnapshot.IsValid = true;
             returnSnapshot.ReturnSceneName = GameScenes.FlightTest;
-
             LandMissionHandoffState.BeginReturnToFlight(returnSnapshot, result);
             IsActive = false;
-            Debug.Log("[LandCombat] Module exited; flight return handoff queued.");
+            Debug.Log(
+                $"[LandCombat] Module exited; flight return queued at {returnSnapshot.AircraftWorldPosition}.");
         }
 
         public static void ShutdownWithoutHandoff()

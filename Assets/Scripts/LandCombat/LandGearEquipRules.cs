@@ -8,8 +8,8 @@ namespace F89.LandCombat
         public static string GetSlotDisplayName(LandEquipmentSlot slot) =>
             slot switch
             {
-                LandEquipmentSlot.Utility1 => "Vitality Utility",
-                LandEquipmentSlot.Utility2 => "Agility Utility",
+                LandEquipmentSlot.Utility1 => "Utility 1",
+                LandEquipmentSlot.Utility2 => "Utility 2",
                 LandEquipmentSlot.Module2 => "Right Shoulder",
                 LandEquipmentSlot.Helmet => "Helmet",
                 LandEquipmentSlot.Module1 => "Left Shoulder",

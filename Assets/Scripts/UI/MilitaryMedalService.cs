@@ -14,27 +14,42 @@ namespace F89.UI
         {
             if (save == null)
             {
-                return GetMedalTexture(MilitaryMedalIds.DefaultForNewCharacter);
+                return null;
             }
 
-            return GetMedalTexture(MilitaryMedalCatalog.NormalizeAwardId(save.HighestAward));
+            var medalId = MilitaryMedalCatalog.GetHighestMedalIdFromEarnedRibbons(save.EarnedRibbonIds);
+            return GetMedalTexture(medalId);
+        }
+
+        public static Texture2D GetMedalTextureByPrecedence(int precedence)
+        {
+            if (!MilitaryMedalCatalog.TryGetDefinitionByPrecedence(precedence, out var definition))
+            {
+                return null;
+            }
+
+            return GetMedalTexture(definition.Id);
         }
 
         public static Texture2D GetMedalTexture(string medalId)
         {
-            var normalizedId = MilitaryMedalCatalog.NormalizeAwardId(medalId);
-            if (Textures.TryGetValue(normalizedId, out var cached) && cached != null)
+            if (string.IsNullOrEmpty(medalId) || medalId == MilitaryMedalIds.None)
+            {
+                return null;
+            }
+
+            if (Textures.TryGetValue(medalId, out var cached) && cached != null)
             {
                 return cached;
             }
 
-            if (!MilitaryMedalCatalog.TryGetDefinition(normalizedId, out var definition))
+            if (!MilitaryMedalCatalog.TryGetDefinition(medalId, out var definition))
             {
                 return null;
             }
 
             var texture = Resources.Load<Texture2D>(MedalResourceRoot + definition.ResourceName);
-            Textures[normalizedId] = texture;
+            Textures[medalId] = texture;
             return texture;
         }
 

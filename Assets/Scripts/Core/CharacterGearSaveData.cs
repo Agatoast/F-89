@@ -5,6 +5,7 @@ namespace F89.Core
     [Serializable]
     public class CharacterGearAffixSaveData
     {
+        // Maps to F89.LandCombat.LandItemStat (Damage, RateOfFire).
         public int StatId;
         public float Value;
     }

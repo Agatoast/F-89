@@ -9,18 +9,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dfadeb343f4b4f249ae2710321ae7207, type: 3}
+  m_Script: {fileID: 11500000, guid: 53dcbdcdd70f3504db4870b8e43bdc05, type: 3}
   m_Name: TestHelmet
-  m_EditorClassIdentifier: Assembly-CSharp::MTAU.Core.GearDefinition
-  displayName: Helmet
-  description: Light head protection salvaged from derelict suits.
-  slot: 8
-  rarity: 0
-  maxHealthBonus: 0
-  velocityBonus: 0
-  strengthMod: 0
-  agilityMod: 0
-  vitalityMod: 0
-  intelligenceMod: 1
-  wisdomMod: 0
-  defenseMod: 0
+  m_EditorClassIdentifier: Assembly-CSharp::F89.LandCombat.LandGearDefinition
+  DisplayName: Helmet
+  Description: Light head protection salvaged from derelict suits.
+  Slot: 8
+  Rarity: 0

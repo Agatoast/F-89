@@ -9,10 +9,8 @@ namespace F89.UI
     public class AntarcticaMapOverlay : MonoBehaviour
     {
         private const float MinVisibleWidthMiles = 20f;
-        private const float EastWestStretch = 1.2f;
-        // +44% east-west vs raw map aspect (1.2 base display width * 1.2 expansion).
-        private const float GeoMapWidthScale = 1.44f;
         private const float FullViewOceanPadding = 1.06f;
+        private static readonly Color MapOceanUnderlayColor = new Color(0.239f, 0.486f, 0.800f, 1f);
         private const float ScrollSensitivity = 0.1f;
         private const float HeaderHeight = 20f;
         private const float MapMargin = 24f;
@@ -822,7 +820,7 @@ namespace F89.UI
                 return 0f;
             }
 
-            var milesPerSecond = mph / 3600f;
+            var milesPerSecond = worldMap.MphToMilesPerSecond(mph);
             if (autopilotTimeWarp)
             {
                 var warp = autopilot != null
@@ -910,6 +908,8 @@ namespace F89.UI
             }
 
             var projection = GetMapGeoProjection();
+            GUI.color = MapOceanUnderlayColor;
+            GUI.DrawTexture(mapRect, Texture2D.whiteTexture);
             GUI.color = Color.white;
             GUI.DrawTextureWithTexCoords(mapRect, texture, projection.GetSatelliteTextureCoords());
         }
@@ -919,12 +919,13 @@ namespace F89.UI
             var visibleHalfMiles = GetVisibleHalfMiles();
             var spacingMiles = ChooseGridSpacingMiles(visibleHalfMiles);
             var centerMiles = GetViewCenterMiles();
-            var antarcticaHalfMiles = worldMap.antarcticaSizeMiles * 0.5f;
+            var antarcticaHalfWidthMiles = worldMap.antarcticaSizeMiles * 0.5f;
+            var antarcticaHalfHeightMiles = antarcticaHalfWidthMiles / AntarcticaLandMask.GetMapWidthOverHeight();
 
-            var minMilesX = Mathf.Max(-antarcticaHalfMiles, centerMiles.x - visibleHalfMiles);
-            var maxMilesX = Mathf.Min(antarcticaHalfMiles, centerMiles.x + visibleHalfMiles);
-            var minMilesY = Mathf.Max(-antarcticaHalfMiles, centerMiles.y - visibleHalfMiles);
-            var maxMilesY = Mathf.Min(antarcticaHalfMiles, centerMiles.y + visibleHalfMiles);
+            var minMilesX = Mathf.Max(-antarcticaHalfWidthMiles, centerMiles.x - visibleHalfMiles);
+            var maxMilesX = Mathf.Min(antarcticaHalfWidthMiles, centerMiles.x + visibleHalfMiles);
+            var minMilesY = Mathf.Max(-antarcticaHalfHeightMiles, centerMiles.y - visibleHalfMiles);
+            var maxMilesY = Mathf.Min(antarcticaHalfHeightMiles, centerMiles.y + visibleHalfMiles);
 
             var startX = Mathf.Floor(minMilesX / spacingMiles) * spacingMiles;
             var startY = Mathf.Floor(minMilesY / spacingMiles) * spacingMiles;
@@ -2225,11 +2226,13 @@ namespace F89.UI
 
         private void ClampPanOffset()
         {
-            var antarcticaHalfMiles = worldMap.antarcticaSizeMiles * 0.5f;
+            var antarcticaHalfWidthMiles = worldMap.antarcticaSizeMiles * 0.5f;
+            var antarcticaHalfHeightMiles = antarcticaHalfWidthMiles / AntarcticaLandMask.GetMapWidthOverHeight();
             var visibleHalfMiles = GetVisibleHalfMiles();
 
             // Full-theater zoom shows the entire map. Keep pan at origin so imagery stays aligned.
-            if (visibleHalfMiles >= antarcticaHalfMiles)
+            if (visibleHalfMiles >= antarcticaHalfWidthMiles
+                && visibleHalfMiles >= antarcticaHalfHeightMiles)
             {
                 if (zoomLevel <= 0.001f)
                 {
@@ -2239,25 +2242,24 @@ namespace F89.UI
                 return;
             }
 
-            var panLimit = Mathf.Max(0f, antarcticaHalfMiles - visibleHalfMiles);
+            var panLimitX = Mathf.Max(0f, antarcticaHalfWidthMiles - visibleHalfMiles);
+            var panLimitY = Mathf.Max(0f, antarcticaHalfHeightMiles - visibleHalfMiles);
             panOffsetMiles = new Vector2(
-                Mathf.Clamp(panOffsetMiles.x, -panLimit, panLimit),
-                Mathf.Clamp(panOffsetMiles.y, -panLimit, panLimit));
+                Mathf.Clamp(panOffsetMiles.x, -panLimitX, panLimitX),
+                Mathf.Clamp(panOffsetMiles.y, -panLimitY, panLimitY));
         }
 
         private Rect GetGeoMapRect(Rect mapRect)
         {
             var texture = GetSatelliteTexture();
-            var aspect = texture != null
-                ? (float)texture.width / texture.height
-                : 1024f / 788f;
+            var aspect = GetMapTextureAspect();
 
             var geoHeight = mapRect.height;
-            var geoWidth = geoHeight * aspect * GeoMapWidthScale;
+            var geoWidth = geoHeight * aspect;
             if (geoWidth > mapRect.width)
             {
                 geoWidth = mapRect.width;
-                geoHeight = geoWidth / (aspect * GeoMapWidthScale);
+                geoHeight = geoWidth / aspect;
             }
 
             var y = mapRect.y + (mapRect.height - geoHeight) * 0.5f;
@@ -2266,11 +2268,13 @@ namespace F89.UI
 
         private float GetMapPanelEastWestStretch()
         {
+            return GetMapTextureAspect();
+        }
+
+        private float GetMapTextureAspect()
+        {
             var texture = GetSatelliteTexture();
-            var aspect = texture != null
-                ? (float)texture.width / texture.height
-                : 1024f / 788f;
-            return Mathf.Max(EastWestStretch, aspect * GeoMapWidthScale);
+            return texture != null ? (float)texture.width / texture.height : 1024f / 837f;
         }
 
         private Rect GetMapRect()
@@ -2332,18 +2336,21 @@ namespace F89.UI
             public readonly float UMax;
             public readonly float MileVMin;
             public readonly float MileVMax;
-            public readonly float MapSizeMiles;
+            public readonly float MapWidthMiles;
+            public readonly float MapHeightMiles;
             public readonly float VisibleHalfMiles;
 
-            public MapGeoProjection(Vector2 centerMiles, float visibleHalfMiles, float mapSizeMiles)
+            public MapGeoProjection(Vector2 centerMiles, float visibleHalfMiles, float mapWidthMiles)
             {
                 VisibleHalfMiles = visibleHalfMiles;
-                MapSizeMiles = mapSizeMiles;
-                var halfMapMiles = mapSizeMiles * 0.5f;
-                UMin = (centerMiles.x - visibleHalfMiles + halfMapMiles) / mapSizeMiles;
-                UMax = (centerMiles.x + visibleHalfMiles + halfMapMiles) / mapSizeMiles;
-                MileVMin = (centerMiles.y - visibleHalfMiles + halfMapMiles) / mapSizeMiles;
-                MileVMax = (centerMiles.y + visibleHalfMiles + halfMapMiles) / mapSizeMiles;
+                MapWidthMiles = mapWidthMiles;
+                MapHeightMiles = AntarcticaLandMask.GetMapHeightMiles(mapWidthMiles);
+                var halfWidthMiles = mapWidthMiles * 0.5f;
+                var halfHeightMiles = MapHeightMiles * 0.5f;
+                UMin = (centerMiles.x - visibleHalfMiles + halfWidthMiles) / MapWidthMiles;
+                UMax = (centerMiles.x + visibleHalfMiles + halfWidthMiles) / MapWidthMiles;
+                MileVMin = (centerMiles.y - visibleHalfMiles + halfHeightMiles) / MapHeightMiles;
+                MileVMax = (centerMiles.y + visibleHalfMiles + halfHeightMiles) / MapHeightMiles;
             }
 
             public Rect GetSatelliteTextureCoords()
@@ -2381,21 +2388,23 @@ namespace F89.UI
 
             private void WorldMilesToFractions(Vector2 worldMiles, out float fu, out float fy)
             {
-                var halfMapMiles = MapSizeMiles * 0.5f;
-                var u = (worldMiles.x + halfMapMiles) / MapSizeMiles;
-                var mileV = (worldMiles.y + halfMapMiles) / MapSizeMiles;
+                var halfWidthMiles = MapWidthMiles * 0.5f;
+                var halfHeightMiles = MapHeightMiles * 0.5f;
+                var u = (worldMiles.x + halfWidthMiles) / MapWidthMiles;
+                var mileV = (worldMiles.y + halfHeightMiles) / MapHeightMiles;
                 fu = Mathf.InverseLerp(UMin, UMax, u);
                 fy = Mathf.InverseLerp(MileVMin, MileVMax, mileV);
             }
 
             private Vector2 FractionsToWorldMiles(float fu, float fy)
             {
-                var halfMapMiles = MapSizeMiles * 0.5f;
+                var halfWidthMiles = MapWidthMiles * 0.5f;
+                var halfHeightMiles = MapHeightMiles * 0.5f;
                 var u = Mathf.Lerp(UMin, UMax, fu);
                 var mileV = Mathf.Lerp(MileVMin, MileVMax, fy);
                 return new Vector2(
-                    u * MapSizeMiles - halfMapMiles,
-                    mileV * MapSizeMiles - halfMapMiles);
+                    u * MapWidthMiles - halfWidthMiles,
+                    mileV * MapHeightMiles - halfHeightMiles);
             }
         }
 
@@ -2445,7 +2454,7 @@ namespace F89.UI
         {
             if (satelliteTexture == null)
             {
-                satelliteTexture = Resources.Load<Texture2D>("F89_AntarcticaMap");
+                satelliteTexture = AntarcticaLandMask.GetReadableMap();
             }
 
             return satelliteTexture;

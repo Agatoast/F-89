@@ -9,23 +9,14 @@ namespace F89.UI
     public class SelectionPageController : MonoBehaviour
     {
         private const string BackgroundResourcePath = "SelectionPage/selection_page";
-        private const string NewCharacterButtonResourcePath = "SelectionPage/new_character_button";
-        private const string DeleteButtonResourcePath = "SelectionPage/delete_button";
-        private const string SelectButtonResourcePath = "SelectionPage/select_button";
         private const string DefaultCharacterRank = "2nd LT";
 
         private readonly List<CharacterSaveData> visibleSaves = new List<CharacterSaveData>();
 
         private Texture2D backgroundTexture;
-        private Texture2D newCharacterButtonTexture;
-        private Texture2D deleteButtonTexture;
-        private Texture2D selectButtonTexture;
         private Vector2 plaqueScrollPosition;
         private string selectedSaveId;
         private bool hasInitializedSelection;
-        private float newCharacterButtonPressUntil;
-        private float deleteButtonPressUntil;
-        private float selectButtonPressUntil;
         private bool showNewCharacterDialog;
         private bool showDeleteCharacterDialog;
         private bool showSelectPortraitDialog;
@@ -39,9 +30,6 @@ namespace F89.UI
             CharacterPortraitService.ClearPresetCache();
             MilitaryMedalService.ClearCache();
             backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
-            newCharacterButtonTexture = Resources.Load<Texture2D>(NewCharacterButtonResourcePath);
-            deleteButtonTexture = Resources.Load<Texture2D>(DeleteButtonResourcePath);
-            selectButtonTexture = Resources.Load<Texture2D>(SelectButtonResourcePath);
 
             if (backgroundTexture == null)
             {
@@ -79,6 +67,7 @@ namespace F89.UI
 
         private void OnGUI()
         {
+            MilitaryAwardTooltipUi.BeginFrame();
             DrawBackground();
 
             if (showNewCharacterDialog)
@@ -104,6 +93,7 @@ namespace F89.UI
             DrawNewCharacterButton();
             DrawDeleteButton();
             DrawSelectButton();
+            MilitaryAwardTooltipUi.Draw();
         }
 
         private void DrawBackground()
@@ -226,10 +216,7 @@ namespace F89.UI
             SelectionPageStyles.DrawDossierName(
                 SelectionPageLayout.GetDossierNameRect(),
                 save.DisplayRankAndName);
-            var highestAwardMedalTexture = MilitaryMedalService.GetMedalTexture(save);
-            SelectionPageStyles.DrawDossierHighestAwardMedal(
-                SelectionPageLayout.GetDossierHighestAwardMedalRect(highestAwardMedalTexture),
-                highestAwardMedalTexture);
+            DrawDossierHighestAward(save);
 
             var pictureRect = SelectionPageLayout.GetDossierPictureRect();
             var portraitTexture = CharacterPortraitService.GetPortraitTexture(save);
@@ -282,45 +269,37 @@ namespace F89.UI
 
         private void DrawNewCharacterButton()
         {
-            if (newCharacterButtonTexture == null)
+            var rect = SelectionPageLayout.GetNewCharacterButtonRect();
+            if (StartPageMenuStyles.DrawMenuButton(rect, "NEW CHARACTER"))
             {
-                return;
-            }
-
-            var rect = SelectionPageLayout.GetNewCharacterButtonRect(newCharacterButtonTexture);
-            if (SelectionPageStyles.DrawTexturedButton(rect, newCharacterButtonTexture, newCharacterButtonPressUntil))
-            {
-                newCharacterButtonPressUntil = Time.unscaledTime + SelectionPageStyles.PressDuration;
                 OpenNewCharacterDialog();
             }
         }
 
         private void DrawDeleteButton()
         {
-            if (deleteButtonTexture == null)
+            if (FindSelectedSave() == null)
             {
                 return;
             }
 
-            var rect = SelectionPageLayout.GetDeleteButtonRect(deleteButtonTexture);
-            if (SelectionPageStyles.DrawTexturedButton(rect, deleteButtonTexture, deleteButtonPressUntil))
+            var rect = SelectionPageLayout.GetDeleteButtonRect();
+            if (StartPageMenuStyles.DrawMenuButton(rect, "DELETE"))
             {
-                deleteButtonPressUntil = Time.unscaledTime + SelectionPageStyles.PressDuration;
                 OpenDeleteCharacterDialog();
             }
         }
 
         private void DrawSelectButton()
         {
-            if (selectButtonTexture == null)
+            if (FindSelectedSave() == null)
             {
                 return;
             }
 
-            var rect = SelectionPageLayout.GetSelectButtonRect(selectButtonTexture);
-            if (SelectionPageStyles.DrawTexturedButton(rect, selectButtonTexture, selectButtonPressUntil))
+            var rect = SelectionPageLayout.GetSelectButtonRect();
+            if (StartPageMenuStyles.DrawMenuButton(rect, "Select Character", panelAlpha: 1f))
             {
-                selectButtonPressUntil = Time.unscaledTime + SelectionPageStyles.PressDuration;
                 OpenSelectedCharacterPage();
             }
         }
@@ -525,6 +504,83 @@ namespace F89.UI
         private CharacterSaveData FindSelectedSave()
         {
             return CharacterSaveRepository.FindById(selectedSaveId);
+        }
+
+        private static void DrawDossierHighestAward(CharacterSaveData save)
+        {
+            var preview = SelectionPageLayout.DossierMedalLayoutPreviewPrecedence;
+            if (preview == 12)
+            {
+                DrawDossierFruitSaladRibbon();
+                return;
+            }
+
+            if (preview > 0 && preview <= 11)
+            {
+                DrawDossierMedalByPrecedence(preview);
+                return;
+            }
+
+            var medalId = MilitaryMedalCatalog.GetHighestMedalIdFromEarnedRibbons(save?.EarnedRibbonIds);
+            if (!string.IsNullOrEmpty(medalId) && medalId != MilitaryMedalIds.None)
+            {
+                DrawDossierMedal(medalId);
+                return;
+            }
+
+            if (save != null && HasEarnedFruitSaladRibbon(save))
+            {
+                DrawDossierFruitSaladRibbon();
+            }
+        }
+
+        private static void DrawDossierMedalByPrecedence(int precedence)
+        {
+            if (!MilitaryMedalCatalog.TryGetDefinitionByPrecedence(precedence, out var definition))
+            {
+                return;
+            }
+
+            DrawDossierMedal(definition.Id);
+        }
+
+        private static void DrawDossierMedal(string medalId)
+        {
+            var medalTexture = MilitaryMedalService.GetMedalTexture(medalId);
+            if (medalTexture == null)
+            {
+                return;
+            }
+
+            var medalRect = SelectionPageLayout.GetDossierHighestAwardMedalRect(medalTexture);
+            SelectionPageStyles.DrawDossierHighestAwardMedal(medalRect, medalTexture);
+            MilitaryAwardTooltipUi.RegisterHover(medalRect, medalId);
+        }
+
+        private static void DrawDossierFruitSaladRibbon()
+        {
+            var ribbonTexture = MilitaryRibbonService.GetRibbonTexture(MilitaryRibbonIds.FruitSalad);
+            var ribbonRect = SelectionPageLayout.GetDossierFruitSaladRibbonRect(ribbonTexture);
+            SelectionPageStyles.DrawDossierHighestAwardMedal(ribbonRect, ribbonTexture);
+            MilitaryAwardTooltipUi.RegisterHover(ribbonRect, MilitaryRibbonIds.FruitSalad);
+        }
+
+        private static bool HasEarnedFruitSaladRibbon(CharacterSaveData save)
+        {
+            if (save?.EarnedRibbonIds == null)
+            {
+                return false;
+            }
+
+            foreach (var ribbonId in save.EarnedRibbonIds)
+            {
+                if (ribbonId == MilitaryRibbonIds.FruitSalad)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

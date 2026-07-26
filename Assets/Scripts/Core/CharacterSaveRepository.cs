@@ -53,7 +53,8 @@ namespace F89.Core
                 Rank = string.IsNullOrWhiteSpace(rank) ? "2nd LT" : rank.Trim(),
                 Name = TrimCharacterName(name),
                 LastPlayedUtc = DateTime.UtcNow.ToString("o"),
-                HighestAward = MilitaryMedalIds.DefaultForNewCharacter
+                HighestAward = MilitaryMedalIds.DefaultForNewCharacter,
+                EarnedRibbonIds = new[] { MilitaryRibbonIds.FruitSalad }
             };
 
             EnsureGearInitialized(save);
@@ -260,6 +261,8 @@ namespace F89.Core
             PurgeLegacyDemoSaves();
             ClearAllSavesOnce();
             NormalizeLoadedAwards();
+            NormalizeLoadedRibbons();
+            NormalizeLoadedScores();
             NormalizeLoadedGear();
 
             if (cachedSaves.Count == 0)
@@ -278,7 +281,8 @@ namespace F89.Core
                     continue;
                 }
 
-                var normalized = MilitaryMedalCatalog.NormalizeAwardId(save.HighestAward);
+                var derived = MilitaryMedalCatalog.GetHighestMedalIdFromEarnedRibbons(save.EarnedRibbonIds);
+                var normalized = MilitaryMedalCatalog.NormalizeAwardId(derived);
                 if (save.HighestAward == normalized)
                 {
                     continue;
@@ -292,6 +296,84 @@ namespace F89.Core
             {
                 WriteToDisk();
             }
+        }
+
+        private static void NormalizeLoadedScores()
+        {
+            const int testScoreBoost = 100;
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null)
+                {
+                    continue;
+                }
+
+                if (!string.Equals(save.Name, "Don", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (save.BestMissionScore >= testScoreBoost && save.TotalScore >= testScoreBoost)
+                {
+                    continue;
+                }
+
+                save.BestMissionScore = testScoreBoost;
+                save.TotalScore = testScoreBoost;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                WriteToDisk();
+            }
+        }
+
+        private static void NormalizeLoadedRibbons()
+        {
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null)
+                {
+                    continue;
+                }
+
+                if (save.EarnedRibbonIds == null)
+                {
+                    save.EarnedRibbonIds = Array.Empty<string>();
+                    changed = true;
+                }
+
+                if (string.Equals(save.Name, "Don", StringComparison.OrdinalIgnoreCase))
+                {
+                    save.EarnedRibbonIds = GetAllRibbonIdsExcept(MilitaryRibbonIds.PrisonerOfWar);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                WriteToDisk();
+            }
+        }
+
+        private static string[] GetAllRibbonIdsExcept(string excludedRibbonId)
+        {
+            var allRibbonIds = MilitaryRibbonCatalog.GetAllRibbonIds();
+            var filtered = new List<string>(allRibbonIds.Length);
+            foreach (var ribbonId in allRibbonIds)
+            {
+                if (ribbonId == excludedRibbonId)
+                {
+                    continue;
+                }
+
+                filtered.Add(ribbonId);
+            }
+
+            return filtered.ToArray();
         }
 
         private static void ClearAllSavesOnce()

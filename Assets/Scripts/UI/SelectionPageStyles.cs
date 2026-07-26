@@ -16,8 +16,6 @@ namespace F89.UI
         private static GUIStyle dossierPhotoPromptStyle;
         private static GUIStyle dossierVehicleKillsStyle;
         private static GUIStyle dossierTroopKillsStyle;
-        private static GUIStyle dossierBestScoreStyle;
-        private static GUIStyle dossierTotalScoreStyle;
         private static GUIStyle hiddenScrollbarStyle;
         private static GUIStyle plaqueVerticalScrollbarStyle;
         private static GUIStyle plaqueVerticalScrollbarThumbStyle;
@@ -136,8 +134,8 @@ namespace F89.UI
             EnsureStyles();
             DrawDossierStatValue(SelectionPageLayout.GetDossierVehicleKillsValueRect(), vehicleKills, dossierVehicleKillsStyle);
             DrawDossierStatValue(SelectionPageLayout.GetDossierTroopKillsValueRect(), troopKills, dossierTroopKillsStyle);
-            DrawDossierStatValue(SelectionPageLayout.GetDossierBestScoreValueRect(), bestMissionScore, dossierBestScoreStyle);
-            DrawDossierStatValue(SelectionPageLayout.GetDossierTotalScoreValueRect(), totalScore, dossierTotalScoreStyle);
+            MissionScoreDisplayUi.DrawDossierValue(SelectionPageLayout.GetDossierBestScoreValueRect(), bestMissionScore);
+            MissionScoreDisplayUi.DrawDossierValue(SelectionPageLayout.GetDossierTotalScoreValueRect(), totalScore);
         }
 
         private static void DrawDossierStatValue(Rect rect, int value, GUIStyle style)
@@ -255,8 +253,6 @@ namespace F89.UI
             var dossierStatColor = new Color(0.98f, 0.92f, 0.18f);
             dossierVehicleKillsStyle = CreateDossierStatStyle(statSize, dossierStatColor);
             dossierTroopKillsStyle = CreateDossierStatStyle(statSize, dossierStatColor);
-            dossierBestScoreStyle = CreateDossierStatStyle(statSize, dossierStatColor);
-            dossierTotalScoreStyle = CreateDossierStatStyle(statSize, dossierStatColor);
 
             hiddenScrollbarStyle = new GUIStyle(GUIStyle.none)
             {

@@ -12,19 +12,9 @@ namespace F89.LandCombat
             }
 
             LandGroundSceneController.ResetSession();
-            BuildArena();
+            LandGroundTerrainBuilder.BuildArena();
             BuildPlayer();
             SpawnEnemies();
-        }
-
-        private static void BuildArena()
-        {
-            var backdrop = new GameObject("AntarcticaBackdrop");
-            var sprite = backdrop.AddComponent<SpriteRenderer>();
-            sprite.color = new Color(0.75f, 0.82f, 0.9f);
-            sprite.drawMode = SpriteDrawMode.Sliced;
-            sprite.size = new Vector2(40f, 40f);
-            sprite.sortingOrder = -10;
         }
 
         private static void BuildPlayer()
@@ -43,6 +33,7 @@ namespace F89.LandCombat
 
             var motor = playerObject.AddComponent<LandPlayerMotor>();
             var combat = playerObject.AddComponent<LandPlayerCombat>();
+            playerObject.AddComponent<LandPlayerHealth>();
             playerObject.AddComponent<LandPlayerController>();
 
             var poolObject = new GameObject("LandProjectilePool");
@@ -62,10 +53,10 @@ namespace F89.LandCombat
             }
 
             camera.orthographic = true;
-            camera.orthographicSize = 8f;
+            camera.orthographicSize = LandGameConstants.ArenaHalfSizeWorldUnits;
             camera.transform.position = new Vector3(0f, 0f, -10f);
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.82f, 0.88f, 0.95f);
+            camera.backgroundColor = new Color(0.84f, 0.88f, 0.93f);
 
             var follow = camera.gameObject.GetComponent<LandGroundCameraFollow>();
             if (follow == null)
@@ -90,13 +81,14 @@ namespace F89.LandCombat
 
         private static void SpawnEnemies()
         {
+            var spawnRadius = LandGameConstants.ArenaHalfSizeWorldUnits * 0.75f;
             var spawnPoints = new[]
             {
-                new Vector2(4f, 2f),
-                new Vector2(-5f, 1f),
-                new Vector2(2f, -4f),
-                new Vector2(-3f, -3f),
-                new Vector2(6f, -1f)
+                new Vector2(spawnRadius * 0.45f, spawnRadius * 0.25f),
+                new Vector2(-spawnRadius * 0.55f, spawnRadius * 0.15f),
+                new Vector2(spawnRadius * 0.25f, -spawnRadius * 0.45f),
+                new Vector2(-spawnRadius * 0.35f, -spawnRadius * 0.35f),
+                new Vector2(spawnRadius * 0.65f, -spawnRadius * 0.1f)
             };
 
             for (var i = 0; i < spawnPoints.Length; i++)

@@ -53,6 +53,17 @@ namespace F89.Weapons
             }
         }
 
+        public void SetCrosshairDistanceMiles(float miles)
+        {
+            if (config == null)
+            {
+                return;
+            }
+
+            crosshairDistanceMiles = Mathf.Clamp(miles, config.minCrosshairMiles, config.maxRangeMiles);
+            UpdateCrosshairPosition();
+        }
+
         public void UpdateCrosshairFromMouse(Vector2 screenPosition)
         {
             if (aircraft == null || config == null)

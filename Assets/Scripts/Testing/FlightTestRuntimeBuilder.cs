@@ -16,13 +16,19 @@ namespace F89.Testing
             var existingPlayer = Object.FindAnyObjectByType<AircraftController>();
             if (existingPlayer != null)
             {
+                FlightGroundReturnService.TryApplyPendingReturn(existingPlayer.gameObject);
                 EnsureMapSystems(existingPlayer);
                 EnsurePlayerVisuals(existingPlayer);
                 EnsureWeaponSystems(existingPlayer.gameObject);
                 WeaponTestTargetSpawner.RemoveIfPresent();
                 AntarcticaBaseSpawner.SpawnIfNeeded();
-                AntarcticaBaseSpawner.TryMovePlayerToCarrier(existingPlayer.transform);
-                ApplyMissionLaunchIfNeeded(existingPlayer);
+
+                if (!FlightGroundReturnService.ShouldSkipCarrierSpawn())
+                {
+                    AntarcticaBaseSpawner.TryMovePlayerToCarrier(existingPlayer.transform);
+                    ApplyMissionLaunchIfNeeded(existingPlayer);
+                }
+
                 return null;
             }
 
@@ -94,7 +100,12 @@ namespace F89.Testing
 
             grid.Configure(player.transform, profile.ticSizeWorldUnits, worldMap);
 
-            ApplyMissionLaunchIfNeeded(player.GetComponent<AircraftController>());
+            FlightGroundReturnService.TryApplyPendingReturn(player);
+
+            if (!FlightGroundReturnService.ShouldSkipCarrierSpawn())
+            {
+                ApplyMissionLaunchIfNeeded(player.GetComponent<AircraftController>());
+            }
 
             Debug.Log("F-89 flight test ready. Launch from USS Martin Van Buren. Mission 1: capture Palmer Station.");
             return player;

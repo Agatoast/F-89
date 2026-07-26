@@ -25,7 +25,7 @@ namespace F89.LandCombat
             fallbackBlaster.DisplayName = "Blaster";
             fallbackBlaster.Kind = LandWeaponKind.Bullet;
             fallbackBlaster.Damage = 12f;
-            fallbackBlaster.FireRate = 1f;
+            fallbackBlaster.RateOfFire = 1f;
             fallbackBlaster.RangeTiles = 8f;
             fallbackBlaster.ProjectileSpeed = 16f;
             return fallbackBlaster;

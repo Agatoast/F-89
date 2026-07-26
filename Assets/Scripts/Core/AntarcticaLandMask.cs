@@ -5,17 +5,14 @@ namespace F89.Core
     public static class AntarcticaLandMask
     {
         private const string MapResourcePath = "F89_AntarcticaMap";
-        private const float MinLandBrightness = 0.28f;
-        private const float MaxOceanBlueDominance = 0.12f;
+        private const float DefaultMapWidthOverHeight = 1024f / 837f;
+        /// <summary>
+        /// Pixels at or below this luminance (black sea background) are treated as ocean.
+        /// Land is defined by the continent silhouette, not interior terrain shading.
+        /// </summary>
+        private const float SeaLuminanceThreshold = 0.078f;
 
         private static Texture2D readableMap;
-
-        private const float MinDisplayLandBrightness = 0.60f;
-        private const float MaxDisplayOceanBlueDominance = 0.04f;
-        private const float MinSolidIceBrightness = 0.66f;
-        private const float MaxSolidIceBlueDominance = 0.04f;
-        private const float MaxVisibleOceanBrightness = 0.60f;
-        private const float MinVisibleOceanBlueDominance = 0.04f;
 
         /// <summary>
         /// Minimum distance from coast/shallow shelf required for base placement.
@@ -23,6 +20,28 @@ namespace F89.Core
         public const float BasePlacementInsetMiles = 30f;
 
         public const float BasePlacementSnapSearchMiles = 250f;
+
+        /// <summary>
+        /// Native width÷height of the Antarctica map artwork (east-west ÷ north-south).
+        /// </summary>
+        public static float GetMapWidthOverHeight()
+        {
+            var map = GetReadableMap();
+            if (map != null && map.height > 0)
+            {
+                return (float)map.width / map.height;
+            }
+
+            return DefaultMapWidthOverHeight;
+        }
+
+        /// <summary>
+        /// North-south mile extent when east-west spans <paramref name="mapWidthMiles"/>.
+        /// </summary>
+        public static float GetMapHeightMiles(float mapWidthMiles)
+        {
+            return mapWidthMiles / GetMapWidthOverHeight();
+        }
 
         public static bool IsLandMiles(Vector2 positionMiles, float mapSizeMiles)
         {
@@ -56,7 +75,7 @@ namespace F89.Core
                 return false;
             }
 
-            var insetPixels = MilesToPixels(insetMiles, map.width, mapSizeMiles);
+            var insetPixels = ResolveInsetPixelRadius(insetMiles, map, mapSizeMiles);
             if (insetPixels < 1)
             {
                 return true;
@@ -223,47 +242,7 @@ namespace F89.Core
 
         public static bool IsShallowShelfMiles(Vector2 positionMiles, float mapSizeMiles, float sampleRadiusMiles)
         {
-            var map = GetReadableMap();
-            if (map == null)
-            {
-                return false;
-            }
-
-            if (!TryMilesToPixel(positionMiles, map.width, map.height, mapSizeMiles, out var center))
-            {
-                return false;
-            }
-
-            var samplePixels = MilesToPixels(sampleRadiusMiles, map.width, mapSizeMiles);
-            var highBlueCount = 0;
-            var sampleCount = 0;
-
-            for (var y = -samplePixels; y <= samplePixels; y++)
-            {
-                for (var x = -samplePixels; x <= samplePixels; x++)
-                {
-                    if (x * x + y * y > samplePixels * samplePixels)
-                    {
-                        continue;
-                    }
-
-                    var color = map.GetPixel(center.x + x, center.y + y);
-                    var blueDominance = color.b - Mathf.Max(color.r, color.g);
-                    if (blueDominance > 0.08f)
-                    {
-                        highBlueCount++;
-                    }
-
-                    sampleCount++;
-                }
-            }
-
-            if (sampleCount == 0)
-            {
-                return false;
-            }
-
-            return highBlueCount / (float)sampleCount > 0.18f;
+            return false;
         }
 
         /// <summary>
@@ -287,21 +266,7 @@ namespace F89.Core
         /// </summary>
         public static bool IsVisibleOceanMiles(Vector2 positionMiles, float mapSizeMiles)
         {
-            var map = GetReadableMap();
-            if (map == null)
-            {
-                return false;
-            }
-
-            if (!TryMilesToPixel(positionMiles, map.width, map.height, mapSizeMiles, out var pixel))
-            {
-                return true;
-            }
-
-            var color = map.GetPixel(pixel.x, pixel.y);
-            var brightness = (color.r + color.g + color.b) / 3f;
-            var blueDominance = color.b - Mathf.Max(color.r, color.g);
-            return blueDominance > MinVisibleOceanBlueDominance || brightness < MaxVisibleOceanBrightness;
+            return GetDisplayLandBlendMiles(positionMiles, mapSizeMiles) < 0.5f;
         }
 
         /// <summary>
@@ -521,11 +486,13 @@ namespace F89.Core
             return GetDisplayLandBlendMilesInternal(positionMiles, mapSizeMiles);
         }
 
-        public static Vector2 GetMaskUvForMiles(Vector2 positionMiles, float mapSizeMiles)
+        public static Vector2 GetMaskUvForMiles(Vector2 positionMiles, float mapWidthMiles)
         {
-            var half = mapSizeMiles * 0.5f;
-            var u = (positionMiles.x + half) / mapSizeMiles;
-            var mileV = (positionMiles.y + half) / mapSizeMiles;
+            var mapHeightMiles = GetMapHeightMiles(mapWidthMiles);
+            var halfWidth = mapWidthMiles * 0.5f;
+            var halfHeight = mapHeightMiles * 0.5f;
+            var u = (positionMiles.x + halfWidth) / mapWidthMiles;
+            var mileV = (positionMiles.y + halfHeight) / mapHeightMiles;
             return new Vector2(u, 1f - mileV);
         }
 
@@ -547,7 +514,7 @@ namespace F89.Core
                 return false;
             }
 
-            var insetPixels = MilesToPixels(insetMiles, map.width, mapSizeMiles);
+            var insetPixels = ResolveInsetPixelRadius(insetMiles, map, mapSizeMiles);
             if (insetPixels < 1)
             {
                 return true;
@@ -572,26 +539,32 @@ namespace F89.Core
             return true;
         }
 
-        public static Vector2 PixelToMiles(Vector2Int pixel, int width, int height, float mapSizeMiles)
+        public static Vector2 PixelToMiles(Vector2Int pixel, int width, int height, float mapWidthMiles)
         {
-            var half = mapSizeMiles * 0.5f;
+            var aspect = width > 0 && height > 0 ? (float)width / height : DefaultMapWidthOverHeight;
+            var mapHeightMiles = mapWidthMiles / aspect;
+            var halfWidth = mapWidthMiles * 0.5f;
+            var halfHeight = mapHeightMiles * 0.5f;
             var u = pixel.x / (float)(width - 1);
             // Unity texture pixels use a bottom-left origin; mile +Y is map north (up).
             var v = 1f - pixel.y / (float)(height - 1);
-            return new Vector2(u * mapSizeMiles - half, v * mapSizeMiles - half);
+            return new Vector2(u * mapWidthMiles - halfWidth, v * mapHeightMiles - halfHeight);
         }
 
         public static bool TryMilesToPixel(
             Vector2 positionMiles,
             int width,
             int height,
-            float mapSizeMiles,
+            float mapWidthMiles,
             out Vector2Int pixel)
         {
             pixel = default;
-            var half = mapSizeMiles * 0.5f;
-            var u = (positionMiles.x + half) / mapSizeMiles;
-            var v = (positionMiles.y + half) / mapSizeMiles;
+            var aspect = width > 0 && height > 0 ? (float)width / height : DefaultMapWidthOverHeight;
+            var mapHeightMiles = mapWidthMiles / aspect;
+            var halfWidth = mapWidthMiles * 0.5f;
+            var halfHeight = mapHeightMiles * 0.5f;
+            var u = (positionMiles.x + halfWidth) / mapWidthMiles;
+            var v = (positionMiles.y + halfHeight) / mapHeightMiles;
             if (u < 0f || u > 1f || v < 0f || v > 1f)
             {
                 return false;
@@ -620,9 +593,17 @@ namespace F89.Core
             return readableMap;
         }
 
-        private static int MilesToPixels(float miles, int mapWidthPixels, float mapSizeMiles)
+        private static int MilesToPixels(float miles, int mapSpanPixels, float mapSpanMiles)
         {
-            return Mathf.Max(1, Mathf.RoundToInt(miles / mapSizeMiles * mapWidthPixels));
+            return Mathf.Max(1, Mathf.RoundToInt(miles / mapSpanMiles * mapSpanPixels));
+        }
+
+        private static int ResolveInsetPixelRadius(float insetMiles, Texture2D map, float mapWidthMiles)
+        {
+            var mapHeightMiles = GetMapHeightMiles(mapWidthMiles);
+            var insetPixelsX = MilesToPixels(insetMiles, map.width, mapWidthMiles);
+            var insetPixelsY = MilesToPixels(insetMiles, map.height, mapHeightMiles);
+            return Mathf.Min(insetPixelsX, insetPixelsY);
         }
 
         private static bool IsLandPixel(Texture2D map, int x, int y)
@@ -669,20 +650,7 @@ namespace F89.Core
 
         private static float GetSolidIceBlendPixel(Texture2D map, int x, int y)
         {
-            if (x < 0 || y < 0 || x >= map.width || y >= map.height)
-            {
-                return 0f;
-            }
-
-            var color = map.GetPixel(x, y);
-            var brightness = (color.r + color.g + color.b) / 3f;
-            var blueDominance = color.b - Mathf.Max(color.r, color.g);
-            if (brightness < MinSolidIceBrightness || blueDominance > MaxSolidIceBlueDominance)
-            {
-                return 0f;
-            }
-
-            return 1f;
+            return GetDisplayLandBlendPixel(map, x, y);
         }
 
         private static float GetDisplayLandBlendPixel(Texture2D map, int x, int y)
@@ -692,35 +660,28 @@ namespace F89.Core
                 return 0f;
             }
 
-            var color = map.GetPixel(x, y);
-            var brightness = (color.r + color.g + color.b) / 3f;
-            var blueDominance = color.b - Mathf.Max(color.r, color.g);
-            return Mathf.Clamp01(
-                Mathf.InverseLerp(MinDisplayLandBrightness, 0.78f, brightness)
-                * (1f - Mathf.SmoothStep(0f, MaxDisplayOceanBlueDominance, blueDominance)));
+            return GetSilhouetteLandScore(map.GetPixel(x, y));
         }
 
         private static float GetLandBlendPixel(Texture2D map, int x, int y)
         {
-            if (x < 0 || y < 0 || x >= map.width || y >= map.height)
-            {
-                return 0f;
-            }
-
-            var color = map.GetPixel(x, y);
-            var brightness = (color.r + color.g + color.b) / 3f;
-            var blueDominance = color.b - Mathf.Max(color.r, color.g);
-            var landScore = Mathf.Clamp01(
-                Mathf.InverseLerp(0.38f, 0.72f, brightness)
-                * (1f - Mathf.SmoothStep(0f, 0.10f, blueDominance)));
-            return landScore;
+            return GetDisplayLandBlendPixel(map, x, y);
         }
 
-        private static bool IsLandColor(Color color)
+        private static float GetSilhouetteLandScore(Color color)
         {
-            var brightness = (color.r + color.g + color.b) / 3f;
-            var blueDominance = color.b - Mathf.Max(color.r, color.g);
-            return brightness >= MinLandBrightness && blueDominance <= MaxOceanBlueDominance;
+            return color.a >= 0.5f ? 1f : 0f;
+        }
+
+        private static bool IsSourceLandPixel(Color color)
+        {
+            if (color.a <= 0.02f)
+            {
+                return false;
+            }
+
+            var luminance = (color.r + color.g + color.b) / 3f;
+            return luminance > SeaLuminanceThreshold;
         }
 
         private static Texture2D CreateReadableCopy(Texture2D source)
@@ -738,10 +699,32 @@ namespace F89.Core
 
             var copy = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false);
             copy.ReadPixels(new Rect(0, 0, source.width, source.height), 0, 0);
+
+            var pixels = copy.GetPixels32();
+            for (var i = 0; i < pixels.Length; i++)
+            {
+                var color = (Color)pixels[i];
+                if (IsSourceLandPixel(color))
+                {
+                    pixels[i] = new Color32(
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(color.r * 255f), 0, 255),
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(color.g * 255f), 0, 255),
+                        (byte)Mathf.Clamp(Mathf.RoundToInt(color.b * 255f), 0, 255),
+                        255);
+                }
+                else
+                {
+                    pixels[i] = new Color32(255, 255, 255, 0);
+                }
+            }
+
+            copy.SetPixels32(pixels);
             copy.Apply();
 
             RenderTexture.active = previous;
             RenderTexture.ReleaseTemporary(renderTarget);
+            copy.wrapMode = TextureWrapMode.Clamp;
+            copy.filterMode = FilterMode.Bilinear;
             return copy;
         }
     }

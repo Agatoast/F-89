@@ -106,7 +106,11 @@ namespace F89.LandCombat
                         continue;
                     }
 
-                    affixes.Add(new LandRolledAffix { StatId = affix.StatId, Value = affix.Value });
+                    affixes.Add(new LandRolledAffix
+                    {
+                        Stat = (LandItemStat)affix.StatId,
+                        Value = affix.Value
+                    });
                 }
             }
 
@@ -133,7 +137,7 @@ namespace F89.LandCombat
                 {
                     affixes[i] = new CharacterGearAffixSaveData
                     {
-                        StatId = runtime.Affixes[i].StatId,
+                        StatId = (int)runtime.Affixes[i].Stat,
                         Value = runtime.Affixes[i].Value
                     };
                 }

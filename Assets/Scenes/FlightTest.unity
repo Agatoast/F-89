@@ -12133,10 +12133,8 @@ MonoBehaviour:
   aircraft: {fileID: 2054446780}
   offset: {x: 0, y: 38, z: -12}
   followSmoothTime: 0.18
-  lookAheadDistance: 8
-  lookAheadSpeedThreshold: 20
-  viewShiftDistance: 14
   viewShiftSmoothTime: 0.2
+  viewShiftDistanceFallback: 14
   maxVisibleHorizontalMiles: 20
   zoomScrollSensitivity: 0.12
   maxZoomOffsetScaleFallback: 4.5

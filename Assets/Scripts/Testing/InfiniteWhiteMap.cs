@@ -24,6 +24,8 @@ namespace F89.Testing
         private float currentLandBlend;
         private float mapHalfSizeWorld = 30000f;
         private static readonly int MapHalfSizeWorldId = Shader.PropertyToID("_MapHalfSizeWorld");
+        private static readonly int MapAspectWidthOverHeightId = Shader.PropertyToID("_MapAspectWidthOverHeight");
+        private static readonly int SatelliteBlendId = Shader.PropertyToID("_SatelliteBlend");
 
         private void Awake()
         {
@@ -165,7 +167,17 @@ namespace F89.Testing
                 groundMaterial.SetFloat(MapHalfSizeWorldId, mapHalfSizeWorld);
             }
 
-            var landMask = Resources.Load<Texture2D>(LandMaskResourcePath);
+            if (groundMaterial.HasProperty(MapAspectWidthOverHeightId))
+            {
+                groundMaterial.SetFloat(MapAspectWidthOverHeightId, AntarcticaLandMask.GetMapWidthOverHeight());
+            }
+
+            if (groundMaterial.HasProperty(SatelliteBlendId))
+            {
+                groundMaterial.SetFloat(SatelliteBlendId, 1f);
+            }
+
+            var landMask = AntarcticaLandMask.GetReadableMap();
             if (landMask != null && groundMaterial.HasProperty("_LandMask"))
             {
                 groundMaterial.SetTexture("_LandMask", landMask);

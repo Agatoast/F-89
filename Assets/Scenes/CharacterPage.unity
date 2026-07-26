@@ -222,7 +222,7 @@ GameObject:
   - component: {fileID: 1478757813}
   - component: {fileID: 1478757812}
   m_Layer: 0
-  m_Name: MainMenu
+  m_Name: CharacterPage
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -237,9 +237,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1478757811}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a7c0b15d19a27ee4fa4e808c0ec81cf1, type: 3}
+  m_Script: {fileID: 11500000, guid: 6e4fb7d040fcc954e9213fe09eb16be2, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::F89.UI.MainMenuController
+  m_EditorClassIdentifier: Assembly-CSharp::F89.UI.CharacterPageController
 --- !u!4 &1478757813
 Transform:
   m_ObjectHideFlags: 0

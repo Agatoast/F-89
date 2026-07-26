@@ -49,5 +49,17 @@ namespace F89.LandCombat
 
             return item.DefinitionId;
         }
+
+        public bool TryGetWeaponSummary(LandGearInstance item, out string summary)
+        {
+            summary = string.Empty;
+            if (!LandLoadoutSlots.IsValidItem(item) || !TryGetWeapon(item.DefinitionId, out var weapon))
+            {
+                return false;
+            }
+
+            summary = LandItemStatFormatter.FormatWeaponSummary(weapon);
+            return true;
+        }
     }
 }

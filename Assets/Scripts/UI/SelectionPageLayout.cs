@@ -8,13 +8,12 @@ namespace F89.UI
         private const float ListPanelTop = 0.111f;
         private const float ListPanelWidth = 0.419f;
         private const float ListPanelHeight = 0.707f;
-        private const float ColumnButtonWidthScale = 0.92f;
         private const float ColumnButtonOffsetRightPx = 30f;
         private const float ColumnButtonOffsetUpPx = 180f;
 
         private const float SelectButtonCenterX = 0.535f;
         private const float SelectButtonCenterY = 0.793f;
-        private const float SelectButtonOffsetRightPx = 55f;
+        private const float SelectButtonOffsetRightPx = 143f;
         private const float SelectButtonOffsetDownPx = 150f;
 
         private const float DossierNameLeftInsetPx = 10f;
@@ -33,8 +32,14 @@ namespace F89.UI
         private const float DossierAwardBoxWidth = 0.072f;
         private const float DossierAwardBoxHeight = 0.198f;
         private const float DossierAwardMedalInsetPx = 4f;
-        private const float DossierAwardMedalOffsetRightPx = 434f;
-        private const float DossierAwardMedalOffsetDownPx = 153f;
+        private const float DossierAwardMedalOffsetRightPx = 499f;
+        private const float DossierAwardMedalOffsetDownPx = 62f;
+
+        // Layout preview: 1-11 forces that medal; 12 shows fruit salad ribbon; 0 uses earned ribbons.
+        public const int DossierMedalLayoutPreviewPrecedence = 0;
+
+        private const float DossierFruitSaladRibbonOffsetRightPx = 499f;
+        private const float DossierFruitSaladRibbonOffsetDownPx = 153f;
 
         private const float DossierVehicleKillsOnesXNorm = 0.5869f;
         private const float DossierVehicleKillsValueYNorm = 0.5927f;
@@ -53,6 +58,7 @@ namespace F89.UI
         public const float PlaqueScrollbarWidthPx = 18f;
         public const float PlaqueTextOffsetFromPanelLeftPx = 150f;
         private const float PlaqueRowSpacingPx = 6f;
+        private const float CharacterListOffsetDownPx = 25f;
 
         public static float GetPlaqueRowHeightPx() =>
             SelectionPageStyles.GetPlaqueHeight() + PlaqueRowSpacingPx;
@@ -67,8 +73,9 @@ namespace F89.UI
         public static Rect GetCharacterListScrollRect()
         {
             var panel = GetCharacterListPanelRect();
+            var top = panel.y + CharacterListOffsetDownPx;
             var bottom = panel.yMax - ColumnButtonOffsetUpPx;
-            return new Rect(panel.x, panel.y, panel.width, Mathf.Max(0f, bottom - panel.y));
+            return new Rect(panel.x, top, panel.width, Mathf.Max(0f, bottom - top));
         }
 
         public static Rect GetCharacterListRowSlotRect(int index, int visibleCount)
@@ -156,29 +163,31 @@ namespace F89.UI
             return new Rect(0f, index * rowHeight, viewWidth, rowHeight);
         }
 
-        public static Rect GetNewCharacterButtonRect(Texture2D buttonTexture)
+        public static Rect GetNewCharacterButtonRect()
         {
+            StartPageMenuStyles.GetMenuButtonSize(out var width, out var height);
             var panel = GetCharacterListPanelRect();
-            GetStandardButtonSize(buttonTexture, panel.width, out var width, out var height);
             var x = panel.x + (panel.width - width) * 0.5f + ColumnButtonOffsetRightPx;
             var y = panel.yMax - ColumnButtonOffsetUpPx;
             return new Rect(x, y, width, height);
         }
 
-        public static Rect GetDeleteButtonRect(Texture2D buttonTexture)
+        public static Rect GetDeleteButtonRect()
         {
-            var newCharacterRect = GetNewCharacterButtonRect(buttonTexture);
-            GetStandardButtonSize(buttonTexture, GetCharacterListPanelRect().width, out _, out var height);
-            return new Rect(newCharacterRect.x, newCharacterRect.yMax, newCharacterRect.width, height);
+            var newCharacterRect = GetNewCharacterButtonRect();
+            StartPageMenuStyles.GetMenuButtonSize(out _, out var height);
+            return new Rect(newCharacterRect.x, newCharacterRect.yMax + 8f, newCharacterRect.width, height);
         }
 
-        public static Rect GetSelectButtonRect(Texture2D buttonTexture)
+        public static Rect GetSelectButtonRect()
         {
-            var panel = GetCharacterListPanelRect();
-            GetStandardButtonSize(buttonTexture, panel.width, out var width, out var height);
+            const float lowerPx = 10f;
+
+            StartPageMenuStyles.GetMenuButtonSize(out var width, out var height);
             var centerX = Screen.width * SelectButtonCenterX + SelectButtonOffsetRightPx;
-            var centerY = Screen.height * SelectButtonCenterY + SelectButtonOffsetDownPx;
-            return new Rect(centerX - width * 0.5f, centerY - height * 0.5f, width, height);
+            var centerY = Screen.height * SelectButtonCenterY + SelectButtonOffsetDownPx + lowerPx;
+            var x = centerX - width * 0.5f;
+            return new Rect(x, centerY - height * 0.5f, width, height);
         }
 
         public static Rect GetDossierNameRect()
@@ -220,12 +229,14 @@ namespace F89.UI
             var inset = DossierAwardMedalInsetPx;
             var maxWidth = Mathf.Max(0f, boxRect.width - inset * 2f);
             var maxHeight = Mathf.Max(0f, boxRect.height - inset * 2f);
+            var anchorX = boxRect.x + inset + DossierAwardMedalOffsetRightPx;
+            var anchorY = boxRect.y + inset + DossierAwardMedalOffsetDownPx;
 
             if (medalTexture == null || medalTexture.width <= 0 || medalTexture.height <= 0)
             {
                 return new Rect(
-                    boxRect.x + inset + DossierAwardMedalOffsetRightPx,
-                    boxRect.y + inset + DossierAwardMedalOffsetDownPx,
+                    anchorX - maxWidth * 0.5f,
+                    anchorY,
                     maxWidth,
                     maxHeight);
             }
@@ -240,8 +251,42 @@ namespace F89.UI
             }
 
             return new Rect(
-                boxRect.x + inset + DossierAwardMedalOffsetRightPx,
-                boxRect.y + inset + DossierAwardMedalOffsetDownPx,
+                anchorX - width * 0.5f,
+                anchorY,
+                width,
+                height);
+        }
+
+        public static Rect GetDossierFruitSaladRibbonRect(Texture2D ribbonTexture)
+        {
+            var boxRect = GetDossierHighestAwardBoxRect();
+            var inset = DossierAwardMedalInsetPx;
+            var maxWidth = Mathf.Max(0f, boxRect.width - inset * 2f);
+            var maxHeight = Mathf.Max(0f, boxRect.height - inset * 2f);
+            var anchorX = boxRect.x + inset + DossierFruitSaladRibbonOffsetRightPx;
+            var anchorY = boxRect.y + inset + DossierFruitSaladRibbonOffsetDownPx;
+
+            if (ribbonTexture == null || ribbonTexture.width <= 0 || ribbonTexture.height <= 0)
+            {
+                return new Rect(
+                    anchorX - maxWidth * 0.5f,
+                    anchorY,
+                    maxWidth,
+                    maxHeight);
+            }
+
+            var aspect = (float)ribbonTexture.height / ribbonTexture.width;
+            var width = maxWidth;
+            var height = width * aspect;
+            if (height > maxHeight)
+            {
+                height = maxHeight;
+                width = height / aspect;
+            }
+
+            return new Rect(
+                anchorX - width * 0.5f,
+                anchorY,
                 width,
                 height);
         }
@@ -298,36 +343,6 @@ namespace F89.UI
                 centerY - DossierStatValueHeightPx * 0.5f,
                 widthPx,
                 DossierStatValueHeightPx);
-        }
-
-        private static void GetStandardButtonSize(Texture2D buttonTexture, float panelWidth, out float width, out float height)
-        {
-            height = GetButtonHeight(buttonTexture);
-            width = GetButtonWidth(buttonTexture, height, panelWidth);
-        }
-
-        private static float GetButtonHeight(Texture2D buttonTexture)
-        {
-            var availableBelowPanel = Screen.height * (1f - (ListPanelTop + ListPanelHeight));
-            var maxHeight = availableBelowPanel * 0.5f;
-            if (buttonTexture == null || buttonTexture.width <= 0)
-            {
-                return maxHeight;
-            }
-
-            var aspectHeight = Screen.width * ListPanelWidth * ColumnButtonWidthScale *
-                ((float)buttonTexture.height / buttonTexture.width);
-            return Mathf.Min(aspectHeight, maxHeight);
-        }
-
-        private static float GetButtonWidth(Texture2D buttonTexture, float height, float panelWidth)
-        {
-            if (buttonTexture != null && buttonTexture.height > 0)
-            {
-                return height * ((float)buttonTexture.width / buttonTexture.height);
-            }
-
-            return panelWidth * ColumnButtonWidthScale;
         }
 
         private static Rect ScaleRect(float xNorm, float yNorm, float wNorm, float hNorm)

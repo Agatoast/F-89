@@ -120,6 +120,12 @@ namespace F89.Flight
 
         private void Start()
         {
+            if (FlightGroundReturnService.ShouldSkipCarrierSpawn())
+            {
+                FlightGroundReturnService.TryApplyPendingReturn(gameObject);
+                return;
+            }
+
             TryApplyMissionCarrierLaunch();
         }
 
@@ -177,6 +183,27 @@ namespace F89.Flight
 
                 body.linearVelocity = forward.normalized * currentSpeed;
             }
+        }
+
+        public void ApplyTakeoffSpeed(float speedMph)
+        {
+            if (profile == null || body == null)
+            {
+                return;
+            }
+
+            currentSpeedMph = Mathf.Clamp(speedMph, 0f, profile.maxThrottleMph);
+            afterburnerSpoolDownActive = false;
+            IsAfterburning = false;
+            currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
+
+            var forward = Flatten(transform.forward);
+            if (forward.sqrMagnitude < 0.0001f)
+            {
+                forward = Vector3.forward;
+            }
+
+            body.linearVelocity = forward.normalized * currentSpeed;
         }
 
         private void OnValidate()
@@ -242,13 +269,18 @@ namespace F89.Flight
 
             if (IsLandingLocked)
             {
+                if (AircraftLandingController.IsTakeoffActive)
+                {
+                    return;
+                }
+
                 currentSpeed = 0f;
                 currentSpeedMph = 0f;
                 body.linearVelocity = Vector3.zero;
                 return;
             }
 
-            if (AircraftLandingController.IsLandingActive)
+            if (AircraftLandingController.IsLandingActive || AircraftLandingController.IsTakeoffActive)
             {
                 return;
             }

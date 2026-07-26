@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::F89.Core.WorldMapConfig
   gridSpacingTics: 20
   milesPerGrid: 1
+  travelSpeedScale: 6
   antarcticaSizeMiles: 3000
   maxFuelRangeMiles: 1350
   fuelGallonsPerTank: 1350

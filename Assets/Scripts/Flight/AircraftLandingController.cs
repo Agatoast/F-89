@@ -20,9 +20,11 @@ namespace F89.Flight
         private float sequenceStartTime;
         private float currentVisualScale = 1f;
         private bool sequenceActive;
+        private bool takeoffActive;
         private bool landingComplete;
 
         public static bool IsLandingActive => activeInstance != null && activeInstance.sequenceActive;
+        public static bool IsTakeoffActive => activeInstance != null && activeInstance.takeoffActive;
         public static bool IsLandingComplete => activeInstance != null && activeInstance.landingComplete;
         public static float VisualScaleMultiplier => activeInstance?.currentVisualScale ?? 1f;
 
@@ -71,8 +73,58 @@ namespace F89.Flight
             }
         }
 
+        public void PrepareForGroundReturn()
+        {
+            activeInstance = this;
+            sequenceActive = false;
+            takeoffActive = false;
+            landingComplete = false;
+            currentVisualScale = TargetVisualScale;
+
+            if (visualPivot != null)
+            {
+                if (initialVisualScale.sqrMagnitude < 0.0001f)
+                {
+                    initialVisualScale = Vector3.one;
+                }
+
+                visualPivot.localScale = initialVisualScale * TargetVisualScale;
+            }
+
+            aircraft?.SetLandingLocked(true);
+
+            if (input != null)
+            {
+                input.enabled = false;
+            }
+        }
+
+        public void BeginTakeoff()
+        {
+            if (takeoffActive || sequenceActive)
+            {
+                return;
+            }
+
+            takeoffActive = true;
+            activeInstance = this;
+            sequenceStartTime = Time.time;
+            currentVisualScale = TargetVisualScale;
+
+            if (input != null)
+            {
+                input.enabled = false;
+            }
+        }
+
         private void Update()
         {
+            if (takeoffActive)
+            {
+                UpdateTakeoffVisual();
+                return;
+            }
+
             if (!sequenceActive)
             {
                 return;
@@ -94,6 +146,12 @@ namespace F89.Flight
 
         private void FixedUpdate()
         {
+            if (takeoffActive)
+            {
+                UpdateTakeoffMotion();
+                return;
+            }
+
             if (!sequenceActive || aircraft == null || body == null)
             {
                 return;
@@ -142,6 +200,58 @@ namespace F89.Flight
             LandMissionHandoffState.BeginEnterFromFlight(snapshot);
             Time.timeScale = 1f;
             SceneManager.LoadScene(GameScenes.GroundAttack);
+        }
+
+        private void UpdateTakeoffVisual()
+        {
+            var progress = Mathf.Clamp01((Time.time - sequenceStartTime) / ShrinkDurationSeconds);
+            currentVisualScale = Mathf.Lerp(TargetVisualScale, 1f, progress);
+
+            if (visualPivot != null)
+            {
+                visualPivot.localScale = initialVisualScale * currentVisualScale;
+            }
+
+            if (progress >= 1f)
+            {
+                CompleteTakeoff();
+            }
+        }
+
+        private void UpdateTakeoffMotion()
+        {
+            if (aircraft == null || body == null)
+            {
+                return;
+            }
+
+            var progress = Mathf.Clamp01((Time.time - sequenceStartTime) / ShrinkDurationSeconds);
+            var targetSpeedMph = Mathf.Lerp(0f, AircraftLanding.MaxLandingSpeedMph, progress);
+            aircraft.ApplyTakeoffSpeed(targetSpeedMph);
+        }
+
+        private void CompleteTakeoff()
+        {
+            takeoffActive = false;
+            currentVisualScale = 1f;
+
+            if (visualPivot != null)
+            {
+                visualPivot.localScale = initialVisualScale;
+            }
+
+            if (aircraft != null)
+            {
+                aircraft.SetLandingLocked(false);
+                aircraft.ApplyTakeoffSpeed(AircraftLanding.MaxLandingSpeedMph);
+            }
+
+            if (input != null)
+            {
+                input.enabled = true;
+            }
+
+            activeInstance = null;
         }
     }
 }

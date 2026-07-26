@@ -4,6 +4,7 @@ Shader "F89/ProceduralFlightGround"
     {
         _LandMask ("Land Mask Map", 2D) = "white" {}
         _MapHalfSizeWorld ("Map Half Size (world units)", Float) = 30000
+        _MapAspectWidthOverHeight ("Map Aspect (width ÷ height)", Float) = 1.223
 
         _OceanDeep ("Ocean Deep", Color) = (0.239, 0.486, 0.800, 1)
         _OceanShallow ("Ocean Shallow", Color) = (0.10, 0.34, 0.52, 1)
@@ -16,6 +17,7 @@ Shader "F89/ProceduralFlightGround"
         _IceShadow ("Ice Shadow", Color) = (0.62, 0.69, 0.78, 1)
         _IceCrack ("Ice Crack", Color) = (0.48, 0.56, 0.66, 1)
         _LandNoiseScale ("Land Noise Scale", Float) = 0.0035
+        _SatelliteBlend ("Satellite Imagery Blend", Range(0, 1)) = 1
     }
 
     SubShader
@@ -43,6 +45,7 @@ Shader "F89/ProceduralFlightGround"
             CBUFFER_START(UnityPerMaterial)
                 float4 _LandMask_ST;
                 float _MapHalfSizeWorld;
+                float _MapAspectWidthOverHeight;
                 float4 _OceanDeep;
                 float4 _OceanShallow;
                 float4 _OceanHighlight;
@@ -53,6 +56,7 @@ Shader "F89/ProceduralFlightGround"
                 float4 _IceShadow;
                 float4 _IceCrack;
                 float _LandNoiseScale;
+                float _SatelliteBlend;
             CBUFFER_END
 
             struct Attributes
@@ -108,9 +112,12 @@ Shader "F89/ProceduralFlightGround"
 
             float2 WorldToMaskUv(float3 worldPos)
             {
-                float mapSize = max(_MapHalfSizeWorld * 2.0, 1.0);
-                float u = (worldPos.x + _MapHalfSizeWorld) / mapSize;
-                float mileV = (-worldPos.z + _MapHalfSizeWorld) / mapSize;
+                float mapWidthWorld = max(_MapHalfSizeWorld * 2.0, 1.0);
+                float aspect = max(_MapAspectWidthOverHeight, 0.0001);
+                float mapHeightWorld = mapWidthWorld / aspect;
+                float halfHeightWorld = mapHeightWorld * 0.5;
+                float u = (worldPos.x + _MapHalfSizeWorld) / mapWidthWorld;
+                float mileV = (-worldPos.z + halfHeightWorld) / mapHeightWorld;
                 return float2(u, 1.0 - mileV);
             }
 
@@ -122,12 +129,23 @@ Shader "F89/ProceduralFlightGround"
                 }
 
                 float4 sampleColor = SAMPLE_TEXTURE2D(_LandMask, sampler_LandMask, uv);
-                float brightness = (sampleColor.r + sampleColor.g + sampleColor.b) / 3.0;
-                float blueDominance = sampleColor.b - max(sampleColor.r, sampleColor.g);
-                // Match AntarcticaLandMask display-land / solid-ice thresholds used for map bases.
-                float landScore = smoothstep(0.60, 0.78, brightness)
-                    * (1.0 - smoothstep(0.0, 0.04, blueDominance));
-                return saturate(landScore);
+                return sampleColor.a;
+            }
+
+            float3 SampleSatellite(float2 uv)
+            {
+                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
+                {
+                    return float3(1.0, 1.0, 1.0);
+                }
+
+                float4 sampleColor = SAMPLE_TEXTURE2D(_LandMask, sampler_LandMask, uv);
+                if (sampleColor.a < 0.5)
+                {
+                    return float3(1.0, 1.0, 1.0);
+                }
+
+                return sampleColor.rgb;
             }
 
             float3 SampleOcean(float3 worldPos, float time)
@@ -170,7 +188,9 @@ Shader "F89/ProceduralFlightGround"
 
                 float3 ocean = SampleOcean(input.worldPos, time);
                 float3 ice = SampleIce(input.worldPos);
-                float3 color = lerp(ocean, ice, land);
+                float3 satellite = SampleSatellite(uv);
+                float3 landColor = lerp(ice, satellite, _SatelliteBlend);
+                float3 color = lerp(ocean, landColor, land);
                 return half4(color, 1.0);
             }
             ENDHLSL
@@ -191,6 +211,7 @@ Shader "F89/ProceduralFlightGround"
             sampler2D _LandMask;
             float4 _LandMask_ST;
             float _MapHalfSizeWorld;
+            float _MapAspectWidthOverHeight;
             fixed4 _OceanDeep;
             fixed4 _OceanShallow;
             fixed4 _OceanHighlight;
@@ -201,6 +222,7 @@ Shader "F89/ProceduralFlightGround"
             fixed4 _IceShadow;
             fixed4 _IceCrack;
             float _LandNoiseScale;
+            float _SatelliteBlend;
 
             struct appdata
             {
@@ -253,9 +275,12 @@ Shader "F89/ProceduralFlightGround"
 
             float2 WorldToMaskUv(float3 worldPos)
             {
-                float mapSize = max(_MapHalfSizeWorld * 2.0, 1.0);
-                float u = (worldPos.x + _MapHalfSizeWorld) / mapSize;
-                float mileV = (-worldPos.z + _MapHalfSizeWorld) / mapSize;
+                float mapWidthWorld = max(_MapHalfSizeWorld * 2.0, 1.0);
+                float aspect = max(_MapAspectWidthOverHeight, 0.0001);
+                float mapHeightWorld = mapWidthWorld / aspect;
+                float halfHeightWorld = mapHeightWorld * 0.5;
+                float u = (worldPos.x + _MapHalfSizeWorld) / mapWidthWorld;
+                float mileV = (-worldPos.z + halfHeightWorld) / mapHeightWorld;
                 return float2(u, 1.0 - mileV);
             }
 
@@ -267,11 +292,23 @@ Shader "F89/ProceduralFlightGround"
                 }
 
                 fixed4 sampleColor = tex2D(_LandMask, uv);
-                float brightness = (sampleColor.r + sampleColor.g + sampleColor.b) / 3.0;
-                float blueDominance = sampleColor.b - max(sampleColor.r, sampleColor.g);
-                return saturate(
-                    smoothstep(0.60, 0.78, brightness)
-                    * (1.0 - smoothstep(0.0, 0.04, blueDominance)));
+                return sampleColor.a;
+            }
+
+            fixed3 SampleSatellite(float2 uv)
+            {
+                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
+                {
+                    return fixed3(1.0, 1.0, 1.0);
+                }
+
+                fixed4 sampleColor = tex2D(_LandMask, uv);
+                if (sampleColor.a < 0.5)
+                {
+                    return fixed3(1.0, 1.0, 1.0);
+                }
+
+                return sampleColor.rgb;
             }
 
             fixed3 SampleOcean(float3 worldPos, float time)
@@ -308,7 +345,9 @@ Shader "F89/ProceduralFlightGround"
                 float land = LandFactor(uv);
                 fixed3 ocean = SampleOcean(i.worldPos, _Time.y);
                 fixed3 ice = SampleIce(i.worldPos);
-                return fixed4(lerp(ocean, ice, land), 1.0);
+                fixed3 satellite = SampleSatellite(uv);
+                fixed3 landColor = lerp(ice, satellite, _SatelliteBlend);
+                return fixed4(lerp(ocean, landColor, land), 1.0);
             }
             ENDCG
         }

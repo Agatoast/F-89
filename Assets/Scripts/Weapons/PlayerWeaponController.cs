@@ -1,4 +1,5 @@
 using F89.Controls;
+using F89.Core;
 using F89.Flight;
 using F89.UI;
 using UnityEngine;
@@ -223,6 +224,7 @@ namespace F89.Weapons
                 if (input.cycleTargetPressed)
                 {
                     TryCycleTarget();
+                    AlignGauCrosshairToSelectedTarget();
                 }
 
                 lockController.UpdateLockProgress(false);
@@ -338,6 +340,32 @@ namespace F89.Weapons
                 worldMap,
                 profile.ticSizeWorldUnits,
                 IsCycleCandidate);
+        }
+
+        private void AlignGauCrosshairToSelectedTarget()
+        {
+            if (gau27aGun == null
+                || aircraft == null
+                || lockController == null
+                || lockController.SelectedTarget == null
+                || !lockController.SelectedTarget.IsAlive)
+            {
+                return;
+            }
+
+            var profile = aircraft.Profile;
+            var worldMap = aircraft.WorldMap;
+            if (profile == null || worldMap == null)
+            {
+                return;
+            }
+
+            var distanceMiles = CombatThreatRange.DistanceMiles(
+                aircraft.transform.position,
+                lockController.SelectedTarget.transform.position,
+                worldMap,
+                profile.ticSizeWorldUnits);
+            gau27aGun.SetCrosshairDistanceMiles(distanceMiles);
         }
 
         private bool IsCycleCandidate(LockableTarget target)

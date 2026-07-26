@@ -6,7 +6,7 @@ namespace F89.LandCombat
     [Serializable]
     public sealed class LandRolledAffix
     {
-        public int StatId;
+        public LandItemStat Stat = LandItemStat.Damage;
         public float Value;
     }
 

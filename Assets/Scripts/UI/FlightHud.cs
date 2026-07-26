@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using F89.Core;
 using F89.Flight;
 using F89.Weapons;
 using UnityEngine;
@@ -55,7 +56,7 @@ namespace F89.UI
 
         private void Update()
         {
-            if (GamePauseController.IsPaused)
+            if (GamePauseController.IsPaused || AntarcticaMapOverlay.IsOpen)
             {
                 return;
             }
@@ -63,6 +64,13 @@ namespace F89.UI
             if (Input.GetKeyDown(KeyCode.BackQuote))
             {
                 FlightHudColorPalette.CycleNext();
+            }
+
+            if (GameKeyBindings.WasPressed(GameKeyBindingIds.Land)
+                && aircraft != null
+                && AircraftLanding.CanLand(aircraft.CurrentSpeedMph))
+            {
+                AircraftLanding.TryLand(aircraft);
             }
         }
 
@@ -87,6 +95,39 @@ namespace F89.UI
             DrawHeadingCompass();
             DrawIncomingMissileThreatIndicators();
             DrawMapBearingIndicator();
+            DrawLandPrompt();
+        }
+
+        private void DrawLandPrompt()
+        {
+            if (aircraft == null || !AircraftLanding.CanLand(aircraft.CurrentSpeedMph))
+            {
+                return;
+            }
+
+            var hudColor = FlightHudColorPalette.Current;
+            const string label = AircraftLanding.LandPromptText;
+            const float horizontalPadding = 28f;
+            const float verticalPadding = 18f;
+            const float bottomMargin = 24f;
+
+            var promptStyle = HudStyleFactory.CreateLabel(
+                18,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                hudColor);
+            var textSize = promptStyle.CalcSize(new GUIContent(label));
+            var promptRect = new Rect(
+                (Screen.width - textSize.x) * 0.5f - horizontalPadding,
+                Screen.height - textSize.y - verticalPadding * 2f - bottomMargin,
+                textSize.x + horizontalPadding * 2f,
+                textSize.y + verticalPadding * 2f);
+
+            GUI.color = new Color(hudColor.r, hudColor.g, hudColor.b, 0.18f);
+            GUI.DrawTexture(promptRect, Texture2D.whiteTexture);
+            GUI.color = hudColor;
+            GUI.Label(promptRect, label, promptStyle);
+            GUI.color = Color.white;
         }
 
         private void DrawHeadingCompass()
@@ -661,7 +702,7 @@ namespace F89.UI
                 return 0f;
             }
 
-            var milesPerSecond = mph / 3600f;
+            var milesPerSecond = aircraft.WorldMap.MphToMilesPerSecond(mph);
             if (autopilotTimeWarp)
             {
                 var warp = AutopilotController.Instance != null

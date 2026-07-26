@@ -18,7 +18,7 @@ namespace F89.UI
                     new Rect(0f, 0f, frameRect.width, frameRect.height),
                     portraitTexture.width,
                     portraitTexture.height);
-                GUI.DrawTexture(drawRect, portraitTexture, ScaleMode.StretchToFill, false);
+                GUI.DrawTexture(drawRect, portraitTexture, ScaleMode.StretchToFill, true);
             }
             else if (!string.IsNullOrEmpty(promptText) && promptStyle != null)
             {

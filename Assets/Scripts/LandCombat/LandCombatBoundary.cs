@@ -11,7 +11,8 @@ namespace F89.LandCombat
     ///   - F89.Core.GameScenes.GroundAttack
     ///
     /// Flight code must NOT reference types in F89.LandCombat.
-    /// Inventory, bank, paperdoll, and MTAU ports belong here — not in F89.Flight or F89.Weapons.
+    /// Inventory, bank, paperdoll, and Land item stats (Damage, ROF) belong here —
+    /// not in F89.Flight or F89.Weapons.
     /// </summary>
     public static class LandCombatBoundary
     {

@@ -47,7 +47,7 @@ namespace F89.LandCombat
                 return;
             }
 
-            nextFireTime = Time.time + 1f / Mathf.Max(0.1f, weapon.FireRate);
+            nextFireTime = Time.time + 1f / Mathf.Max(0.1f, weapon.RateOfFire);
             var origin = (Vector2)transform.position;
             var aim = motor.AimDirection;
             var lifetime = weapon.RangeTiles / Mathf.Max(0.1f, weapon.ProjectileSpeed);

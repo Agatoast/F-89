@@ -32,15 +32,11 @@ namespace F89.Testing
             var camera = Camera.main;
             if (camera == null)
             {
-                var cameraObject = new GameObject("Main Camera");
-                cameraObject.tag = "MainCamera";
-                camera = cameraObject.AddComponent<Camera>();
-                cameraObject.AddComponent<AudioListener>();
+                return;
             }
 
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.1f, 0.12f, 0.1f);
-            camera.transform.position = new Vector3(0f, 0f, -10f);
+            camera.backgroundColor = new Color(0.84f, 0.88f, 0.93f);
         }
     }
 }

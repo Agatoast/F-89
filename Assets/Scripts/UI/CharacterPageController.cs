@@ -1,175 +1,178 @@
 using F89.Core;
 using F89.LandCombat;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace F89.UI
 {
     public class CharacterPageController : MonoBehaviour
     {
-        private const float Margin = 20f;
-        private const int RibbonRows = 3;
-        private const int RibbonColumns = 8;
+        private const string BackgroundResourcePath = "CharacterPage/character_page_bg";
+        private const string PaperdollResourcePath = "CharacterPage/paperdoll";
+        private const string TopSecretFolderResourcePath = "CharacterPage/top_secret_folder";
 
-        private GUIStyle headerStyle;
-        private GUIStyle bodyStyle;
-        private GUIStyle labelStyle;
-        private GUIStyle valueStyle;
-        private GUIStyle sectionStyle;
+        private const string SaveAntarcticaLogoResourcePath = "CharacterPage/save_antarctica_logo";
+
+        private Texture2D backgroundTexture;
+        private Texture2D paperdollTexture;
+        private Texture2D topSecretFolderTexture;
+        private Texture2D saveAntarcticaLogoTexture;
+
+        private void Start()
+        {
+            backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
+            paperdollTexture = Resources.Load<Texture2D>(PaperdollResourcePath);
+            topSecretFolderTexture = Resources.Load<Texture2D>(TopSecretFolderResourcePath);
+            saveAntarcticaLogoTexture = Resources.Load<Texture2D>(SaveAntarcticaLogoResourcePath);
+
+            if (backgroundTexture == null)
+            {
+                Debug.LogWarning("F-89: Character page background missing from Resources/CharacterPage/character_page_bg.");
+            }
+
+            if (topSecretFolderTexture == null)
+            {
+                Debug.LogWarning("F-89: Top secret folder graphic missing from Resources/CharacterPage/top_secret_folder.");
+            }
+
+            if (saveAntarcticaLogoTexture == null)
+            {
+                Debug.LogWarning("F-89: SAVE Antarctica logo missing from Resources/CharacterPage/save_antarctica_logo.");
+            }
+        }
 
         private void OnGUI()
         {
-            EnsureStyles();
+            MilitaryAwardTooltipUi.BeginFrame();
             CharacterGearSession.Bind(CharacterSessionState.ActiveSave);
             DrawPageBackground();
-            DrawBackButton();
 
             var save = CharacterSessionState.ActiveSave;
-            var topBar = Margin + 34f;
-            var leftWidth = Screen.width * 0.22f;
-            var leftRect = new Rect(Margin, topBar, leftWidth, Screen.height - topBar - Margin);
-            var rightX = leftRect.xMax + Margin;
-            var rightWidth = Screen.width - rightX - Margin;
-            var ribbonsHeight = Screen.height * 0.4f;
-            var ribbonsRect = new Rect(rightX, topBar, rightWidth, ribbonsHeight);
-            var loadoutRect = new Rect(
-                rightX,
-                ribbonsRect.yMax + Margin,
-                rightWidth,
-                Screen.height - ribbonsRect.yMax - Margin * 2f);
+            DrawFootlockerHeader();
+            CharacterPageGearUi.DrawEquipmentSlots();
+            CharacterPageGearUi.DrawInventory(CharacterPageLayout.GetInventoryGridRect());
+            DrawPaperdoll();
+            DrawLeftColumn(save);
+            CharacterPageGearUi.DrawFootlocker(CharacterPageLayout.GetFootlockerGridRect());
+            DrawPortrait(save);
+            DrawScoreRows(save);
+            DrawKillFolderLabels();
+            DrawSaveAntarcticaLogo();
+            MilitaryAwardTooltipUi.Draw();
+        }
 
-            if (save != null)
+        private static void DrawKillFolderLabels()
+        {
+            DrawKillFolderLabel(
+                CharacterPageLayout.GetVehicleKillsLabelRect(),
+                "Enemy Vehicles Destroyed");
+            DrawKillFolderLabel(
+                CharacterPageLayout.GetTroopKillsLabelRect(),
+                "Enemy Troops Killed");
+        }
+
+        private static void DrawFootlockerHeader()
+        {
+            GUI.Label(CharacterPageLayout.GetFootlockerTitleRect(), "FOOTLOCKER", CharacterPageStyles.FootlockerTitleStyle);
+        }
+
+        private void DrawLeftColumn(CharacterSaveData save)
+        {
+            DrawNameBar(save);
+            DrawRibbonsPanel(save);
+            DrawKillFolder(CharacterPageLayout.GetVehicleKillsRect());
+            DrawKillFolder(CharacterPageLayout.GetTroopKillsRect());
+        }
+
+        private static void DrawKillFolderLabel(Rect rect, string label)
+        {
+            GUI.Label(rect, label, CharacterPageStyles.KillFolderLabelStyle);
+        }
+
+        private static void DrawNameBar(CharacterSaveData save)
+        {
+            var rect = CharacterPageLayout.GetNameBarRect();
+            var label = save != null ? save.DisplayRankAndName : "NO CHARACTER";
+            GUI.Label(rect, label, CharacterPageStyles.NameBarStyle);
+        }
+
+        private static void DrawRibbonsPanel(CharacterSaveData save)
+        {
+            var rect = CharacterPageLayout.GetRibbonsRect();
+            var earnedRibbonIds = save?.EarnedRibbonIds;
+            if (earnedRibbonIds == null || earnedRibbonIds.Length == 0)
             {
-                DrawProfilePanel(leftRect, save);
+                return;
             }
-            else
+
+            CharacterPageRibbonUi.DrawRibbons(rect, earnedRibbonIds);
+        }
+
+        private static void DrawScoreRows(CharacterSaveData save)
+        {
+            var onesColumnX = CharacterPageLayout.GetMissionScoreOnesColumnX();
+            MissionScoreDisplayUi.DrawCharacterPageRow(
+                CharacterPageLayout.GetTotalScoreLabelRect(),
+                "Total Mission Score:",
+                save?.TotalScore ?? 0,
+                CharacterPageLayout.MissionScoreLabelColumnWidthPx,
+                onesColumnX);
+            MissionScoreDisplayUi.DrawCharacterPageRow(
+                CharacterPageLayout.GetBestScoreLabelRect(),
+                "Best Mission Score:",
+                save?.BestMissionScore ?? 0,
+                CharacterPageLayout.MissionScoreLabelColumnWidthPx,
+                onesColumnX);
+        }
+
+        private void DrawKillFolder(Rect rect)
+        {
+            if (topSecretFolderTexture == null)
             {
-                DrawWireBox(leftRect, 2f);
-                GUI.Label(new Rect(leftRect.x + 12f, leftRect.y + 12f, leftRect.width - 24f, 40f), "No character loaded.", bodyStyle);
+                return;
             }
 
-            DrawRibbonPanel(ribbonsRect);
-            DrawLoadoutPanel(loadoutRect);
-            DrawNextMissionButton();
+            GUI.DrawTexture(rect, topSecretFolderTexture, ScaleMode.ScaleToFit, true);
+            DrawKillFolderSlotGrid(rect);
         }
 
-        private void DrawProfilePanel(Rect rect, CharacterSaveData save)
+        private static GUIStyle killFolderPlaceholderStyle;
+
+        private static void DrawKillFolderSlotGrid(Rect folderRect)
         {
-            DrawWireBox(rect, 2f);
+            EnsureKillFolderPlaceholderStyle();
 
-            var x = rect.x + 14f;
-            var y = rect.y + 12f;
-            var innerWidth = rect.width - 28f;
-
-            GUI.Label(new Rect(x, y, innerWidth, 28f), save.DisplayRankAndName, headerStyle);
-            y += 34f;
-
-            var pictureHeight = Mathf.Min(180f, rect.height * 0.24f);
-            var pictureRect = new Rect(x, y, innerWidth, pictureHeight);
-            DrawWireBox(pictureRect, 1.5f);
-            GUI.Label(new Rect(pictureRect.x, pictureRect.y + pictureHeight * 0.42f, pictureRect.width, 24f), "Picture", bodyStyle);
-            y = pictureRect.yMax + 16f;
-
-            DrawLabelValue(new Rect(x, y, innerWidth, 22f), "Highest Mission Score:", save.BestMissionScore.ToString("N0"));
-            y += 30f;
-            DrawLabelValue(new Rect(x, y, innerWidth, 22f), "Total Score:", save.TotalScore.ToString("N0"));
-            y += 38f;
-
-            GUI.Label(new Rect(x, y, innerWidth, 20f), save.VehicleKillDisplay, labelStyle);
-            y += Mathf.Max(72f, labelStyle.CalcHeight(new GUIContent(save.VehicleKillDisplay), innerWidth) + 10f);
-
-            GUI.Label(new Rect(x, y, innerWidth, 20f), save.TroopKillDisplay, labelStyle);
-        }
-
-        private void DrawRibbonPanel(Rect rect)
-        {
-            DrawWireBox(rect, 2f);
-            GUI.Label(
-                new Rect(rect.x + 14f, rect.y + 10f, rect.width - 28f, 24f),
-                "Ribbons in order with oak leaves",
-                sectionStyle);
-
-            var gridRect = new Rect(rect.x + 14f, rect.y + 40f, rect.width - 28f, rect.height - 54f);
-            DrawWireBox(gridRect, 1.5f);
-
-            var cellWidth = gridRect.width / RibbonColumns;
-            var cellHeight = gridRect.height / RibbonRows;
-            for (var row = 0; row < RibbonRows; row++)
+            for (var i = 0; i < CharacterPageLayout.KillFolderSlotCount; i++)
             {
-                for (var col = 0; col < RibbonColumns; col++)
-                {
-                    var cell = new Rect(
-                        gridRect.x + col * cellWidth + 3f,
-                        gridRect.y + row * cellHeight + 3f,
-                        cellWidth - 6f,
-                        cellHeight - 6f);
-                    DrawWireBox(cell, 1f);
-                }
+                var slotRect = CharacterPageLayout.GetKillFolderSlotRect(folderRect, i);
+                GUI.color = new Color(0.12f, 0.12f, 0.12f, 0.92f);
+                GUI.DrawTexture(slotRect, Texture2D.whiteTexture);
+
+                DrawKillFolderSlotBorder(slotRect, 1f, new Color(0.95f, 0.95f, 0.95f, 0.95f));
+
+                GUI.color = Color.white;
+                GUI.Label(slotRect, (i + 1).ToString(), killFolderPlaceholderStyle);
             }
+
+            GUI.color = Color.white;
         }
 
-        private void DrawLoadoutPanel(Rect rect)
+        private static void EnsureKillFolderPlaceholderStyle()
         {
-            DrawWireBox(rect, 2f);
-            var inner = new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f);
-            LandCharacterGearPanelUi.Draw(inner);
-        }
-
-        private void DrawNextMissionButton()
-        {
-            const float width = 190f;
-            const float height = 44f;
-            var rect = new Rect(Screen.width - width - Margin, Screen.height - height - Margin, width, height);
-            DrawRoundedHeader(rect, "Next Mission");
-
-            if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+            if (killFolderPlaceholderStyle != null)
             {
-                BeginNextMission();
+                return;
             }
+
+            killFolderPlaceholderStyle = HudStyleFactory.CreateLabel(
+                24,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                Color.white);
         }
 
-        private static void BeginNextMission()
+        private static void DrawKillFolderSlotBorder(Rect rect, float thickness, Color color)
         {
-            Time.timeScale = 1f;
-            MissionBriefingState.PrepareNextMission(CharacterSessionState.ActiveSave);
-            SceneManager.LoadScene(GameScenes.MissionBriefing);
-        }
-
-        private void DrawBackButton()
-        {
-            const float width = 110f;
-            const float height = 34f;
-            var rect = new Rect(Margin, Margin, width, height);
-            DrawWireBox(rect, 1.5f);
-            if (GUI.Button(rect, "BACK", bodyStyle))
-            {
-                SceneManager.LoadScene(GameScenes.SelectionPage);
-            }
-        }
-
-        private void DrawLabelValue(Rect rect, string label, string value)
-        {
-            GUI.Label(new Rect(rect.x, rect.y, rect.width * 0.62f, rect.height), label, labelStyle);
-            GUI.Label(new Rect(rect.x + rect.width * 0.38f, rect.y, rect.width * 0.62f, rect.height), value, valueStyle);
-        }
-
-        private static void DrawRoundedHeader(Rect rect, string text)
-        {
-            DrawWireBox(rect, 2f);
-            var style = HudStyleFactory.CreateLabel(16, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
-            GUI.Label(rect, text, style);
-        }
-
-        private static void DrawPageBackground()
-        {
-            GUI.color = new Color(0.93f, 0.93f, 0.93f);
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = Color.black;
-        }
-
-        private static void DrawWireBox(Rect rect, float thickness)
-        {
-            GUI.color = Color.black;
+            GUI.color = color;
             GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), Texture2D.whiteTexture);
@@ -177,18 +180,71 @@ namespace F89.UI
             GUI.color = Color.white;
         }
 
-        private void EnsureStyles()
+        private static void DrawPortrait(CharacterSaveData save)
         {
-            if (headerStyle != null)
+            if (save != null)
+            {
+                save = CharacterSaveRepository.FindById(save.Id) ?? save;
+            }
+
+            var frameRect = CharacterPageLayout.GetPortraitRect();
+            var inset = Mathf.Min(frameRect.width, frameRect.height) * 0.11f;
+            var portraitRect = new Rect(
+                frameRect.x + inset,
+                frameRect.y + inset,
+                frameRect.width - inset * 2f,
+                frameRect.height - inset * 2f);
+
+            var portraitTexture = CharacterPortraitService.GetPortraitTexture(save);
+            GUI.color = Color.white;
+            PortraitDisplayUtility.DrawPortraitFrame(portraitRect, portraitTexture, null, null);
+            GUI.color = Color.white;
+        }
+
+        private void DrawSaveAntarcticaLogo()
+        {
+            if (saveAntarcticaLogoTexture == null)
+            {
+                saveAntarcticaLogoTexture = Resources.Load<Texture2D>(SaveAntarcticaLogoResourcePath);
+                if (saveAntarcticaLogoTexture == null)
+                {
+                    return;
+                }
+            }
+
+            var rect = CharacterPageLayout.GetSaveAntarcticaLogoRect(saveAntarcticaLogoTexture);
+            GUI.color = Color.white;
+            GUI.DrawTexture(rect, saveAntarcticaLogoTexture, ScaleMode.ScaleToFit, true);
+            GUI.color = Color.white;
+        }
+
+        private void DrawPaperdoll()
+        {
+            if (paperdollTexture == null)
             {
                 return;
             }
 
-            headerStyle = HudStyleFactory.CreateLabel(20, FontStyle.Bold, TextAnchor.UpperLeft, Color.black);
-            bodyStyle = HudStyleFactory.CreateLabel(14, FontStyle.Normal, TextAnchor.MiddleCenter, Color.black);
-            labelStyle = HudStyleFactory.CreateLabel(13, FontStyle.Normal, TextAnchor.UpperLeft, Color.black, wordWrap: true);
-            valueStyle = HudStyleFactory.CreateLabel(14, FontStyle.Bold, TextAnchor.UpperRight, Color.black);
-            sectionStyle = HudStyleFactory.CreateLabel(15, FontStyle.Bold, TextAnchor.UpperLeft, Color.black);
+            var rect = CharacterPageLayout.GetPaperdollRect();
+            GUI.DrawTexture(rect, paperdollTexture, ScaleMode.ScaleToFit, true);
+        }
+
+        private void DrawPageBackground()
+        {
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            if (backgroundTexture == null)
+            {
+                return;
+            }
+
+            GUI.DrawTexture(
+                new Rect(0f, 0f, Screen.width, Screen.height),
+                backgroundTexture,
+                ScaleMode.StretchToFill,
+                true);
         }
     }
 }

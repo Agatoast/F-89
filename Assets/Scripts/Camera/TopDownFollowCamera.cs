@@ -7,14 +7,14 @@ namespace F89.CameraSystems
 {
     public class TopDownFollowCamera : MonoBehaviour
     {
+        private const float ShiftedPlaneViewportY = 0.25f;
+
         [SerializeField] private Transform target;
         [SerializeField] private AircraftController aircraft;
         [SerializeField] private Vector3 offset = new Vector3(0f, 38f, -12f);
         [SerializeField] private float followSmoothTime = 0.18f;
-        [SerializeField] private float lookAheadDistance = 8f;
-        [SerializeField] private float lookAheadSpeedThreshold = 20f;
-        [SerializeField] private float viewShiftDistance = 14f;
         [SerializeField] private float viewShiftSmoothTime = 0.2f;
+        [SerializeField] private float viewShiftDistanceFallback = 14f;
         [SerializeField] private float maxVisibleHorizontalMiles = 20f;
         [SerializeField] private float zoomScrollSensitivity = 0.12f;
         [SerializeField] private float maxZoomOffsetScaleFallback = 4.5f;
@@ -27,6 +27,7 @@ namespace F89.CameraSystems
         private float maxOffsetScale = 1f;
         private bool zoomLimitsReady;
         private bool zoomChangedThisFrame;
+        private float computedViewShiftDistance;
 
         public bool IsViewShifted => isViewShifted;
         public float ZoomLevel => zoomLevel;
@@ -71,6 +72,7 @@ namespace F89.CameraSystems
             zoomLevel = 0f;
             zoomLimitsReady = false;
             maxOffsetScale = maxZoomOffsetScaleFallback;
+            computedViewShiftDistance = viewShiftDistanceFallback;
             SnapToTarget();
         }
 
@@ -103,22 +105,23 @@ namespace F89.CameraSystems
 
             EnsureZoomLimits();
 
-            var viewShiftTarget = isViewShifted ? viewShiftDistance : 0f;
+            var zoomScale = Mathf.Lerp(1f, maxOffsetScale, zoomLevel);
+            var worldOffset = target.rotation * (offset * zoomScale);
+
+            if (isViewShifted || currentViewShift > 0.01f)
+            {
+                computedViewShiftDistance = ComputeViewShiftForwardDistance(zoomScale, worldOffset);
+            }
+
+            var viewShiftTarget = isViewShifted ? computedViewShiftDistance : 0f;
             currentViewShift = Mathf.SmoothDamp(
                 currentViewShift,
                 viewShiftTarget,
                 ref viewShiftVelocity,
                 viewShiftSmoothTime);
 
-            var lookAhead = Vector3.zero;
-            if (!isViewShifted && aircraft != null && aircraft.CurrentSpeed >= lookAheadSpeedThreshold)
-            {
-                lookAhead = target.forward * lookAheadDistance;
-            }
-
-            var focusPoint = target.position + target.forward * currentViewShift + lookAhead;
-            var zoomScale = Mathf.Lerp(1f, maxOffsetScale, zoomLevel);
-            var desiredPosition = focusPoint + target.rotation * (offset * zoomScale);
+            var focusPoint = target.position + GetHorizontalForward() * currentViewShift;
+            var desiredPosition = focusPoint + worldOffset;
 
             if (zoomChangedThisFrame)
             {
@@ -136,6 +139,72 @@ namespace F89.CameraSystems
             }
 
             transform.LookAt(focusPoint);
+        }
+
+        private float ComputeViewShiftForwardDistance(float zoomScale, Vector3 worldOffset)
+        {
+            var camera = GetComponent<Camera>();
+            if (camera == null || target == null)
+            {
+                return viewShiftDistanceFallback;
+            }
+
+            var planePos = target.position;
+            var forward = GetHorizontalForward();
+            var savedPosition = transform.position;
+            var savedRotation = transform.rotation;
+
+            var low = 0f;
+            var high = 32f;
+            for (var expand = 0; expand < 8; expand++)
+            {
+                ApplyCameraPose(planePos + forward * high, worldOffset);
+                var viewport = camera.WorldToViewportPoint(planePos);
+                if (viewport.z > 0f && viewport.y <= ShiftedPlaneViewportY)
+                {
+                    break;
+                }
+
+                high *= 1.5f;
+            }
+
+            for (var i = 0; i < 20; i++)
+            {
+                var mid = (low + high) * 0.5f;
+                ApplyCameraPose(planePos + forward * mid, worldOffset);
+                var viewport = camera.WorldToViewportPoint(planePos);
+                if (viewport.y > ShiftedPlaneViewportY)
+                {
+                    low = mid;
+                }
+                else
+                {
+                    high = mid;
+                }
+            }
+
+            transform.position = savedPosition;
+            transform.rotation = savedRotation;
+
+            return (low + high) * 0.5f;
+        }
+
+        private void ApplyCameraPose(Vector3 focusPoint, Vector3 worldOffset)
+        {
+            transform.position = focusPoint + worldOffset;
+            transform.LookAt(focusPoint);
+        }
+
+        private Vector3 GetHorizontalForward()
+        {
+            var forward = target.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f)
+            {
+                forward = Vector3.forward;
+            }
+
+            return forward.normalized;
         }
 
         private void SnapToTarget()

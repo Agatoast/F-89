@@ -10,7 +10,32 @@ namespace F89.UI
         private void OnGUI()
         {
             DrawHudOverlay();
+            DrawHealthBar();
             DrawReturnButton();
+        }
+
+        private static void DrawHealthBar()
+        {
+            var health = Object.FindAnyObjectByType<LandPlayerHealth>();
+            if (health == null)
+            {
+                return;
+            }
+
+            const float barWidth = 220f;
+            const float barHeight = 18f;
+            const float margin = 16f;
+            var barRect = new Rect(margin, Screen.height - barHeight - margin - 52f, barWidth, barHeight);
+            var fillRect = new Rect(barRect.x + 1f, barRect.y + 1f, (barRect.width - 2f) * health.HealthNormalized, barRect.height - 2f);
+
+            GUI.color = new Color(0f, 0f, 0f, 0.55f);
+            GUI.DrawTexture(barRect, Texture2D.whiteTexture);
+            GUI.color = health.IsAlive ? new Color(0.18f, 0.82f, 0.28f, 0.95f) : new Color(0.75f, 0.12f, 0.12f, 0.95f);
+            GUI.DrawTexture(fillRect, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var labelStyle = HudStyleFactory.CreateLabel(12, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+            GUI.Label(barRect, $"{health.HealthPercent:0}%", labelStyle);
         }
 
         private static void DrawHudOverlay()
@@ -20,7 +45,34 @@ namespace F89.UI
                 new Rect(16f, 16f, 520f, 24f),
                 $"Ground Ops  |  Kills: {LandGroundSceneController.SessionKills}  Score: {LandGroundSceneController.SessionScore}",
                 hudStyle);
-            GUI.Label(new Rect(16f, 40f, 520f, 24f), "WASD move, mouse aim, click to fire.", hudStyle);
+
+            var weaponLine = BuildEquippedWeaponLine();
+            if (!string.IsNullOrEmpty(weaponLine))
+            {
+                GUI.Label(new Rect(16f, 40f, 520f, 24f), weaponLine, hudStyle);
+                GUI.Label(new Rect(16f, 64f, 520f, 24f), "WASD move, mouse aim, click to fire.", hudStyle);
+            }
+            else
+            {
+                GUI.Label(new Rect(16f, 40f, 520f, 24f), "WASD move, mouse aim, click to fire.", hudStyle);
+            }
+        }
+
+        private static string BuildEquippedWeaponLine()
+        {
+            var weaponItem = CharacterGearSession.ActiveLoadout?.Weapon;
+            if (weaponItem == null || !LandLoadoutSlots.IsValidItem(weaponItem))
+            {
+                return string.Empty;
+            }
+
+            var catalog = CharacterGearSession.Catalog;
+            if (!catalog.TryGetWeaponSummary(weaponItem, out var summary))
+            {
+                return catalog.GetDisplayName(weaponItem);
+            }
+
+            return $"{catalog.GetDisplayName(weaponItem)}  |  {summary}";
         }
 
         private static void DrawReturnButton()
@@ -52,16 +104,8 @@ namespace F89.UI
 
             LandCombatModule.ExitToFlight(result);
 
-            var returnScene = GameScenes.FlightTest;
-            if (LandMissionHandoffState.TryConsumeReturnToFlight(out var snapshot, out _))
-            {
-                returnScene = string.IsNullOrEmpty(snapshot.ReturnSceneName)
-                    ? GameScenes.FlightTest
-                    : snapshot.ReturnSceneName;
-            }
-
             Time.timeScale = 1f;
-            SceneManager.LoadScene(returnScene);
+            SceneManager.LoadScene(LandMissionHandoffState.PendingReturnSceneName);
         }
     }
 }

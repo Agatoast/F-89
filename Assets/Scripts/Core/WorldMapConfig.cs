@@ -12,6 +12,10 @@ namespace F89.Core
         [Tooltip("Each grid cell is this many miles square.")]
         public float milesPerGrid = 1f;
 
+        [Header("Flight Pace")]
+        [Tooltip("World-movement multiplier for displayed mph. At max throttle (~1200 mph) the aircraft crosses about two 1-mile grid squares per second.")]
+        public float travelSpeedScale = 6f;
+
         [Header("Antarctica")]
         public float antarcticaSizeMiles = 3000f;
 
@@ -43,6 +47,12 @@ namespace F89.Core
             return TicsToMiles(ticsPerSecond) * 3600f;
         }
 
+        public float MphToMilesPerSecond(float mph)
+        {
+            var scale = travelSpeedScale > 0f ? travelSpeedScale : 1f;
+            return mph / 3600f * scale;
+        }
+
         public float MphToWorldUnits(float mph, float ticSizeWorldUnits)
         {
             return MilesPerSecondToWorldUnits(mph / 3600f, this, ticSizeWorldUnits);
@@ -55,7 +65,12 @@ namespace F89.Core
                 return 0f;
             }
 
-            return TicsPerSecondToMph(worldSpeed / ticSizeWorldUnits);
+            return TicsPerSecondToMph((worldSpeed / ticSizeWorldUnits) / GetTravelSpeedScale());
+        }
+
+        private float GetTravelSpeedScale()
+        {
+            return travelSpeedScale > 0f ? travelSpeedScale : 1f;
         }
 
         public static float MilesPerSecondToWorldUnits(
@@ -63,12 +78,17 @@ namespace F89.Core
             WorldMapConfig worldMap,
             float ticSizeWorldUnits)
         {
-            if (worldMap == null || milesPerSecond <= 0f)
+            if (milesPerSecond <= 0f)
             {
-                return milesPerSecond * 20f * ticSizeWorldUnits;
+                return 0f;
             }
 
-            return worldMap.MilesToTics(milesPerSecond) * ticSizeWorldUnits;
+            if (worldMap == null)
+            {
+                return milesPerSecond * 20f * ticSizeWorldUnits * 6f;
+            }
+
+            return worldMap.MilesToTics(milesPerSecond * worldMap.GetTravelSpeedScale()) * ticSizeWorldUnits;
         }
 
         public static float RangeMilesToWorldUnits(
@@ -120,9 +140,10 @@ namespace F89.Core
 
         public bool IsWithinAntarcticaBounds(Vector3 worldPosition, float ticSizeWorldUnits)
         {
-            var halfExtentWorld = MilesToTics(antarcticaSizeMiles * 0.5f) * ticSizeWorldUnits;
-            return Mathf.Abs(worldPosition.x) <= halfExtentWorld
-                && Mathf.Abs(worldPosition.z) <= halfExtentWorld;
+            var halfWidthWorld = MilesToTics(antarcticaSizeMiles * 0.5f) * ticSizeWorldUnits;
+            var halfHeightWorld = halfWidthWorld / AntarcticaLandMask.GetMapWidthOverHeight();
+            return Mathf.Abs(worldPosition.x) <= halfWidthWorld
+                && Mathf.Abs(worldPosition.z) <= halfHeightWorld;
         }
     }
 }

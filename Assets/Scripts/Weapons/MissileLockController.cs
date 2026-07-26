@@ -248,40 +248,43 @@ namespace F89.Weapons
 
             candidates.Sort((a, b) =>
             {
-                var distanceA = CombatThreatRange.DistanceMiles(
-                    observer,
-                    a.transform.position,
-                    worldMap,
-                    ticSizeWorldUnits);
-                var distanceB = CombatThreatRange.DistanceMiles(
-                    observer,
-                    b.transform.position,
-                    worldMap,
-                    ticSizeWorldUnits);
+                var distanceA = HorizontalDistanceMeters(observer, a.transform.position);
+                var distanceB = HorizontalDistanceMeters(observer, b.transform.position);
                 return distanceA.CompareTo(distanceB);
             });
 
             var currentIndex = SelectedTarget != null ? candidates.IndexOf(SelectedTarget) : -1;
-            var nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % candidates.Count;
-            var nextTarget = candidates[nextIndex];
-
-            if (lockWeapon != null && !IsSelectableTarget(nextTarget))
+            for (var step = 0; step < candidates.Count; step++)
             {
-                return false;
+                var nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1 + step) % candidates.Count;
+                var nextTarget = candidates[nextIndex];
+                if (lockWeapon != null && !IsSelectableTarget(nextTarget))
+                {
+                    continue;
+                }
+
+                SelectedTarget = nextTarget;
+
+                if (lockWeapon != null
+                    && nextTarget.RespondsWithIff
+                    && nextTarget.MatchesWeapon(lockWeapon.ValidTargetKind))
+                {
+                    EnsureAudio();
+                    TriggerIffFriendResponse(nextTarget);
+                }
+
+                RestartLockProgressForSelection();
+                return true;
             }
 
-            SelectedTarget = nextTarget;
+            return false;
+        }
 
-            if (lockWeapon != null
-                && nextTarget.RespondsWithIff
-                && nextTarget.MatchesWeapon(lockWeapon.ValidTargetKind))
-            {
-                EnsureAudio();
-                TriggerIffFriendResponse(nextTarget);
-            }
-
-            RestartLockProgressForSelection();
-            return true;
+        private static float HorizontalDistanceMeters(Vector3 observer, Vector3 targetPosition)
+        {
+            var delta = targetPosition - observer;
+            delta.y = 0f;
+            return delta.magnitude;
         }
 
         public LockableTarget GetLockedTarget()

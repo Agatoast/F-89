@@ -35,6 +35,11 @@ namespace F89.Testing
             RemoveLegacyMainMenuRoots();
 
             var sceneName = SceneManager.GetActiveScene().name;
+            if (!GameScenes.IsGameplayScene(sceneName))
+            {
+                Cursor.visible = true;
+                Cursor.lockState = CursorLockMode.None;
+            }
             if (sceneName == GameScenes.LoadingScreen)
             {
                 LoadingScreenRuntimeBuilder.BuildIfNeeded();

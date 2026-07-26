@@ -7,20 +7,34 @@ namespace F89.UI
     public class StartPageController : MonoBehaviour
     {
         private const string BackgroundResourcePath = "StartPage/main_menu";
+        private const string SaveAntarcticaLogoResourcePath = "CharacterPage/save_antarctica_logo";
 
         private static readonly string[] ButtonLabels = { "PLAY", "STORY", "RULES", "SETTINGS", "CREDITS" };
 
         private Texture2D backgroundTexture;
+        private Texture2D saveAntarcticaLogoTexture;
 
         private void Start()
         {
             backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
+            saveAntarcticaLogoTexture = Resources.Load<Texture2D>(SaveAntarcticaLogoResourcePath);
         }
 
         private void OnGUI()
         {
             StartPageMenuStyles.DrawFullscreenBackground(backgroundTexture);
+            DrawSaveAntarcticaLogo();
             DrawButtons();
+        }
+
+        private void DrawSaveAntarcticaLogo()
+        {
+            if (saveAntarcticaLogoTexture == null)
+            {
+                saveAntarcticaLogoTexture = Resources.Load<Texture2D>(SaveAntarcticaLogoResourcePath);
+            }
+
+            StartPageMenuStyles.DrawSaveAntarcticaLogo(saveAntarcticaLogoTexture);
         }
 
         private static void DrawButtons()

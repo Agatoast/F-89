@@ -72,7 +72,7 @@ namespace F89.UI
 
         private static bool DrawKeymapMenu()
         {
-            var dialogHeight = Mathf.Min(Screen.height - 80f, 560f);
+            var dialogHeight = Mathf.Min(Screen.height - 80f, 620f);
             var dialogRect = new Rect(
                 (Screen.width - DialogWidth) * 0.5f,
                 (Screen.height - dialogHeight) * 0.5f,
@@ -80,7 +80,10 @@ namespace F89.UI
                 dialogHeight);
             DrawDialogFrame(dialogRect, "Keymap");
 
-            var listRect = new Rect(dialogRect.x + 16f, dialogRect.y + 58f, dialogRect.width - 32f, dialogHeight - 148f);
+            var buttonX = dialogRect.x + (dialogRect.width - ButtonWidth) * 0.5f;
+            var backRect = new Rect(buttonX, dialogRect.yMax - ButtonHeight - 16f, ButtonWidth, ButtonHeight);
+            var defaultsRect = new Rect(buttonX, backRect.y - ButtonSpacing - ButtonHeight, ButtonWidth, ButtonHeight);
+            var listRect = new Rect(dialogRect.x + 16f, dialogRect.y + 58f, dialogRect.width - 32f, defaultsRect.y - dialogRect.y - 74f);
             var contentHeight = GameKeyBindingCatalog.Bindings.Length * KeymapRowHeight;
             var viewRect = new Rect(0f, 0f, listRect.width - 18f, contentHeight);
 
@@ -103,20 +106,17 @@ namespace F89.UI
             if (GameKeyBindings.IsListening)
             {
                 GUI.Label(
-                    new Rect(dialogRect.x + 16f, dialogRect.yMax - 92f, dialogRect.width - 32f, 24f),
+                    new Rect(dialogRect.x + 16f, defaultsRect.y - 28f, dialogRect.width - 32f, 24f),
                     "Press a key or mouse button. Escape cancels.",
                     promptStyle);
             }
 
-            var buttonX = dialogRect.x + (dialogRect.width - ButtonWidth) * 0.5f;
-            var defaultsRect = new Rect(buttonX, dialogRect.yMax - 58f, ButtonWidth, ButtonHeight);
             if (DrawMenuButton(defaultsRect, "Restore Defaults"))
             {
                 GameKeyBindings.ResetToDefaults();
                 GameKeyBindings.CancelListening();
             }
 
-            var backRect = new Rect(buttonX, dialogRect.yMax - ButtonHeight - 16f, ButtonWidth, ButtonHeight);
             if (DrawMenuButton(backRect, "Back"))
             {
                 GameKeyBindings.CancelListening();

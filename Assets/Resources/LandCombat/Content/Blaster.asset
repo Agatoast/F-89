@@ -9,20 +9,20 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2e5aadd0ce9f6fd42abf81d7678d1653, type: 3}
+  m_Script: {fileID: 11500000, guid: 6a6ca54a90fff134fa19e9470600dc1b, type: 3}
   m_Name: Blaster
-  m_EditorClassIdentifier: Assembly-CSharp::MTAU.Core.WeaponDefinition
-  displayName: Blaster
-  description: 
-  kind: 0
-  rarity: 0
-  damage: 12
-  fireRate: 1
-  rangeTiles: 8
-  minRangeTiles: 0
-  projectileSpeed: 16
-  spreadCount: 5
-  spreadAngle: 32
-  homingTurnRate: 240
-  projectileColor: {r: 0.3, g: 0.95, b: 1, a: 1}
-  projectileScale: 0.18
+  m_EditorClassIdentifier: Assembly-CSharp::F89.LandCombat.LandWeaponDefinition
+  DisplayName: Blaster
+  Description: 
+  Kind: 0
+  Rarity: 0
+  Damage: 12
+  RateOfFire: 1
+  RangeTiles: 8
+  MinRangeTiles: 0
+  ProjectileSpeed: 16
+  SpreadCount: 5
+  SpreadAngle: 32
+  HomingTurnRate: 240
+  ProjectileColor: {r: 0.3, g: 0.95, b: 1, a: 1}
+  ProjectileScale: 0.18

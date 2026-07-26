@@ -287,6 +287,8 @@ namespace F89.UI
             AutopilotController.Instance?.DisengageAutopilot("Returned to main menu.");
             Object.FindAnyObjectByType<AntarcticaMapOverlay>()?.CloseMap();
 
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
             IsPaused = false;
             currentView = PauseView.Root;
             AudioListener.pause = false;

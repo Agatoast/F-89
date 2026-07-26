@@ -31,7 +31,7 @@ namespace F89.LandCombat
             motor.SetMoveInput(move);
 
             var worldMouse = Camera.main != null
-                ? Camera.main.ScreenToWorldPoint(Input.mousePosition)
+                ? (Vector2)Camera.main.ScreenToWorldPoint(Input.mousePosition)
                 : (Vector2)transform.position + Vector2.right;
             motor.SetAimDirection(worldMouse);
             combat.SetFireHeld(Input.GetMouseButton(0));

@@ -1,5 +1,4 @@
 using F89.Core;
-using F89.Flight;
 using F89.UI;
 using UnityEngine;
 
@@ -29,29 +28,67 @@ namespace F89.Controls
     {
         public AircraftControlInput Current { get; private set; }
 
+        private bool firePressed;
+        private bool selectAim9zPressed;
+        private bool selectAgm88jPressed;
+        private bool selectGbu12Pressed;
+        private bool selectAgm114Pressed;
+        private bool selectGau27aPressed;
+        private bool flarePressed;
+        private bool cycleTargetPressed;
+
         private void Update()
         {
-            RefreshCurrent();
+            if (IsInputBlocked())
+            {
+                Current = default;
+                ClearPressedInputs();
+                return;
+            }
+
+            firePressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.Fire);
+            selectAim9zPressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAim9z);
+            selectAgm88jPressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAgm88j);
+            selectGbu12Pressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.SelectGbu12);
+            selectAgm114Pressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAgm114);
+            selectGau27aPressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.SelectGau27a);
+            flarePressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.Flare);
+            cycleTargetPressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.CycleTarget);
+            Current = BuildCurrentInput();
         }
 
         private void FixedUpdate()
         {
-            RefreshCurrent();
-        }
-
-        private void RefreshCurrent()
-        {
-            if (GamePauseController.IsPaused
-                || AntarcticaMapOverlay.IsOpen)
+            if (IsInputBlocked())
             {
                 Current = default;
                 return;
             }
 
-            Current = ReadLegacyInput();
+            Current = BuildCurrentInput();
         }
 
-        private static AircraftControlInput ReadLegacyInput()
+        private void LateUpdate()
+        {
+            ClearPressedInputs();
+        }
+
+        private static bool IsInputBlocked() =>
+            GamePauseController.IsPaused || AntarcticaMapOverlay.IsOpen;
+
+        private void ClearPressedInputs()
+        {
+            firePressed = false;
+            selectAim9zPressed = false;
+            selectAgm88jPressed = false;
+            selectGbu12Pressed = false;
+            selectAgm114Pressed = false;
+            selectGau27aPressed = false;
+            flarePressed = false;
+            cycleTargetPressed = false;
+        }
+
+        private AircraftControlInput BuildCurrentInput()
         {
             var turn = 0f;
             if (GameKeyBindings.IsHeld(GameKeyBindingIds.TurnLeft))
@@ -72,15 +109,15 @@ namespace F89.Controls
                 afterburnerHeld = GameKeyBindings.IsHeld(GameKeyBindingIds.Afterburner),
                 aimScreenPosition = Input.mousePosition,
                 hasAimScreenPosition = true,
-                firePressed = GameKeyBindings.WasPressed(GameKeyBindingIds.Fire),
+                firePressed = firePressed,
                 fireHeld = GameKeyBindings.IsHeld(GameKeyBindingIds.Fire),
-                selectAim9zPressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAim9z),
-                selectAgm88jPressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAgm88j),
-                selectGbu12Pressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectGbu12),
-                selectAgm114Pressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAgm114),
-                selectGau27aPressed = GameKeyBindings.WasPressed(GameKeyBindingIds.SelectGau27a),
-                flarePressed = GameKeyBindings.WasPressed(GameKeyBindingIds.Flare),
-                cycleTargetPressed = GameKeyBindings.WasPressed(GameKeyBindingIds.CycleTarget)
+                selectAim9zPressed = selectAim9zPressed,
+                selectAgm88jPressed = selectAgm88jPressed,
+                selectGbu12Pressed = selectGbu12Pressed,
+                selectAgm114Pressed = selectAgm114Pressed,
+                selectGau27aPressed = selectGau27aPressed,
+                flarePressed = flarePressed,
+                cycleTargetPressed = cycleTargetPressed
             };
         }
     }

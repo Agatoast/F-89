@@ -1,7 +1,12 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace F89.LandCombat
 {
+    /// <summary>
+    /// Weapon item definition for Land. Combat stats are Damage and RateOfFire (ROF) —
+    /// not MTAU attribute stats.
+    /// </summary>
     [CreateAssetMenu(fileName = "LandWeapon", menuName = "F89/Land Combat/Weapon Definition")]
     public sealed class LandWeaponDefinition : ScriptableObject
     {
@@ -10,8 +15,22 @@ namespace F89.LandCombat
         public string Description = string.Empty;
         public LandWeaponKind Kind = LandWeaponKind.Bullet;
         public LandItemRarity Rarity = LandItemRarity.White;
+
+        [Header("Combat Stats")]
+        [Tooltip("Damage per hit.")]
         public float Damage = 12f;
-        public float FireRate = 1f;
+
+        [Tooltip("Rate of fire (ROF) in shots per second.")]
+        [FormerlySerializedAs("FireRate")]
+        public float RateOfFire = 1f;
+
+        public float FireRate
+        {
+            get => RateOfFire;
+            set => RateOfFire = value;
+        }
+
+        [Header("Behavior")]
         public float RangeTiles = 8f;
         public float MinRangeTiles;
         public float ProjectileSpeed = 16f;

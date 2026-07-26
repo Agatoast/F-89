@@ -10,13 +10,7 @@ namespace F89.LandCombat
         public string Description = string.Empty;
         public LandEquipmentSlot Slot = LandEquipmentSlot.Core;
         public LandItemRarity Rarity = LandItemRarity.White;
-        public float MaxHealthBonus;
-        public float VelocityBonus;
-        public float StrengthMod;
-        public float AgilityMod;
-        public float VitalityMod;
-        public float IntelligenceMod;
-        public float WisdomMod;
-        public float DefenseMod;
+        // Non-weapon gear has no MTAU attribute stats. Weapon items use LandWeaponDefinition
+        // for Damage and RateOfFire (ROF).
     }
 }

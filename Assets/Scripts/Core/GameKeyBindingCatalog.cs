@@ -17,6 +17,7 @@ namespace F89.Core
         public const string SelectAim9z = "select_aim9z";
         public const string Flare = "flare";
         public const string CycleTarget = "cycle_target";
+        public const string Land = "land";
     }
 
     public readonly struct GameKeyBindingDefinition
@@ -49,7 +50,8 @@ namespace F89.Core
             new GameKeyBindingDefinition(GameKeyBindingIds.SelectAgm88j, "Select AGM-88J", KeyCode.Alpha4),
             new GameKeyBindingDefinition(GameKeyBindingIds.SelectAim9z, "Select AIM-9Z", KeyCode.Alpha5),
             new GameKeyBindingDefinition(GameKeyBindingIds.Flare, "Deploy Flare", KeyCode.F),
-            new GameKeyBindingDefinition(GameKeyBindingIds.CycleTarget, "Cycle Target", KeyCode.Tab)
+            new GameKeyBindingDefinition(GameKeyBindingIds.CycleTarget, "Cycle Target", KeyCode.Tab),
+            new GameKeyBindingDefinition(GameKeyBindingIds.Land, "Land", KeyCode.L)
         };
 
         public static bool TryGetDefinition(string bindingId, out GameKeyBindingDefinition definition)
