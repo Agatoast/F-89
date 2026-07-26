@@ -54,6 +54,7 @@ namespace F89.Weapons
         public int Agm88jRemaining => agm88jRemaining;
         public int Gbu12Remaining => gbu12Remaining;
         public int Agm114Remaining => agm114Remaining;
+        public bool HasSortieInventory => inventoryInitialized;
         public Gau27aGunController Gau27aGun => gau27aGun;
         public MissileLockController LockController => lockController;
         public HudTargetFilter ActiveHudTargetFilter => ActiveWeapon switch
@@ -196,6 +197,19 @@ namespace F89.Weapons
             agm114Remaining = Mathf.Max(0, agm114);
             inventoryInitialized = true;
             gau27aGun?.SetRounds(gauRounds);
+        }
+
+        public int ComputeRemainingPayloadLbs()
+        {
+            var gunRounds = gau27aGun != null
+                ? Mathf.Min(gau27aGun.RoundsRemaining, AircraftLoadoutState.MaxGunRounds)
+                : 0;
+            return AircraftLoadoutState.ComputePayloadLbs(
+                aim9zRemaining,
+                agm88jRemaining,
+                gbu12Remaining,
+                agm114Remaining,
+                gunRounds);
         }
 
         public void SetRadarOverlay(PlaneRadarOverlay overlay)

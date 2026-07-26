@@ -7,21 +7,40 @@ namespace F89.UI
     public class MissionBriefingController : MonoBehaviour
     {
         private const float Margin = 40f;
-        private const float ButtonWidth = 220f;
-        private const float ButtonHeight = 48f;
         private const float BorderSidePaddingPx = 10f;
         private const int SecurityBorderXCount = 80;
+        private const string TopSecretStampResourcePath = "MissionBriefing/top_secret_stamp";
+        private const float TopSecretStampWidthPx = 285f;
+        private const string BurnBagStampResourcePath = "MissionBriefing/burn_bag_only_stamp";
+        private const float BurnBagStampWidthPx = 260f;
+        private const float BurnBagStampGapAboveAcceptPx = 10f;
 
         private GUIStyle centerStyle;
         private GUIStyle securityLineStyle;
         private GUIStyle securityBorderStyle;
         private GUIStyle leftBodyStyle;
-        private GUIStyle buttonStyle;
 
         private float contentWidth;
         private float innerContentWidth;
 
         private bool showBailOutConfirm;
+        private Texture2D topSecretStampTexture;
+        private Texture2D burnBagStampTexture;
+
+        private void Awake()
+        {
+            topSecretStampTexture = Resources.Load<Texture2D>(TopSecretStampResourcePath);
+            if (topSecretStampTexture == null)
+            {
+                Debug.LogWarning("F-89: TOP SECRET stamp missing from Resources/MissionBriefing/top_secret_stamp.");
+            }
+
+            burnBagStampTexture = Resources.Load<Texture2D>(BurnBagStampResourcePath);
+            if (burnBagStampTexture == null)
+            {
+                Debug.LogWarning("F-89: BURN BAG ONLY stamp missing from Resources/MissionBriefing/burn_bag_only_stamp.");
+            }
+        }
 
         private void OnGUI()
         {
@@ -38,6 +57,7 @@ namespace F89.UI
             y = DrawMissionMetadata(innerX, y, subjectName);
             y = DrawSecurityBlock(innerX, y);
             y = DrawMissionBody(innerX, y);
+            DrawTopSecretStamp(contentX);
             DrawActionButtons();
 
             if (showBailOutConfirm)
@@ -52,6 +72,30 @@ namespace F89.UI
                     showBailOutConfirm = false;
                 }
             }
+        }
+
+        private void DrawTopSecretStamp(float pageLeftX)
+        {
+            if (topSecretStampTexture == null)
+            {
+                topSecretStampTexture = Resources.Load<Texture2D>(TopSecretStampResourcePath);
+                if (topSecretStampTexture == null)
+                {
+                    return;
+                }
+            }
+
+            var aspect = topSecretStampTexture.height > 0
+                ? (float)topSecretStampTexture.height / topSecretStampTexture.width
+                : 1f;
+            var width = TopSecretStampWidthPx;
+            var height = width * aspect;
+            // Pin stamp top to page top and right edge to page right border.
+            GUI.DrawTexture(
+                new Rect(pageLeftX + contentWidth - width, 0f, width, height),
+                topSecretStampTexture,
+                ScaleMode.StretchToFill,
+                true);
         }
 
         private float DrawHeader(float contentX, float y)
@@ -130,36 +174,57 @@ namespace F89.UI
         private void DrawActionButtons()
         {
             const float buttonGap = 12f;
-            var totalHeight = ButtonHeight * 2f + buttonGap;
-            var startX = (Screen.width - ButtonWidth) * 0.5f;
+            const float buttonWidth = 220f;
+            StartPageMenuStyles.GetMenuButtonSize(out _, out var buttonHeight);
+            var totalHeight = buttonHeight * 2f + buttonGap;
+            var startX = (Screen.width - buttonWidth) * 0.5f;
             var startY = Screen.height - totalHeight - Margin;
 
-            var acceptRect = new Rect(startX, startY, ButtonWidth, ButtonHeight);
-            var bailRect = new Rect(startX, startY + ButtonHeight + buttonGap, ButtonWidth, ButtonHeight);
+            var acceptRect = new Rect(startX, startY, buttonWidth, buttonHeight);
+            var bailRect = new Rect(startX, startY + buttonHeight + buttonGap, buttonWidth, buttonHeight);
 
-            DrawActionButton(acceptRect, "Accept");
-            DrawActionButton(bailRect, "Bail Out?");
+            DrawBurnBagStampAbove(acceptRect);
 
-            if (!showBailOutConfirm && GUI.Button(acceptRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(acceptRect, "ACCEPT") && !showBailOutConfirm)
             {
                 AcceptMission();
             }
 
-            if (GUI.Button(bailRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?"))
             {
                 showBailOutConfirm = true;
             }
         }
 
-        private void DrawActionButton(Rect rect, string label)
+        private void DrawBurnBagStampAbove(Rect acceptRect)
         {
-            DrawWireBox(rect, 2f);
-            GUI.Label(rect, label, buttonStyle);
+            if (burnBagStampTexture == null)
+            {
+                burnBagStampTexture = Resources.Load<Texture2D>(BurnBagStampResourcePath);
+                if (burnBagStampTexture == null)
+                {
+                    return;
+                }
+            }
+
+            var aspect = burnBagStampTexture.height > 0
+                ? (float)burnBagStampTexture.height / burnBagStampTexture.width
+                : 0.3f;
+            var width = BurnBagStampWidthPx;
+            var height = width * aspect;
+            var x = acceptRect.center.x - width * 0.5f;
+            var y = acceptRect.y - BurnBagStampGapAboveAcceptPx - height;
+            GUI.DrawTexture(
+                new Rect(x, y, width, height),
+                burnBagStampTexture,
+                ScaleMode.StretchToFill,
+                true);
         }
 
         private static void AcceptMission()
         {
             Time.timeScale = 1f;
+            CharacterLoadoutNavState.MarkEnteredFromMissionBrief();
             SceneManager.LoadScene(GameScenes.CharacterLoadout);
         }
 
@@ -185,16 +250,6 @@ namespace F89.UI
             GUI.color = Color.white;
         }
 
-        private static void DrawWireBox(Rect rect, float thickness)
-        {
-            GUI.color = Color.black;
-            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
-
         private void EnsureStyles()
         {
             if (centerStyle != null)
@@ -206,7 +261,6 @@ namespace F89.UI
             securityBorderStyle = HudStyleFactory.CreateLabel(13, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
             securityLineStyle = HudStyleFactory.CreateLabel(14, FontStyle.Normal, TextAnchor.MiddleCenter, Color.black, wordWrap: true);
             leftBodyStyle = HudStyleFactory.CreateLabel(14, FontStyle.Normal, TextAnchor.UpperLeft, Color.black, wordWrap: true);
-            buttonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
 
             centerStyle.clipping = TextClipping.Clip;
             securityBorderStyle.clipping = TextClipping.Clip;

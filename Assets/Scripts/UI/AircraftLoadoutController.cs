@@ -7,9 +7,15 @@ namespace F89.UI
     public class AircraftLoadoutController : MonoBehaviour
     {
         private const string MockupResourcePath = "Loadout/plane_loadout";
+        private const float ActionButtonMargin = 20f;
+        private const float ActionButtonWidth = 190f;
+        private const float ActionButtonHeight = 44f;
         private static readonly Color HudYellow = new Color(1f, 0.88f, 0f);
 
         private GUIStyle loadoutValueStyle;
+        private GUIStyle speedDecreaseLabelStyle;
+        private GUIStyle instructionStyle;
+        private GUIStyle weightParagraphLabelStyle;
         private GUIStyle weaponCounterStyle;
         private GUIStyle gunCounterFieldStyle;
 
@@ -78,9 +84,9 @@ namespace F89.UI
             public int PairIndex;
         }
 
-        private static readonly NormalizedRect CurrentLoadoutValueRect = new NormalizedRect { X = 0.403f, Y = 0.908f, W = 0.20f, H = 0.06f };
-        private static readonly NormalizedRect BailOutButtonRect = new NormalizedRect { X = 0.735f, Y = 0.885f, W = 0.115f, H = 0.075f };
-        private static readonly NormalizedRect StartMissionButtonRect = new NormalizedRect { X = 0.855f, Y = 0.885f, W = 0.125f, H = 0.075f };
+        private static readonly NormalizedRect LoadoutInstructionsRect = new NormalizedRect { X = 0.695f, Y = 0.30f, W = 0.28f, H = 0.42f };
+        // Rear tip of the baked aircraft on plane_loadout.png (1024x674).
+        private static readonly Vector2 AircraftTailTipCenterPx = new Vector2(512f, 530f);
 
         private void OnEnable()
         {
@@ -108,13 +114,16 @@ namespace F89.UI
             HandleDragAndDropInput();
             DrawAssignedWeaponIcons();
             DrawWeaponTrayCounters();
-            DrawCurrentLoadoutValue();
-            RegisterInteractiveRegions();
+            DrawLoadoutWeightParagraph();
+            DrawSpeedDecrease();
+            DrawLoadoutInstructions();
             DrawGunRoundsEditOverlay();
             if (!showOverweightWarning && !showBailOutConfirm)
             {
                 DrawDraggedWeapon();
             }
+
+            DrawActionButtons();
 
             if (showBailOutConfirm)
             {
@@ -493,12 +502,44 @@ namespace F89.UI
 
         private void EnsureStyles()
         {
-            if (loadoutValueStyle != null && weaponCounterStyle != null && gunCounterFieldStyle != null)
+            if (loadoutValueStyle != null
+                && speedDecreaseLabelStyle != null
+                && instructionStyle != null
+                && weightParagraphLabelStyle != null
+                && weaponCounterStyle != null
+                && gunCounterFieldStyle != null)
             {
+                speedDecreaseLabelStyle.font = HudStyleFactory.ArialFont;
+                speedDecreaseLabelStyle.fontStyle = FontStyle.Bold;
+                instructionStyle.font = HudStyleFactory.ArialFont;
+                instructionStyle.fontStyle = FontStyle.Bold;
+                instructionStyle.alignment = TextAnchor.UpperCenter;
+                weightParagraphLabelStyle.font = HudStyleFactory.ArialFont;
+                weightParagraphLabelStyle.fontStyle = FontStyle.Bold;
+                loadoutValueStyle.alignment = TextAnchor.MiddleCenter;
                 return;
             }
 
-            loadoutValueStyle = HudStyleFactory.CreateLabel(36, FontStyle.Bold, TextAnchor.UpperCenter, HudYellow);
+            loadoutValueStyle = HudStyleFactory.CreateLabel(36, FontStyle.Bold, TextAnchor.MiddleCenter, HudYellow);
+            speedDecreaseLabelStyle = HudStyleFactory.CreateLabel(
+                18,
+                FontStyle.Bold,
+                TextAnchor.LowerCenter,
+                HudYellow,
+                font: HudStyleFactory.ArialFont);
+            instructionStyle = HudStyleFactory.CreateLabel(
+                18,
+                FontStyle.Bold,
+                TextAnchor.UpperCenter,
+                HudYellow,
+                wordWrap: true,
+                font: HudStyleFactory.ArialFont);
+            weightParagraphLabelStyle = HudStyleFactory.CreateLabel(
+                18,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                HudYellow,
+                font: HudStyleFactory.ArialFont);
             weaponCounterStyle = HudStyleFactory.CreateLabel(28, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
             gunCounterFieldStyle = HudStyleFactory.CreateLabel(28, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
             gunCounterFieldStyle.normal.background = Texture2D.whiteTexture;
@@ -851,30 +892,152 @@ namespace F89.UI
             LoadoutWeaponIconLibrary.DrawHardpointMount(rect, weapon, maskVerticalPadding);
         }
 
-        private void DrawCurrentLoadoutValue()
+        private struct LoadoutWeightParagraphLayout
         {
-            var rect = CurrentLoadoutValueRect.ToScreenRect(mockupRect);
-            GUI.Label(rect, $"{AircraftLoadoutState.ComputeCurrentLoadoutLbs():N0} lbs", loadoutValueStyle);
+            public Rect MaximumLabelRect;
+            public Rect MaximumValueRect;
+            public Rect CurrentLabelRect;
+            public Rect CurrentValueRect;
         }
 
-        private void RegisterInteractiveRegions()
+        private LoadoutWeightParagraphLayout GetLoadoutWeightParagraphLayout()
+        {
+            var tip = AircraftLoadoutLayout.MockupPixelCenterRect(
+                AircraftTailTipCenterPx.x,
+                AircraftTailTipCenterPx.y,
+                1f,
+                1f,
+                mockupRect,
+                mockupTexture.width,
+                mockupTexture.height);
+            var center = tip.center;
+
+            var maxLabel = "MAXIMUM LOADOUT";
+            var maxValue = $"{AircraftLoadoutState.MaxLoadoutLbs:N0} lbs";
+            var currentLabel = "CURRENT LOADOUT";
+            var currentValue = $"{AircraftLoadoutState.ComputeCurrentLoadoutLbs():N0} lbs";
+
+            var lineWidth = mockupRect.width * 0.36f;
+            var maxLabelHeight = weightParagraphLabelStyle.CalcHeight(new GUIContent(maxLabel), lineWidth);
+            var maxValueHeight = loadoutValueStyle.CalcHeight(new GUIContent(maxValue), lineWidth);
+            var blankLineHeight = weightParagraphLabelStyle.CalcHeight(new GUIContent("A"), lineWidth);
+            var currentLabelHeight = weightParagraphLabelStyle.CalcHeight(new GUIContent(currentLabel), lineWidth);
+            var currentValueHeight = loadoutValueStyle.CalcHeight(new GUIContent(currentValue), lineWidth);
+            var totalHeight = maxLabelHeight
+                + maxValueHeight
+                + blankLineHeight
+                + currentLabelHeight
+                + currentValueHeight;
+            var threeLetterWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("MAX")).x;
+            var twoLetterWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("MA")).x;
+            var y = center.y - totalHeight * 0.5f + UiFitCanvas.Px(110f);
+            var x = center.x - lineWidth * 0.5f + threeLetterWidth - twoLetterWidth;
+            var currentBlockY = y + maxLabelHeight + maxValueHeight + blankLineHeight;
+
+            var layout = new LoadoutWeightParagraphLayout
+            {
+                MaximumLabelRect = new Rect(x, y, lineWidth, maxLabelHeight),
+                MaximumValueRect = new Rect(x, y + maxLabelHeight, lineWidth, maxValueHeight),
+                CurrentLabelRect = new Rect(x, currentBlockY, lineWidth, currentLabelHeight),
+                CurrentValueRect = new Rect(
+                    x,
+                    currentBlockY + currentLabelHeight,
+                    lineWidth,
+                    currentValueHeight)
+            };
+            return layout;
+        }
+
+        private void DrawLoadoutWeightParagraph()
+        {
+            var layout = GetLoadoutWeightParagraphLayout();
+            GUI.Label(layout.MaximumLabelRect, "MAXIMUM LOADOUT", weightParagraphLabelStyle);
+            GUI.Label(
+                layout.MaximumValueRect,
+                $"{AircraftLoadoutState.MaxLoadoutLbs:N0} lbs",
+                loadoutValueStyle);
+            GUI.Label(layout.CurrentLabelRect, "CURRENT LOADOUT", weightParagraphLabelStyle);
+            GUI.Label(
+                layout.CurrentValueRect,
+                $"{AircraftLoadoutState.ComputeCurrentLoadoutLbs():N0} lbs",
+                loadoutValueStyle);
+        }
+
+        private void DrawSpeedDecrease()
+        {
+            var layout = GetLoadoutWeightParagraphLayout();
+            var currentLabelWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("CURRENT LOADOUT")).x;
+            var currentLabelRight = layout.CurrentLabelRect.center.x + currentLabelWidth * 0.5f;
+            var payloadLeft = currentLabelRight + UiFitCanvas.Px(50f);
+
+            var labelContent = new GUIContent("PAYLOAD EFFECT ON MAXIMUM SPEED");
+            var labelSize = speedDecreaseLabelStyle.CalcSize(labelContent);
+            var labelRect = new Rect(
+                payloadLeft,
+                layout.CurrentLabelRect.y + (layout.CurrentLabelRect.height - labelSize.y) * 0.5f,
+                labelSize.x + 4f,
+                Mathf.Max(labelSize.y, layout.CurrentLabelRect.height));
+
+            var percentText = $"-{AircraftLoadoutState.ComputeSpeedDecreasePercent()}%";
+            var percentSize = loadoutValueStyle.CalcSize(new GUIContent(percentText));
+            var valueRect = new Rect(
+                labelRect.x + (labelRect.width - percentSize.x) * 0.5f,
+                layout.CurrentValueRect.y + (layout.CurrentValueRect.height - percentSize.y) * 0.5f,
+                percentSize.x + 4f,
+                Mathf.Max(percentSize.y, layout.CurrentValueRect.height));
+
+            var previousLabelAlign = speedDecreaseLabelStyle.alignment;
+            var previousValueAlign = loadoutValueStyle.alignment;
+            speedDecreaseLabelStyle.alignment = TextAnchor.MiddleLeft;
+            loadoutValueStyle.alignment = TextAnchor.MiddleCenter;
+            GUI.Label(labelRect, labelContent, speedDecreaseLabelStyle);
+            GUI.Label(valueRect, percentText, loadoutValueStyle);
+            speedDecreaseLabelStyle.alignment = previousLabelAlign;
+            loadoutValueStyle.alignment = previousValueAlign;
+        }
+
+        private void DrawLoadoutInstructions()
+        {
+            var rect = LoadoutInstructionsRect.ToScreenRect(mockupRect);
+            rect.x -= UiFitCanvas.Px(50f);
+            rect.y += UiFitCanvas.Px(350f);
+            GUI.Label(
+                rect,
+                "DRAG WEAPON TO HARDPOINT\n\n" +
+                "HARDPOINT ON OTHER WING WILL\n" +
+                "HAVE IDENTICAL WEAPON ADDED\n\n" +
+                "USE ARROWS ON GUN TO\n" +
+                "INCREASE GAU-27A ROUNDS\n" +
+                "MAXIMUM 3,000 ROUNDS",
+                instructionStyle);
+        }
+
+        private void DrawActionButtons()
         {
             if (isDraggingWeapon || showBailOutConfirm || showOverweightWarning)
             {
-                heldGunArrowIndex = -1;
-                CancelGunRoundsEdit();
                 return;
             }
 
-            var bailRect = BailOutButtonRect.ToScreenRect(mockupRect);
-            if (GUI.Button(bailRect, GUIContent.none, GUIStyle.none))
+            const float gap = 16f;
+            var totalWidth = ActionButtonWidth * 2f + gap;
+            var startX = Screen.width - totalWidth - ActionButtonMargin;
+            var y = Screen.height - ActionButtonHeight - ActionButtonMargin;
+
+            var bailRect = new Rect(startX, y, ActionButtonWidth, ActionButtonHeight);
+            var startRect = new Rect(startX + ActionButtonWidth + gap, y, ActionButtonWidth, ActionButtonHeight);
+
+            if (StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15))
             {
+                heldGunArrowIndex = -1;
+                CancelGunRoundsEdit();
                 showBailOutConfirm = true;
             }
 
-            var startRect = StartMissionButtonRect.ToScreenRect(mockupRect);
-            if (!showBailOutConfirm && GUI.Button(startRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(startRect, "START MISSION", fontSize: 15))
             {
+                heldGunArrowIndex = -1;
+                CancelGunRoundsEdit();
                 StartMission();
             }
         }

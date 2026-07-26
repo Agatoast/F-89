@@ -15,19 +15,56 @@ namespace F89.UI
         private static GUIStyle killFolderLabelStyle;
         private static GUIStyle panelCaptionStyle;
         private static GUIStyle smallSlotLabelStyle;
+        private static GUIStyle researchDropHintStyle;
+        private static GUIStyle researchFooterStyle;
+        private static GUIStyle researchSlotLabelStyle;
+        private static GUIStyle researchSlotTlValueStyle;
+        private static GUIStyle researchSlotChanceStyle;
 
         public static GUIStyle NameBarStyle => Ensure(
             ref nameBarStyle,
             34,
             FontStyle.Bold,
             TextAnchor.UpperLeft,
-            new Color(1f, 0.86f, 0.08f));
+            Color.white);
         public static GUIStyle BodyStyle => Ensure(ref bodyStyle, 13, FontStyle.Normal, TextAnchor.UpperLeft, Color.white, wordWrap: true);
         public static GUIStyle ScoreLabelStyle => Ensure(ref scoreLabelStyle, 14, FontStyle.Normal, TextAnchor.UpperLeft, Color.white);
         public static GUIStyle ScoreValueStyle => Ensure(ref scoreValueStyle, 14, FontStyle.Bold, TextAnchor.UpperRight, Color.white);
-        public static GUIStyle FootlockerTitleStyle => Ensure(ref footlockerTitleStyle, 34, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(1f, 0.86f, 0.08f));
+        public static GUIStyle FootlockerTitleStyle => Ensure(ref footlockerTitleStyle, 44, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(1f, 0.86f, 0.08f));
         public static GUIStyle KillFolderLabelStyle => Ensure(ref killFolderLabelStyle, 30, FontStyle.Bold, TextAnchor.UpperCenter, Color.black);
         public static GUIStyle PanelCaptionStyle => Ensure(ref panelCaptionStyle, 12, FontStyle.Normal, TextAnchor.UpperLeft, new Color(0.92f, 0.92f, 0.92f), wordWrap: true);
+        public static GUIStyle ResearchDropHintStyle => Ensure(
+            ref researchDropHintStyle,
+            17,
+            FontStyle.Normal,
+            TextAnchor.UpperCenter,
+            new Color(0.92f, 0.94f, 0.98f),
+            wordWrap: true);
+        public static GUIStyle ResearchFooterStyle => Ensure(
+            ref researchFooterStyle,
+            15,
+            FontStyle.Normal,
+            TextAnchor.UpperCenter,
+            new Color(0.92f, 0.94f, 0.98f),
+            wordWrap: true);
+        public static GUIStyle ResearchSlotLabelStyle => Ensure(
+            ref researchSlotLabelStyle,
+            13,
+            FontStyle.Bold,
+            TextAnchor.UpperCenter,
+            new Color(0.92f, 0.94f, 0.98f));
+        public static GUIStyle ResearchSlotTlValueStyle => Ensure(
+            ref researchSlotTlValueStyle,
+            13,
+            FontStyle.Bold,
+            TextAnchor.UpperLeft,
+            new Color(1f, 0.86f, 0.08f));
+        public static GUIStyle ResearchSlotChanceStyle => Ensure(
+            ref researchSlotChanceStyle,
+            34,
+            FontStyle.Bold,
+            TextAnchor.MiddleCenter,
+            new Color(1f, 0.86f, 0.08f));
         public static GUIStyle StatBoxStyle => Ensure(ref statBoxStyle, ScaleSlotFont(12), FontStyle.Bold, TextAnchor.LowerCenter, Color.black, wordWrap: true);
         public static GUIStyle SmallSlotLabelStyle => Ensure(ref smallSlotLabelStyle, ScaleSlotFont(SmallSlotLabelBaseFontSize), FontStyle.Bold, TextAnchor.MiddleCenter, Color.white, wordWrap: true);
 

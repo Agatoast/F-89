@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 using UnityEngine;
 
 namespace F89.UI
@@ -24,17 +25,26 @@ namespace F89.UI
         }
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-        [DllImport("comdlg32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern bool GetOpenFileName(ref OpenFileName openFileName);
+        private const int OfnExplorer = 0x00080000;
+        private const int OfnFileMustExist = 0x00001000;
+        private const int OfnPathMustExist = 0x00000800;
+        private const int OfnHideReadOnly = 0x00000200;
+        private const int OfnNoChangeDir = 0x00000008;
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        [DllImport("comdlg32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool GetOpenFileNameW(ref OpenFileName openFileName);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetActiveWindow();
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         private struct OpenFileName
         {
             public int structSize;
             public IntPtr dlgOwner;
             public IntPtr instance;
-            public string filter;
-            public string customFilter;
+            public IntPtr filter;
+            public IntPtr customFilter;
             public int maxCustFilter;
             public int filterIndex;
             public IntPtr file;
@@ -57,38 +67,77 @@ namespace F89.UI
 
         private static bool TryPickPortraitFileWindows(out string path)
         {
+            path = null;
+
+            // Exclusive fullscreen often blocks or hides the native dialog.
+            var restoreFullScreen = Screen.fullScreen;
+            if (restoreFullScreen)
+            {
+                Screen.fullScreen = false;
+            }
+
             const int maxPath = 260;
-            var fileBuffer = Marshal.AllocHGlobal(maxPath * 2);
+            var fileBuffer = Marshal.AllocHGlobal(maxPath * sizeof(char));
+            var filterBuffer = IntPtr.Zero;
             try
             {
-                for (var i = 0; i < maxPath * 2; i++)
+                for (var i = 0; i < maxPath * sizeof(char); i++)
                 {
                     Marshal.WriteByte(fileBuffer, i, 0);
                 }
 
+                // Must be a double-null-terminated multi-string. A C# string field would
+                // truncate at the first embedded '\0' when marshaled.
+                filterBuffer = AllocateFilterBuffer(
+                    "Image Files\0*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0\0");
+
                 var openFileName = new OpenFileName
                 {
                     structSize = Marshal.SizeOf(typeof(OpenFileName)),
-                    filter = "Image Files\0*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0\0",
+                    dlgOwner = GetActiveWindow(),
+                    filter = filterBuffer,
                     file = fileBuffer,
                     maxFile = maxPath,
-                    flags = 0x00080000 | 0x00001000 | 0x00000800 | 0x00000200 | 0x00000008,
-                    title = "Select Portrait"
+                    filterIndex = 1,
+                    flags = OfnExplorer | OfnFileMustExist | OfnPathMustExist | OfnHideReadOnly | OfnNoChangeDir,
+                    title = "Select Portrait",
+                    defExt = "png"
                 };
 
-                if (!GetOpenFileName(ref openFileName))
+                if (!GetOpenFileNameW(ref openFileName))
                 {
-                    path = null;
                     return false;
                 }
 
-                path = Marshal.PtrToStringAuto(fileBuffer);
+                path = Marshal.PtrToStringUni(fileBuffer);
                 return !string.IsNullOrEmpty(path);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"F-89: Portrait browse failed. {exception.Message}");
+                return false;
             }
             finally
             {
                 Marshal.FreeHGlobal(fileBuffer);
+                if (filterBuffer != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(filterBuffer);
+                }
+
+                if (restoreFullScreen)
+                {
+                    Screen.fullScreen = true;
+                }
             }
+        }
+
+        private static IntPtr AllocateFilterBuffer(string filter)
+        {
+            var bytes = Encoding.Unicode.GetBytes(filter);
+            var buffer = Marshal.AllocHGlobal(bytes.Length);
+            Marshal.Copy(bytes, 0, buffer, bytes.Length);
+            return buffer;
         }
 #endif
     }

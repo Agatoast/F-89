@@ -10,7 +10,10 @@ namespace F89.UI
     {
         private const float MinVisibleWidthMiles = 20f;
         private const float FullViewOceanPadding = 1.06f;
-        private static readonly Color MapOceanUnderlayColor = new Color(0.239f, 0.486f, 0.800f, 1f);
+        private static readonly Color MapOceanDeepColor = new Color(0.239f, 0.486f, 0.800f, 1f);
+        private static readonly Color MapOceanMidColor = new Color(0.28f, 0.54f, 0.84f, 1f);
+        private static readonly Color MapOceanShallowColor = new Color(0.34f, 0.62f, 0.88f, 1f);
+        private static readonly Color MapOceanHighlightColor = new Color(0.42f, 0.70f, 0.92f, 1f);
         private const float ScrollSensitivity = 0.1f;
         private const float HeaderHeight = 20f;
         private const float MapMargin = 24f;
@@ -414,6 +417,7 @@ namespace F89.UI
         public void ClearMapRouteOnArrival()
         {
             mapRoute.Clear();
+            selectedMapBase = null;
             ClearHudBearing();
         }
 
@@ -901,17 +905,68 @@ namespace F89.UI
             var texture = GetSatelliteTexture();
             if (texture == null)
             {
-                GUI.color = new Color(0.08f, 0.14f, 0.28f, 1f);
-                GUI.DrawTexture(mapRect, Texture2D.whiteTexture);
-                GUI.color = Color.white;
+                DrawOceanUnderlay(mapRect);
                 return;
             }
 
             var projection = GetMapGeoProjection();
-            GUI.color = MapOceanUnderlayColor;
-            GUI.DrawTexture(mapRect, Texture2D.whiteTexture);
+            DrawOceanUnderlay(mapRect);
             GUI.color = Color.white;
             GUI.DrawTextureWithTexCoords(mapRect, texture, projection.GetSatelliteTextureCoords());
+        }
+
+        private static void DrawOceanUnderlay(Rect mapRect)
+        {
+            var ocean = GetOceanUnderlayTexture();
+            GUI.color = Color.white;
+            // Tile slightly so waves keep some scale across zoom levels.
+            var tile = new Rect(0f, 0f, 2.4f, 2.4f);
+            GUI.DrawTextureWithTexCoords(mapRect, ocean, tile);
+        }
+
+        private static Texture2D oceanUnderlayTexture;
+
+        private static Texture2D GetOceanUnderlayTexture()
+        {
+            if (oceanUnderlayTexture != null)
+            {
+                return oceanUnderlayTexture;
+            }
+
+            const int size = 256;
+            oceanUnderlayTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "MapOceanUnderlay",
+                wrapMode = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Bilinear,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            var pixels = new Color[size * size];
+            for (var y = 0; y < size; y++)
+            {
+                var v = y / (float)(size - 1);
+                for (var x = 0; x < size; x++)
+                {
+                    var u = x / (float)(size - 1);
+
+                    // Soft long swells + finer ripples (Southern Ocean look).
+                    var swell = Mathf.Sin((u * 7.2f + v * 1.4f) * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    var cross = Mathf.Sin((u * 1.1f + v * 5.8f) * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    var ripple = Mathf.Sin((u * 18f - v * 14f) * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    var depth = Mathf.Clamp01(swell * 0.45f + cross * 0.35f + ripple * 0.20f);
+
+                    var ocean = Color.Lerp(MapOceanDeepColor, MapOceanMidColor, depth);
+                    ocean = Color.Lerp(ocean, MapOceanShallowColor, Mathf.SmoothStep(0.55f, 1f, depth) * 0.55f);
+                    var highlight = Mathf.SmoothStep(0.72f, 1f, ripple) * 0.22f;
+                    ocean = Color.Lerp(ocean, MapOceanHighlightColor, highlight);
+                    pixels[y * size + x] = ocean;
+                }
+            }
+
+            oceanUnderlayTexture.SetPixels(pixels);
+            oceanUnderlayTexture.Apply(false, true);
+            return oceanUnderlayTexture;
         }
 
         private void DrawGrid(Rect mapRect, Color color)

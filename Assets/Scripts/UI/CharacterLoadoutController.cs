@@ -1,4 +1,5 @@
 using F89.Core;
+using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -6,49 +7,75 @@ namespace F89.UI
 {
     public class CharacterLoadoutController : MonoBehaviour
     {
+        private const string BackgroundResourcePath = "CharacterLoadout/character_loadout_bg";
+        private const string PaperdollResourcePath = "CharacterPage/paperdoll";
+        private const string PortraitFrameResourcePath = "CharacterPage/portrait_frame";
         private const float Margin = 20f;
-        private const int InventoryRows = 3;
-        private const int InventoryColumns = 10;
         private const float ButtonWidth = 190f;
         private const float ButtonHeight = 44f;
-        private static readonly Color EquipmentSlotColor = new Color(0.15f, 0.65f, 0.2f);
 
-        private GUIStyle headerStyle;
-        private GUIStyle bodyStyle;
-        private GUIStyle buttonStyle;
-
+        private Texture2D backgroundTexture;
+        private Texture2D paperdollTexture;
+        private Texture2D portraitFrameTexture;
         private bool showBailOutConfirm;
+
+        private void Start()
+        {
+            backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
+            paperdollTexture = Resources.Load<Texture2D>(PaperdollResourcePath);
+            portraitFrameTexture = Resources.Load<Texture2D>(PortraitFrameResourcePath);
+            CharacterPageGearUi.ResetDragState();
+            CharacterGearSession.Bind(CharacterSessionState.ActiveSave, forceReload: true);
+
+            if (backgroundTexture == null)
+            {
+                Debug.LogWarning(
+                    "F-89: Character loadout background missing from Resources/CharacterLoadout/character_loadout_bg.");
+            }
+
+            if (paperdollTexture == null)
+            {
+                Debug.LogWarning("F-89: Paperdoll missing from Resources/CharacterPage/paperdoll.");
+            }
+
+            if (portraitFrameTexture == null)
+            {
+                Debug.LogWarning("F-89: Portrait frame missing from Resources/CharacterPage/portrait_frame.");
+            }
+        }
 
         private void OnGUI()
         {
-            EnsureStyles();
+            CharacterGearSession.Bind(CharacterSessionState.ActiveSave);
             DrawPageBackground();
 
             var save = CharacterSessionState.ActiveSave;
-            var leftWidth = Screen.width * 0.2f;
-            var leftX = Margin;
-            var topY = Margin;
-            var rightX = leftX + leftWidth + Margin;
-            var rightWidth = Screen.width - rightX - Margin;
+            DrawNameBar(save);
+            DrawPortrait(save);
+            GUI.Label(
+                CharacterLoadoutLayout.GetBasicLoadoutTitleRect(),
+                "BASIC LOADOUT",
+                CharacterPageStyles.FootlockerTitleStyle);
 
-            var profileHeight = Screen.height * 0.42f;
-            DrawProfilePanel(new Rect(leftX, topY, leftWidth, profileHeight), save);
-            DrawResearchButton(new Rect(leftX, topY + profileHeight + Margin, leftWidth, 40f));
-
-            var inventoryHeight = Screen.height * 0.28f;
-            DrawInventoryGrid(new Rect(rightX, topY, rightWidth, inventoryHeight));
-
-            var figureTop = topY + inventoryHeight + Margin;
-            var figureBottom = Screen.height - ButtonHeight - Margin * 2f;
-            var figureRect = new Rect(
-                rightX + rightWidth * 0.18f,
-                figureTop,
-                rightWidth * 0.64f,
-                figureBottom - figureTop);
-            DrawEquipmentPanel(figureRect);
+            GUI.Label(
+                CharacterLoadoutLayout.GetFootlockerTitleRect(),
+                "FOOTLOCKER",
+                CharacterPageStyles.FootlockerTitleStyle);
+            CharacterPageGearUi.HandleGearDragAndDrop(
+                CharacterLoadoutLayout.GetEquipmentSlotRect,
+                CharacterLoadoutLayout.GetInventoryGridRect(),
+                CharacterLoadoutLayout.GetFootlockerGridRect(),
+                footlockerTopAlign: true,
+                CharacterLoadoutLayout.GetLoadoutBoxRect);
+            CharacterPageGearUi.DrawBasicLoadoutBoxes(CharacterLoadoutLayout.GetLoadoutBoxRect);
+            CharacterPageGearUi.DrawEquipmentSlots(CharacterLoadoutLayout.GetEquipmentSlotRect);
+            CharacterPageGearUi.DrawInventory(CharacterLoadoutLayout.GetInventoryGridRect());
+            DrawPaperdoll();
+            CharacterPageGearUi.DrawFootlocker(CharacterLoadoutLayout.GetFootlockerGridRect(), topAlign: true);
+            CharacterPageGearUi.DrawDragOverlay();
 
             DrawActionButtons();
-            if (showBailOutConfirm)
+            if (showBailOutConfirm && CharacterLoadoutNavState.EnteredFromMissionBrief)
             {
                 var dialogResult = BailOutConfirmDialog.Draw(true);
                 if (dialogResult == BailOutConfirmDialog.Result.Confirmed)
@@ -62,100 +89,44 @@ namespace F89.UI
             }
         }
 
-        private void DrawProfilePanel(Rect rect, CharacterSaveData save)
+        private static void DrawNameBar(CharacterSaveData save)
         {
-            var name = save != null ? save.DisplayRankAndName : "OPERATOR";
-            GUI.Label(new Rect(rect.x, rect.y, rect.width, 28f), name, headerStyle);
-
-            var pictureRect = new Rect(rect.x, rect.y + 34f, rect.width, rect.height - 34f);
-            DrawWireBox(pictureRect, 2f);
-            GUI.Label(
-                new Rect(pictureRect.x, pictureRect.y + pictureRect.height * 0.45f, pictureRect.width, 24f),
-                "Picture",
-                bodyStyle);
+            var rect = CharacterLoadoutLayout.GetNameBarRect();
+            var label = save != null ? save.DisplayRankAndName : "NO CHARACTER";
+            GUI.Label(rect, label, CharacterPageStyles.NameBarStyle);
         }
 
-        private void DrawResearchButton(Rect rect)
+        private void DrawPortrait(CharacterSaveData save)
         {
-            DrawRoundedHeader(rect, "Research and Development");
-        }
-
-        private void DrawInventoryGrid(Rect rect)
-        {
-            DrawWireBox(rect, 2f);
-
-            var padding = 8f;
-            var inner = new Rect(rect.x + padding, rect.y + padding, rect.width - padding * 2f, rect.height - padding * 2f);
-            var cellWidth = inner.width / InventoryColumns;
-            var cellHeight = inner.height / InventoryRows;
-
-            for (var row = 0; row < InventoryRows; row++)
+            if (save != null)
             {
-                for (var col = 0; col < InventoryColumns; col++)
+                save = CharacterSaveRepository.FindById(save.Id) ?? save;
+            }
+
+            if (portraitFrameTexture == null)
+            {
+                portraitFrameTexture = Resources.Load<Texture2D>(PortraitFrameResourcePath);
+            }
+
+            PortraitDisplayUtility.DrawMetallicFramedPortrait(
+                CharacterLoadoutLayout.GetPortraitRect(),
+                CharacterPortraitService.GetPortraitTexture(save),
+                portraitFrameTexture);
+        }
+
+        private void DrawPaperdoll()
+        {
+            if (paperdollTexture == null)
+            {
+                paperdollTexture = Resources.Load<Texture2D>(PaperdollResourcePath);
+                if (paperdollTexture == null)
                 {
-                    var cell = new Rect(
-                        inner.x + col * cellWidth + 2f,
-                        inner.y + row * cellHeight + 2f,
-                        cellWidth - 4f,
-                        cellHeight - 4f);
-                    DrawWireBox(cell, 2f);
+                    return;
                 }
             }
-        }
 
-        private void DrawEquipmentPanel(Rect rect)
-        {
-            DrawWireBox(rect, 2f);
-            DrawSilhouette(rect);
-            DrawEquipmentSlots(rect);
-        }
-
-        private static void DrawSilhouette(Rect rect)
-        {
-            var centerX = rect.x + rect.width * 0.5f;
-            var headY = rect.y + rect.height * 0.14f;
-            var hipY = rect.y + rect.height * 0.58f;
-            var footY = rect.y + rect.height * 0.88f;
-            var shoulderY = rect.y + rect.height * 0.24f;
-            var handY = rect.y + rect.height * 0.48f;
-            var shoulderSpan = rect.width * 0.22f;
-            var hipSpan = rect.width * 0.12f;
-
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX, headY + 16f), new Vector2(centerX, hipY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX - shoulderSpan, shoulderY), new Vector2(centerX + shoulderSpan, shoulderY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX - shoulderSpan, shoulderY), new Vector2(centerX - shoulderSpan - 8f, handY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX + shoulderSpan, shoulderY), new Vector2(centerX + shoulderSpan + 8f, handY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX - hipSpan, hipY), new Vector2(centerX - hipSpan, footY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX + hipSpan, hipY), new Vector2(centerX + hipSpan, footY), Color.black, 2f, Texture2D.whiteTexture);
-            HudGuiUtility.DrawScreenLine(new Vector2(centerX - hipSpan, footY), new Vector2(centerX + hipSpan, footY), Color.black, 2f, Texture2D.whiteTexture);
-
-            GUI.color = Color.black;
-            GUI.DrawTexture(new Rect(centerX - 12f, headY, 24f, 24f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
-
-        private static void DrawEquipmentSlots(Rect figureRect)
-        {
-            var slot = Mathf.Min(figureRect.width, figureRect.height) * 0.11f;
-            var positions = new[]
-            {
-                new Vector2(0.5f, 0.08f),
-                new Vector2(0.28f, 0.16f),
-                new Vector2(0.72f, 0.16f),
-                new Vector2(0.5f, 0.34f),
-                new Vector2(0.18f, 0.44f),
-                new Vector2(0.82f, 0.44f),
-                new Vector2(0.5f, 0.82f)
-            };
-
-            foreach (var position in positions)
-            {
-                var center = new Vector2(
-                    figureRect.x + figureRect.width * position.x,
-                    figureRect.y + figureRect.height * position.y);
-                var slotRect = new Rect(center.x - slot * 0.5f, center.y - slot * 0.5f, slot, slot);
-                DrawColoredBox(slotRect, EquipmentSlotColor, 2f);
-            }
+            var rect = CharacterLoadoutLayout.GetPaperdollRect();
+            GUI.DrawTexture(rect, paperdollTexture, ScaleMode.ScaleToFit, true);
         }
 
         private void DrawActionButtons()
@@ -168,34 +139,42 @@ namespace F89.UI
             var bailRect = new Rect(startX, y, ButtonWidth, ButtonHeight);
             var aircraftRect = new Rect(startX + ButtonWidth + gap, y, ButtonWidth, ButtonHeight);
 
-            DrawActionButton(bailRect, "Bail Out?");
-            DrawActionButton(aircraftRect, "AIRCRAFT LOADOUT");
-
-            if (GUI.Button(bailRect, GUIContent.none, GUIStyle.none))
+            if (CharacterLoadoutNavState.EnteredFromMissionBrief)
             {
-                showBailOutConfirm = true;
+                if (StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15))
+                {
+                    showBailOutConfirm = true;
+                }
+            }
+            else if (StartPageMenuStyles.DrawMenuButton(bailRect, "CHARACTER PAGE", fontSize: 15))
+            {
+                ReturnToCharacterPage();
             }
 
-            if (!showBailOutConfirm && GUI.Button(aircraftRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(aircraftRect, "AIRCRAFT LOADOUT", fontSize: 15)
+                && !showBailOutConfirm)
             {
                 ProceedToAircraftLoadout();
             }
         }
 
-        private void DrawActionButton(Rect rect, string label)
-        {
-            DrawWireBox(rect, 2f);
-            GUI.Label(rect, label, buttonStyle);
-        }
-
         private static void ProceedToAircraftLoadout()
         {
+            CharacterGearSession.PersistActive();
             Time.timeScale = 1f;
             SceneManager.LoadScene(GameScenes.AircraftLoadout);
         }
 
+        private static void ReturnToCharacterPage()
+        {
+            CharacterGearSession.PersistActive();
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(GameScenes.CharacterPage);
+        }
+
         private static void ConfirmBailOut()
         {
+            CharacterGearSession.PersistActive();
             var save = CharacterSessionState.ActiveSave;
             if (save != null)
             {
@@ -206,45 +185,17 @@ namespace F89.UI
             SceneManager.LoadScene(GameScenes.CharacterPage);
         }
 
-        private static void DrawRoundedHeader(Rect rect, string text)
+        private void DrawPageBackground()
         {
-            DrawWireBox(rect, 2f);
-            var style = HudStyleFactory.CreateLabel(15, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
-            GUI.Label(rect, text, style);
-        }
-
-        private static void DrawPageBackground()
-        {
-            GUI.color = Color.white;
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
-
-        private static void DrawWireBox(Rect rect, float thickness)
-        {
-            DrawColoredBox(rect, Color.black, thickness);
-        }
-
-        private static void DrawColoredBox(Rect rect, Color color, float thickness)
-        {
-            GUI.color = color;
-            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-        }
-
-        private void EnsureStyles()
-        {
-            if (headerStyle != null)
+            if (backgroundTexture != null)
             {
+                UiFitCanvas.DrawLetterboxedBackground(backgroundTexture);
                 return;
             }
 
-            headerStyle = HudStyleFactory.CreateLabel(20, FontStyle.Bold, TextAnchor.UpperLeft, Color.black);
-            bodyStyle = HudStyleFactory.CreateLabel(14, FontStyle.Normal, TextAnchor.MiddleCenter, Color.black);
-            buttonStyle = HudStyleFactory.CreateLabel(15, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
+            GUI.color = new Color(0.08f, 0.08f, 0.1f, 1f);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
         }
     }
 }

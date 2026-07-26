@@ -125,5 +125,74 @@ namespace F89.LandCombat
 
             return -1;
         }
+
+        public static LandEquipResult TryPlaceItemCopy(CharacterVaultSaveData vault, int vaultIndex, LandGearInstance source)
+        {
+            if (vault == null || !LandLoadoutSlots.IsValidItem(source) || !IsVaultIndexValid(vault, vaultIndex))
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            EnsureVaultSize(vault);
+            if (LandLoadoutSlots.IsValidItem(LandGearSaveMapper.ToRuntimeInstance(vault.Items[vaultIndex])))
+            {
+                return LandEquipResult.VaultFull;
+            }
+
+            vault.Items[vaultIndex] = LandGearSaveMapper.ToSaveInstance(LandLoadoutEquipService.CloneItem(source));
+            return LandEquipResult.Success;
+        }
+
+        public static LandEquipResult TryMoveOrSwapEquipmentWithVault(
+            LandRunLoadout loadout,
+            LandEquipmentSlot equipmentSlot,
+            CharacterVaultSaveData vault,
+            int vaultIndex,
+            LandItemCatalog catalog)
+        {
+            if (loadout == null || vault == null || catalog == null || !IsVaultIndexValid(vault, vaultIndex))
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            EnsureVaultSize(vault);
+            var equipped = LandLoadoutSlots.GetEquipped(loadout, equipmentSlot);
+            var vaultItem = LandGearSaveMapper.ToRuntimeInstance(vault.Items[vaultIndex]);
+
+            if (!LandLoadoutSlots.IsValidItem(equipped))
+            {
+                if (!LandLoadoutSlots.IsValidItem(vaultItem))
+                {
+                    return LandEquipResult.InventoryEmpty;
+                }
+
+                if (!LandLoadoutEquipService.TryResolveItemSlot(vaultItem, catalog, out var incomingSlot)
+                    || !LandGearEquipRules.CanEquip(incomingSlot, equipmentSlot))
+                {
+                    return LandEquipResult.WrongSlot;
+                }
+
+                LandLoadoutSlots.SetEquipped(loadout, equipmentSlot, LandLoadoutEquipService.CloneItem(vaultItem));
+                vault.Items[vaultIndex] = null;
+                return LandEquipResult.Success;
+            }
+
+            if (!LandLoadoutSlots.IsValidItem(vaultItem))
+            {
+                vault.Items[vaultIndex] = LandGearSaveMapper.ToSaveInstance(equipped);
+                LandLoadoutSlots.SetEquipped(loadout, equipmentSlot, null);
+                return LandEquipResult.Success;
+            }
+
+            if (!LandLoadoutEquipService.TryResolveItemSlot(vaultItem, catalog, out var itemSlot)
+                || !LandGearEquipRules.CanEquip(itemSlot, equipmentSlot))
+            {
+                return LandEquipResult.WrongSlot;
+            }
+
+            vault.Items[vaultIndex] = LandGearSaveMapper.ToSaveInstance(equipped);
+            LandLoadoutSlots.SetEquipped(loadout, equipmentSlot, LandLoadoutEquipService.CloneItem(vaultItem));
+            return LandEquipResult.Success;
+        }
     }
 }

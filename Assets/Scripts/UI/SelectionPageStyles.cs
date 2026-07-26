@@ -16,12 +16,47 @@ namespace F89.UI
         private static GUIStyle dossierPhotoPromptStyle;
         private static GUIStyle dossierVehicleKillsStyle;
         private static GUIStyle dossierTroopKillsStyle;
+        private static GUIStyle sectionHeaderStyle;
+        private static GUIStyle dossierStatLabelStyle;
+        private static GUIStyle dossierScoreLabelStyle;
+        private static GUIStyle dossierTotalScoreLabelStyle;
         private static GUIStyle hiddenScrollbarStyle;
         private static GUIStyle plaqueVerticalScrollbarStyle;
         private static GUIStyle plaqueVerticalScrollbarThumbStyle;
         private static Texture2D whiteTexture;
 
-        public static float PressDuration => PressDurationSeconds;
+        private static readonly string[] DossierStatLabels =
+        {
+            "Number of Enemy Vehicles Destroyed:",
+            "Number of Enemy Troops Killed:",
+            "Best Mission Score:",
+            "TOTAL SCORE:"
+        };
+
+        public static float GetDossierStatLabelColumnWidthPx()
+        {
+            EnsureStyles();
+            var maxWidth = 0f;
+            for (var i = 0; i < 3; i++)
+            {
+                maxWidth = Mathf.Max(
+                    maxWidth,
+                    dossierStatLabelStyle.CalcSize(new GUIContent(DossierStatLabels[i])).x);
+            }
+
+            return maxWidth;
+        }
+
+        public static float GetDossierStatValueFiveSpacesWidthPx()
+        {
+            return MissionScoreDisplayUi.MeasureDossierValueTextWidth("     ");
+        }
+
+        public static float GetTotalScoreLabelWidthPx()
+        {
+            EnsureStyles();
+            return dossierTotalScoreLabelStyle.CalcSize(new GUIContent(DossierStatLabels[3])).x;
+        }
 
         public static float GetPlaqueHeight()
         {
@@ -58,6 +93,72 @@ namespace F89.UI
             var clicked = GUI.Button(hitRect, GUIContent.none, GUIStyle.none);
             GUI.backgroundColor = previous;
             return clicked;
+        }
+
+        public static void DrawSectionHeaders()
+        {
+            EnsureStyles();
+            DrawGlowingHeader(SelectionPageLayout.GetCharacterSelectHeaderRect(), "Character Select", TextAnchor.MiddleLeft);
+            DrawGlowingHeader(SelectionPageLayout.GetCharacterDossierHeaderRect(), "Character Dossier", TextAnchor.MiddleCenter);
+        }
+
+        public static void DrawCharacterListBackdrop()
+        {
+            var rect = SelectionPageLayout.GetCharacterListBackdropRect();
+            GUI.color = new Color(0.04f, 0.05f, 0.05f, 0.72f);
+            GUI.DrawTexture(rect, GetWhiteTexture());
+            GUI.color = Color.white;
+            DrawBorder(rect, 2f, new Color(0.55f, 0.48f, 0.28f, 0.85f));
+        }
+
+        public static void DrawDossierPanelChrome()
+        {
+            var rect = SelectionPageLayout.GetDossierPanelRect();
+            GUI.color = new Color(0.12f, 0.14f, 0.12f, 0.82f);
+            GUI.DrawTexture(rect, GetWhiteTexture());
+            GUI.color = Color.white;
+
+            DrawBorder(rect, 3f, new Color(0.62f, 0.52f, 0.28f, 0.95f));
+            DrawBorder(
+                new Rect(rect.x + 5f, rect.y + 5f, rect.width - 10f, rect.height - 10f),
+                1.5f,
+                new Color(0.35f, 0.32f, 0.22f, 0.9f));
+
+            DrawCornerRivets(rect);
+        }
+
+        public static void DrawDossierStaticLabels()
+        {
+            EnsureStyles();
+            var highestAwardLabelRect = SelectionPageLayout.GetHighestAwardLabelRect();
+            var previousAlignment = dossierNameStyle.alignment;
+            dossierNameStyle.alignment = TextAnchor.MiddleCenter;
+            GUI.Label(highestAwardLabelRect, "Highest Award:", dossierNameStyle);
+            dossierNameStyle.alignment = previousAlignment;
+            GUI.Label(
+                SelectionPageLayout.GetVehicleKillsLabelRect(),
+                DossierStatLabels[0],
+                dossierStatLabelStyle);
+            GUI.Label(
+                SelectionPageLayout.GetTroopKillsLabelRect(),
+                DossierStatLabels[1],
+                dossierStatLabelStyle);
+
+            GUI.Label(
+                SelectionPageLayout.GetBestMissionScoreLabelRect(),
+                DossierStatLabels[2],
+                dossierStatLabelStyle);
+
+            GUI.Label(
+                SelectionPageLayout.GetTotalScoreLabelRect(),
+                DossierStatLabels[3],
+                dossierTotalScoreLabelStyle);
+
+            var awardSlot = SelectionPageLayout.GetHighestAwardSlotRect();
+            GUI.color = Color.white;
+            GUI.DrawTexture(awardSlot, GetWhiteTexture());
+            GUI.color = Color.white;
+            DrawBorder(awardSlot, 1.5f, new Color(0.45f, 0.4f, 0.25f, 0.9f));
         }
 
         public static void DrawPlaqueSelection(Rect plaqueRect, Rect labelRect, string label, bool selected)
@@ -103,16 +204,15 @@ namespace F89.UI
             GUI.Label(rect, fitted, dossierNameStyle);
         }
 
-        public static void DrawDossierPortrait(Rect rect, Texture2D portraitTexture)
+        public static void DrawDossierPortrait(Rect rect, Texture2D portraitTexture, Texture2D frameTexture)
         {
             EnsureStyles();
-            if (portraitTexture == null)
-            {
-                PortraitDisplayUtility.DrawPortraitFrame(rect, null, "Click to Add Photo", dossierPhotoPromptStyle);
-                return;
-            }
-
-            PortraitDisplayUtility.DrawPortraitFrame(rect, portraitTexture, null, null);
+            PortraitDisplayUtility.DrawMetallicFramedPortrait(
+                rect,
+                portraitTexture,
+                frameTexture,
+                portraitTexture == null ? "Click to Add Photo" : null,
+                dossierPhotoPromptStyle);
         }
 
         public static void DrawDossierHighestAwardMedal(Rect rect, Texture2D medalTexture)
@@ -132,15 +232,15 @@ namespace F89.UI
             int totalScore)
         {
             EnsureStyles();
-            DrawDossierStatValue(SelectionPageLayout.GetDossierVehicleKillsValueRect(), vehicleKills, dossierVehicleKillsStyle);
-            DrawDossierStatValue(SelectionPageLayout.GetDossierTroopKillsValueRect(), troopKills, dossierTroopKillsStyle);
+            MissionScoreDisplayUi.DrawDossierValue(SelectionPageLayout.GetDossierVehicleKillsValueRect(), vehicleKills);
+            MissionScoreDisplayUi.DrawDossierValue(SelectionPageLayout.GetDossierTroopKillsValueRect(), troopKills);
             MissionScoreDisplayUi.DrawDossierValue(SelectionPageLayout.GetDossierBestScoreValueRect(), bestMissionScore);
-            MissionScoreDisplayUi.DrawDossierValue(SelectionPageLayout.GetDossierTotalScoreValueRect(), totalScore);
-        }
-
-        private static void DrawDossierStatValue(Rect rect, int value, GUIStyle style)
-        {
-            GUI.Label(rect, value.ToString("N0"), style);
+            MissionScoreDisplayUi.DrawDossierValue(
+                SelectionPageLayout.GetDossierTotalScoreValueRect(),
+                totalScore,
+                new Color(0.42f, 0.72f, 1f),
+                TextAnchor.MiddleLeft,
+                fontSizeOffset: 10);
         }
 
         public static GUIStyle GetPlaqueVerticalScrollbar()
@@ -159,6 +259,47 @@ namespace F89.UI
         {
             EnsureStyles();
             return hiddenScrollbarStyle;
+        }
+
+        private static void DrawGlowingHeader(Rect rect, string text, TextAnchor alignment)
+        {
+            sectionHeaderStyle.alignment = alignment;
+            var glow = new Color(0.85f, 0.78f, 0.45f, 0.35f);
+            var previous = sectionHeaderStyle.normal.textColor;
+            sectionHeaderStyle.normal.textColor = glow;
+            GUI.Label(new Rect(rect.x + 1f, rect.y + 1f, rect.width, rect.height), text, sectionHeaderStyle);
+            GUI.Label(new Rect(rect.x - 1f, rect.y, rect.width, rect.height), text, sectionHeaderStyle);
+            sectionHeaderStyle.normal.textColor = previous;
+            GUI.Label(rect, text, sectionHeaderStyle);
+        }
+
+        private static void DrawUnderline(Rect labelRect, GUIStyle style, string text)
+        {
+            var size = style.CalcSize(new GUIContent(text));
+            var y = labelRect.yMax - 4f;
+            GUI.color = new Color(0.85f, 0.85f, 0.85f, 0.75f);
+            GUI.DrawTexture(new Rect(labelRect.x, y, Mathf.Min(size.x, labelRect.width), 1.5f), GetWhiteTexture());
+            GUI.color = Color.white;
+        }
+
+        private static void DrawCornerRivets(Rect rect)
+        {
+            var rivet = UiFitCanvas.Px(7f);
+            var inset = UiFitCanvas.Px(10f);
+            var color = new Color(0.72f, 0.62f, 0.34f, 0.95f);
+            DrawRivet(rect.x + inset, rect.y + inset, rivet, color);
+            DrawRivet(rect.xMax - inset - rivet, rect.y + inset, rivet, color);
+            DrawRivet(rect.x + inset, rect.yMax - inset - rivet, rivet, color);
+            DrawRivet(rect.xMax - inset - rivet, rect.yMax - inset - rivet, rivet, color);
+        }
+
+        private static void DrawRivet(float x, float y, float size, Color color)
+        {
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(x, y, size, size), GetWhiteTexture());
+            GUI.color = new Color(0.25f, 0.2f, 0.1f, 0.85f);
+            GUI.DrawTexture(new Rect(x + size * 0.28f, y + size * 0.28f, size * 0.44f, size * 0.44f), GetWhiteTexture());
+            GUI.color = Color.white;
         }
 
         private static Rect ApplyPressAnimation(Rect rect, float pressUntil)
@@ -216,12 +357,25 @@ namespace F89.UI
 
         private static void EnsureStyles()
         {
+            var scale = Mathf.Clamp(Screen.width / 1920f, 0.72f, 1.35f);
             if (plaqueLabelStyle != null)
             {
+                if (dossierStatLabelStyle != null)
+                {
+                    dossierStatLabelStyle.alignment = TextAnchor.MiddleRight;
+                    dossierStatLabelStyle.wordWrap = false;
+                }
+
+                if (dossierTotalScoreLabelStyle != null)
+                {
+                    dossierTotalScoreLabelStyle.alignment = TextAnchor.MiddleLeft;
+                    dossierTotalScoreLabelStyle.wordWrap = false;
+                    dossierTotalScoreLabelStyle.fontSize = Mathf.RoundToInt(34f * scale) + 20;
+                }
+
                 return;
             }
 
-            var scale = Mathf.Clamp(Screen.width / 1920f, 0.72f, 1.35f);
             var plaqueSize = Mathf.RoundToInt(34f * scale);
             plaqueLabelStyle = HudStyleFactory.CreateLabel(
                 plaqueSize,
@@ -232,12 +386,13 @@ namespace F89.UI
             plaqueLabelStyle.margin = new RectOffset(0, 0, 0, 0);
             plaqueLabelStyle.clipping = TextClipping.Overflow;
 
-            var dossierSize = Mathf.RoundToInt(28f * scale);
+            var dossierNameColor = Color.white;
+            const int dossierSize = 50;
             dossierNameStyle = HudStyleFactory.CreateLabel(
                 dossierSize,
                 FontStyle.Bold,
                 TextAnchor.UpperLeft,
-                new Color(0.93f, 0.9f, 0.78f));
+                dossierNameColor);
             dossierNameStyle.padding = new RectOffset(0, 0, 0, 0);
             dossierNameStyle.clipping = TextClipping.Overflow;
 
@@ -249,10 +404,33 @@ namespace F89.UI
                 wordWrap: true);
             dossierPhotoPromptStyle.padding = new RectOffset(8, 8, 8, 8);
 
-            var statSize = Mathf.RoundToInt(40f * scale);
+            sectionHeaderStyle = HudStyleFactory.CreateLabel(
+                72,
+                FontStyle.Bold,
+                TextAnchor.MiddleLeft,
+                new Color(0.92f, 0.88f, 0.72f),
+                font: HudStyleFactory.StencilFont);
+
+            var dossierLabelSize = Mathf.RoundToInt(34f * scale);
+            dossierStatLabelStyle = HudStyleFactory.CreateLabel(
+                dossierLabelSize,
+                FontStyle.Bold,
+                TextAnchor.MiddleRight,
+                dossierNameColor,
+                wordWrap: false);
+
+            dossierScoreLabelStyle = dossierStatLabelStyle;
+            dossierTotalScoreLabelStyle = HudStyleFactory.CreateLabel(
+                dossierLabelSize + 20,
+                FontStyle.Bold,
+                TextAnchor.MiddleLeft,
+                dossierNameColor,
+                wordWrap: false);
+
             var dossierStatColor = new Color(0.98f, 0.92f, 0.18f);
+            var statSize = Mathf.RoundToInt(40f * scale);
             dossierVehicleKillsStyle = CreateDossierStatStyle(statSize, dossierStatColor);
-            dossierTroopKillsStyle = CreateDossierStatStyle(statSize, dossierStatColor);
+            dossierTroopKillsStyle = dossierVehicleKillsStyle;
 
             hiddenScrollbarStyle = new GUIStyle(GUIStyle.none)
             {

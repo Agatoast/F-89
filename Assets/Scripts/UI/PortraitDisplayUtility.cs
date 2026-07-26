@@ -4,6 +4,11 @@ namespace F89.UI
 {
     public static class PortraitDisplayUtility
     {
+        /// <summary>
+        /// Brass frame border as a fraction of the shorter side; matches portrait_frame.png opening.
+        /// </summary>
+        public const float MetallicFrameInsetFraction = 0.135f;
+
         public static void DrawPortraitFrame(Rect frameRect, Texture2D portraitTexture, string promptText, GUIStyle promptStyle)
         {
             GUI.BeginGroup(frameRect);
@@ -26,6 +31,31 @@ namespace F89.UI
             }
 
             GUI.EndGroup();
+        }
+
+        public static void DrawMetallicFramedPortrait(
+            Rect frameRect,
+            Texture2D portraitTexture,
+            Texture2D frameTexture,
+            string promptText = null,
+            GUIStyle promptStyle = null)
+        {
+            var inset = Mathf.Min(frameRect.width, frameRect.height) * MetallicFrameInsetFraction;
+            var portraitRect = new Rect(
+                frameRect.x + inset,
+                frameRect.y + inset,
+                frameRect.width - inset * 2f,
+                frameRect.height - inset * 2f);
+
+            GUI.color = Color.white;
+            DrawPortraitFrame(portraitRect, portraitTexture, promptText, promptStyle);
+
+            if (frameTexture != null)
+            {
+                GUI.DrawTexture(frameRect, frameTexture, ScaleMode.StretchToFill, true);
+            }
+
+            GUI.color = Color.white;
         }
 
         public static Rect GetCoverRectWithoutUpscale(Rect bounds, float sourceWidth, float sourceHeight)

@@ -9,11 +9,13 @@ namespace F89.UI
     public class SelectionPageController : MonoBehaviour
     {
         private const string BackgroundResourcePath = "SelectionPage/selection_page";
+        private const string PortraitFrameResourcePath = "CharacterPage/portrait_frame";
         private const string DefaultCharacterRank = "2nd LT";
 
         private readonly List<CharacterSaveData> visibleSaves = new List<CharacterSaveData>();
 
         private Texture2D backgroundTexture;
+        private Texture2D portraitFrameTexture;
         private Vector2 plaqueScrollPosition;
         private string selectedSaveId;
         private bool hasInitializedSelection;
@@ -30,10 +32,16 @@ namespace F89.UI
             CharacterPortraitService.ClearPresetCache();
             MilitaryMedalService.ClearCache();
             backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
+            portraitFrameTexture = Resources.Load<Texture2D>(PortraitFrameResourcePath);
 
             if (backgroundTexture == null)
             {
                 Debug.LogWarning("F-89: Selection page background missing from Resources/SelectionPage/selection_page.");
+            }
+
+            if (portraitFrameTexture == null)
+            {
+                Debug.LogWarning("F-89: Portrait frame missing from Resources/CharacterPage/portrait_frame.");
             }
         }
 
@@ -69,6 +77,10 @@ namespace F89.UI
         {
             MilitaryAwardTooltipUi.BeginFrame();
             DrawBackground();
+            SelectionPageStyles.DrawSectionHeaders();
+            SelectionPageStyles.DrawCharacterListBackdrop();
+            SelectionPageStyles.DrawDossierPanelChrome();
+            SelectionPageStyles.DrawDossierStaticLabels();
 
             if (showNewCharacterDialog)
             {
@@ -98,20 +110,7 @@ namespace F89.UI
 
         private void DrawBackground()
         {
-            GUI.color = Color.black;
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            if (backgroundTexture == null)
-            {
-                return;
-            }
-
-            GUI.DrawTexture(
-                new Rect(0f, 0f, Screen.width, Screen.height),
-                backgroundTexture,
-                ScaleMode.StretchToFill,
-                true);
+            UiFitCanvas.DrawLetterboxedBackground(backgroundTexture);
         }
 
         private void DrawCharacterList()
@@ -207,30 +206,36 @@ namespace F89.UI
 
         private void DrawCharacterDossier()
         {
+            if (portraitFrameTexture == null)
+            {
+                portraitFrameTexture = Resources.Load<Texture2D>(PortraitFrameResourcePath);
+            }
+
             var save = FindSelectedSave();
+            var pictureRect = SelectionPageLayout.GetDossierPictureRect();
+            var portraitTexture = save != null ? CharacterPortraitService.GetPortraitTexture(save) : null;
+            SelectionPageStyles.DrawDossierPortrait(pictureRect, portraitTexture, portraitFrameTexture);
+            if (save != null && SelectionPageStyles.DrawInvisibleButton(pictureRect))
+            {
+                OpenSelectPortraitDialog();
+            }
+
             if (save == null)
             {
                 return;
             }
 
+            DrawDossierHighestAward(save);
             SelectionPageStyles.DrawDossierName(
                 SelectionPageLayout.GetDossierNameRect(),
                 save.DisplayRankAndName);
-            DrawDossierHighestAward(save);
 
-            var pictureRect = SelectionPageLayout.GetDossierPictureRect();
-            var portraitTexture = CharacterPortraitService.GetPortraitTexture(save);
-            SelectionPageStyles.DrawDossierPortrait(pictureRect, portraitTexture);
-            if (SelectionPageStyles.DrawInvisibleButton(pictureRect))
-            {
-                OpenSelectPortraitDialog();
-            }
-
+            var preview = SelectionPageLayout.DossierStatLayoutPreviewValue;
             SelectionPageStyles.DrawDossierStats(
-                save.EnemyVehiclesKilled,
-                save.EnemyTroopsKilled,
-                save.BestMissionScore,
-                save.TotalScore);
+                preview > 0 ? preview : save.EnemyVehiclesKilled,
+                preview > 0 ? preview : save.EnemyTroopsKilled,
+                preview > 0 ? preview : save.BestMissionScore,
+                preview > 0 ? preview : save.TotalScore);
         }
 
         private void DrawSelectPortraitDialog()
@@ -298,7 +303,7 @@ namespace F89.UI
             }
 
             var rect = SelectionPageLayout.GetSelectButtonRect();
-            if (StartPageMenuStyles.DrawMenuButton(rect, "Select Character", panelAlpha: 1f))
+            if (StartPageMenuStyles.DrawMenuButton(rect, "SELECT CHARACTER", panelAlpha: 1f))
             {
                 OpenSelectedCharacterPage();
             }
@@ -313,7 +318,7 @@ namespace F89.UI
             }
 
             CharacterSessionState.ActiveSave = save;
-            CharacterGearSession.Bind(save);
+            CharacterGearSession.Bind(save, forceReload: true);
             CharacterSaveRepository.SetLastSelectedSaveId(save.Id);
             CharacterSaveRepository.TouchLastPlayed(save);
             SceneManager.LoadScene(GameScenes.CharacterPage);

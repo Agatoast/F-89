@@ -28,6 +28,17 @@ namespace F89.LandCombat
         Gold = 9
     }
 
+    /// <summary>
+    /// Item origin family: M (Military basic loadout), UR (Ultimate Reich loot / R&amp;D fuel),
+    /// X (Experimental — created by successful R&amp;D).
+    /// </summary>
+    public enum LandItemCategory
+    {
+        Military = 0,
+        UltimateReich = 1,
+        Experimental = 2
+    }
+
     public enum LandWeaponKind
     {
         Bullet,

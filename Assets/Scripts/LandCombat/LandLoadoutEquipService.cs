@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using F89.Core;
 
 namespace F89.LandCombat
 {
@@ -100,6 +101,164 @@ namespace F89.LandCombat
             }
 
             return false;
+        }
+
+        public static LandEquipResult TryEquipItemCopy(
+            LandRunLoadout loadout,
+            LandGearInstance source,
+            LandEquipmentSlot paperdollSlot,
+            LandItemCatalog catalog,
+            CharacterVaultSaveData vault = null)
+        {
+            if (loadout == null || catalog == null || !LandLoadoutSlots.IsValidItem(source))
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            if (!TryResolveItemSlot(source, catalog, out var itemSlot))
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            if (!LandGearEquipRules.CanEquip(itemSlot, paperdollSlot))
+            {
+                return LandEquipResult.WrongSlot;
+            }
+
+            var previous = LandLoadoutSlots.GetEquipped(loadout, paperdollSlot);
+            LandLoadoutSlots.SetEquipped(loadout, paperdollSlot, CloneItem(source));
+            if (LandLoadoutSlots.IsValidItem(previous))
+            {
+                if (!TryAddToFirstEmptyInventory(loadout, previous)
+                    && !TryAddToFirstEmptyVault(vault, previous))
+                {
+                    // Inventory and vault are full — previous item is replaced.
+                }
+            }
+
+            return LandEquipResult.Success;
+        }
+
+        public static LandEquipResult TryPlaceItemCopyInInventory(
+            LandRunLoadout loadout,
+            LandGearInstance source,
+            LandInventoryAddress to)
+        {
+            if (loadout == null || !LandLoadoutSlots.IsValidItem(source))
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            LandInventoryRules.EnsureInventoryCapacity(loadout);
+            if (!LandInventoryRules.IsInventoryIndexAccessible(to.Index, loadout.DuffleBag))
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            TryGetInventoryItem(loadout, to, out var existing);
+            if (LandLoadoutSlots.IsValidItem(existing))
+            {
+                return LandEquipResult.VaultFull;
+            }
+
+            SetInventoryItem(loadout, to, CloneItem(source));
+            return LandEquipResult.Success;
+        }
+
+        public static LandEquipResult TryMoveOrSwapEquipmentWithInventory(
+            LandRunLoadout loadout,
+            LandEquipmentSlot equipmentSlot,
+            LandInventoryAddress inventory,
+            LandItemCatalog catalog)
+        {
+            if (loadout == null || catalog == null)
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            var equipped = LandLoadoutSlots.GetEquipped(loadout, equipmentSlot);
+            if (!LandLoadoutSlots.IsValidItem(equipped))
+            {
+                return LandEquipResult.InventoryEmpty;
+            }
+
+            LandInventoryRules.EnsureInventoryCapacity(loadout);
+            if (!LandInventoryRules.IsInventoryIndexAccessible(inventory.Index, loadout.DuffleBag))
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            TryGetInventoryItem(loadout, inventory, out var inventoryItem);
+            if (!LandLoadoutSlots.IsValidItem(inventoryItem))
+            {
+                SetInventoryItem(loadout, inventory, CloneItem(equipped));
+                LandLoadoutSlots.SetEquipped(loadout, equipmentSlot, null);
+                return LandEquipResult.Success;
+            }
+
+            if (!TryResolveItemSlot(inventoryItem, catalog, out var incomingSlot)
+                || !LandGearEquipRules.CanEquip(incomingSlot, equipmentSlot))
+            {
+                return LandEquipResult.WrongSlot;
+            }
+
+            LandLoadoutSlots.SetEquipped(loadout, equipmentSlot, CloneItem(inventoryItem));
+            SetInventoryItem(loadout, inventory, CloneItem(equipped));
+            return LandEquipResult.Success;
+        }
+
+        public static LandEquipResult TrySwapPaperdollSlots(
+            LandRunLoadout loadout,
+            LandEquipmentSlot fromSlot,
+            LandEquipmentSlot toSlot,
+            LandItemCatalog catalog)
+        {
+            if (loadout == null || catalog == null)
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            var fromItem = LandLoadoutSlots.GetEquipped(loadout, fromSlot);
+            if (!LandLoadoutSlots.IsValidItem(fromItem))
+            {
+                return LandEquipResult.InventoryEmpty;
+            }
+
+            if (!TryResolveItemSlot(fromItem, catalog, out var fromItemSlot)
+                || !LandGearEquipRules.CanEquip(fromItemSlot, toSlot))
+            {
+                return LandEquipResult.WrongSlot;
+            }
+
+            var toItem = LandLoadoutSlots.GetEquipped(loadout, toSlot);
+            if (LandLoadoutSlots.IsValidItem(toItem)
+                && (!TryResolveItemSlot(toItem, catalog, out var toItemSlot)
+                    || !LandGearEquipRules.CanEquip(toItemSlot, fromSlot)))
+            {
+                return LandEquipResult.WrongSlot;
+            }
+
+            LandLoadoutSlots.SetEquipped(loadout, fromSlot, toItem);
+            LandLoadoutSlots.SetEquipped(loadout, toSlot, fromItem);
+            return LandEquipResult.Success;
+        }
+
+        public static bool TryAddToFirstEmptyVault(CharacterVaultSaveData vault, LandGearInstance item)
+        {
+            if (vault == null || !LandLoadoutSlots.IsValidItem(item))
+            {
+                return false;
+            }
+
+            var index = LandVaultStorageService.FindFirstEmptyVaultIndex(vault);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            LandVaultStorageService.EnsureVaultSize(vault);
+            vault.Items[index] = LandGearSaveMapper.ToSaveInstance(CloneItem(item));
+            return true;
         }
 
         public static LandGearInstance CloneItem(LandGearInstance item)

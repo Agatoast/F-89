@@ -144,7 +144,7 @@ namespace F89.UI
                 DrawRedlineMarkerLocal(
                     localCenterY,
                     tapeRect.height,
-                    aircraft.Profile.maxThrottleMph,
+                    aircraft.EffectiveMaxThrottleMph,
                     currentSpeed,
                     pixelsPerMph,
                     hudColor,

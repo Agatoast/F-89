@@ -56,10 +56,6 @@ namespace F89.UI
 
         private void DrawSettingsSubpage()
         {
-            GUI.color = new Color(0.04f, 0.05f, 0.07f, 0.96f);
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
             settingsView = SettingsMenuUi.Draw(settingsView, () =>
             {
                 settingsView = SettingsMenuUi.View.Root;

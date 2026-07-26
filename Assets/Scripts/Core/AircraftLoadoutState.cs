@@ -20,6 +20,9 @@ namespace F89.Core
         public const int GunRoundStep = 1;
         public const int GunRoundWeightLbs = 1;
         public const int LinkedHardpointPairCount = 10;
+        public const int PayloadLbsPerSpeedPenaltyStep = 1000;
+        public const int SpeedPenaltyPercentPerStep = 1;
+        public const int PayloadLbsExemptFromSpeedPenalty = 5000;
 
         private static readonly int[] WeaponWeightsLbs =
         {
@@ -93,15 +96,43 @@ namespace F89.Core
 
         public static int ComputeCurrentLoadoutLbs()
         {
-            var total = GunRounds * GunRoundWeightLbs;
+            CountWeapons(out var aim9z, out var agm88j, out var gbu12, out var agm114);
+            return ComputePayloadLbs(aim9z, agm88j, gbu12, agm114, GunRounds);
+        }
 
-            for (var i = 0; i < LinkedHardpointPairWeapons.Length; i++)
+        public static int ComputePayloadLbs(int aim9z, int agm88j, int gbu12, int agm114, int gunRounds)
+        {
+            return Mathf.Max(0, gunRounds) * GunRoundWeightLbs
+                + GetWeaponWeightLbs(AircraftLoadoutWeapon.Aim9z) * Mathf.Max(0, aim9z)
+                + GetWeaponWeightLbs(AircraftLoadoutWeapon.Agm88j) * Mathf.Max(0, agm88j)
+                + GetWeaponWeightLbs(AircraftLoadoutWeapon.Gbu12) * Mathf.Max(0, gbu12)
+                + GetWeaponWeightLbs(AircraftLoadoutWeapon.Agm114) * Mathf.Max(0, agm114);
+        }
+
+        public static int ComputeSpeedDecreasePercent()
+        {
+            return ComputeSpeedDecreasePercentFromLbs(ComputeCurrentLoadoutLbs());
+        }
+
+        public static int ComputeSpeedDecreasePercentFromLbs(int payloadLbs)
+        {
+            var penalizedLbs = Mathf.Max(0, payloadLbs - PayloadLbsExemptFromSpeedPenalty);
+            if (penalizedLbs <= 0)
             {
-                total += GetWeaponWeightLbs(LinkedHardpointPairWeapons[i]) * 2;
+                return 0;
             }
 
-            total += GetWeaponWeightLbs(WingTipWeapon) * 2;
-            return total;
+            return Mathf.CeilToInt(penalizedLbs / (float)PayloadLbsPerSpeedPenaltyStep) * SpeedPenaltyPercentPerStep;
+        }
+
+        public static float ComputeMaxAirspeedMultiplier()
+        {
+            return ComputeMaxAirspeedMultiplierFromLbs(ComputeCurrentLoadoutLbs());
+        }
+
+        public static float ComputeMaxAirspeedMultiplierFromLbs(int payloadLbs)
+        {
+            return Mathf.Max(0f, 1f - ComputeSpeedDecreasePercentFromLbs(payloadLbs) / 100f);
         }
 
         public static bool CanAssignToLinkedPair(int pairIndex, AircraftLoadoutWeapon weapon)

@@ -20,6 +20,16 @@ namespace F89.Core
         public string[] EarnedRibbonIds = Array.Empty<string>();
         public CharacterLoadoutSaveData Loadout = new CharacterLoadoutSaveData();
         public CharacterVaultSaveData Vault = new CharacterVaultSaveData();
+        /// <summary>Per-type R&amp;D success chance percent (0–30). Each researched item of that type adds 0.5.</summary>
+        public float ResearchHelmetChancePercent;
+        public float ResearchVestChancePercent;
+        public float ResearchWeaponChancePercent;
+        public float ResearchBootsChancePercent;
+        /// <summary>Tech level being researched / accepted per R&amp;D slot: Helmet, Vest, Weapon, Boots (1–10).</summary>
+        public int ResearchHelmetTechLevel = 1;
+        public int ResearchVestTechLevel = 1;
+        public int ResearchWeaponTechLevel = 1;
+        public int ResearchBootsTechLevel = 1;
 
         public string VehicleKillDisplay =>
             string.IsNullOrWhiteSpace(VehicleKillSummary)

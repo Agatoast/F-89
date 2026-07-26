@@ -300,34 +300,7 @@ namespace F89.Core
 
         private static void NormalizeLoadedScores()
         {
-            const int testScoreBoost = 100;
-            var changed = false;
-            foreach (var save in cachedSaves)
-            {
-                if (save == null)
-                {
-                    continue;
-                }
-
-                if (!string.Equals(save.Name, "Don", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (save.BestMissionScore >= testScoreBoost && save.TotalScore >= testScoreBoost)
-                {
-                    continue;
-                }
-
-                save.BestMissionScore = testScoreBoost;
-                save.TotalScore = testScoreBoost;
-                changed = true;
-            }
-
-            if (changed)
-            {
-                WriteToDisk();
-            }
+            // Intentionally empty — character scores are owned by gameplay / explicit resets.
         }
 
         private static void NormalizeLoadedRibbons()

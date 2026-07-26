@@ -1,4 +1,3 @@
-using F89.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -18,31 +17,25 @@ namespace F89.UI
         {
             backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
             saveAntarcticaLogoTexture = Resources.Load<Texture2D>(SaveAntarcticaLogoResourcePath);
+            if (saveAntarcticaLogoTexture == null)
+            {
+                Debug.LogWarning("F-89: SAVE Antarctica logo missing from Resources/CharacterPage/save_antarctica_logo.");
+            }
         }
 
         private void OnGUI()
         {
             StartPageMenuStyles.DrawFullscreenBackground(backgroundTexture);
-            DrawSaveAntarcticaLogo();
-            DrawButtons();
-        }
-
-        private void DrawSaveAntarcticaLogo()
-        {
-            if (saveAntarcticaLogoTexture == null)
-            {
-                saveAntarcticaLogoTexture = Resources.Load<Texture2D>(SaveAntarcticaLogoResourcePath);
-            }
-
             StartPageMenuStyles.DrawSaveAntarcticaLogo(saveAntarcticaLogoTexture);
+            DrawButtons();
         }
 
         private static void DrawButtons()
         {
             for (var i = 0; i < ButtonLabels.Length; i++)
             {
-                var rect = StartPageMenuStyles.GetMenuButtonRect(i, ButtonLabels.Length);
-                if (!StartPageMenuStyles.DrawMenuButton(rect, ButtonLabels[i]))
+                var rect = StartPageMenuStyles.GetMainMenuButtonRect(i, ButtonLabels.Length);
+                if (!StartPageMenuStyles.DrawMenuButton(rect, ButtonLabels[i], fontSize: 50))
                 {
                     continue;
                 }
@@ -58,10 +51,10 @@ namespace F89.UI
             switch (label)
             {
                 case "PLAY":
-                    SceneManager.LoadScene(GameScenes.SelectionPage);
+                    SceneManager.LoadScene(F89.Core.GameScenes.SelectionPage);
                     break;
                 case "STORY":
-                    OpenSubpage("STORY", "Story mode — coming soon.");
+                    OpenSubpage(StoryPageContent.Title, StoryPageContent.Body);
                     break;
                 case "RULES":
                     OpenSubpage("RULES", "Rules and briefing — coming soon.");
@@ -70,7 +63,7 @@ namespace F89.UI
                     MenuNavigationState.Mode = MenuNavigationState.SubpageMode.Settings;
                     MenuNavigationState.SubpageTitle = "SETTINGS";
                     MenuNavigationState.SubpageMessage = string.Empty;
-                    SceneManager.LoadScene(GameScenes.MenuSubpage);
+                    SceneManager.LoadScene(F89.Core.GameScenes.MenuSubpage);
                     break;
                 case "CREDITS":
                     OpenSubpage("CREDITS", "Credits — coming soon.");
@@ -83,7 +76,7 @@ namespace F89.UI
             MenuNavigationState.Mode = MenuNavigationState.SubpageMode.Message;
             MenuNavigationState.SubpageTitle = title;
             MenuNavigationState.SubpageMessage = message;
-            SceneManager.LoadScene(GameScenes.MenuSubpage);
+            SceneManager.LoadScene(F89.Core.GameScenes.MenuSubpage);
         }
     }
 }

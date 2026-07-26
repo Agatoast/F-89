@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 53dcbdcdd70f3504db4870b8e43bdc05, type: 3}
   m_Name: TestHelmet
   m_EditorClassIdentifier: Assembly-CSharp::F89.LandCombat.LandGearDefinition
-  DisplayName: Helmet
-  Description: Light head protection salvaged from derelict suits.
+  DisplayName: M-Helmet
+  Description: Standard Military basic-loadout helmet.
   Slot: 8
   Rarity: 0
+  Category: 0

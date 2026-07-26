@@ -12,10 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a6ca54a90fff134fa19e9470600dc1b, type: 3}
   m_Name: Blaster
   m_EditorClassIdentifier: Assembly-CSharp::F89.LandCombat.LandWeaponDefinition
-  DisplayName: Blaster
-  Description: 
+  DisplayName: M-16
+  Description: Standard Military basic-loadout rifle.
   Kind: 0
   Rarity: 0
+  Category: 0
   Damage: 12
   RateOfFire: 1
   RangeTiles: 8

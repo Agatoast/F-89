@@ -1,6 +1,7 @@
 using F89.Controls;
 using F89.Core;
 using F89.UI;
+using F89.Weapons;
 using UnityEngine;
 
 namespace F89.Flight
@@ -11,6 +12,7 @@ namespace F89.Flight
         [SerializeField] private FlightProfile profile;
         [SerializeField] private WorldMapConfig worldMap;
         [SerializeField] private PlayerAircraftInput inputSource;
+        [SerializeField] private PlayerWeaponController weapons;
 
         private Rigidbody body;
         private float currentSpeed;
@@ -25,6 +27,12 @@ namespace F89.Flight
             ? currentSpeed / profile.ticSizeWorldUnits
             : 0f;
         public float CurrentSpeedMph => currentSpeedMph;
+        public float EffectiveMaxThrottleMph =>
+            profile == null ? 0f : profile.maxThrottleMph * GetPayloadMaxAirspeedMultiplier();
+        public float EffectiveAfterburnerMaxThrottleMph =>
+            profile == null
+                ? 0f
+                : profile.afterburnerMaxThrottleMph * GetPayloadMaxAirspeedMultiplier();
         public bool IsAfterburning { get; private set; }
         public bool CanUseAfterburner => afterburnerFuelRemaining > 0f;
         public float AfterburnerFuelRemaining => afterburnerFuelRemaining;
@@ -77,7 +85,10 @@ namespace F89.Flight
             IsAutopilotActive = autopilotActive;
             if (autopilotActive)
             {
-                currentSpeed = speedWorld;
+                var maxWorld = profile != null
+                    ? profile.MphToWorldSpeed(EffectiveMaxThrottleMph, worldMap)
+                    : speedWorld;
+                currentSpeed = Mathf.Min(speedWorld, maxWorld);
                 SyncSpeedMphFromWorld();
                 IsAfterburning = false;
             }
@@ -108,12 +119,37 @@ namespace F89.Flight
             profile = flightProfile;
             worldMap = mapConfig;
             inputSource = input;
+            if (weapons == null)
+            {
+                weapons = GetComponent<PlayerWeaponController>();
+            }
+
             InitializeFlightState();
+        }
+
+        private float GetPayloadMaxAirspeedMultiplier()
+        {
+            if (weapons == null)
+            {
+                weapons = GetComponent<PlayerWeaponController>();
+            }
+
+            if (weapons != null && weapons.HasSortieInventory)
+            {
+                return AircraftLoadoutState.ComputeMaxAirspeedMultiplierFromLbs(weapons.ComputeRemainingPayloadLbs());
+            }
+
+            return AircraftLoadoutState.ComputeMaxAirspeedMultiplier();
         }
 
         private void Awake()
         {
             body = GetComponent<Rigidbody>();
+            if (weapons == null)
+            {
+                weapons = GetComponent<PlayerWeaponController>();
+            }
+
             ApplyRigidbodySettings();
             InitializeFlightState();
         }
@@ -152,7 +188,7 @@ namespace F89.Flight
             }
 
             Refuel();
-            currentSpeedMph = profile.startThrottleMph;
+            currentSpeedMph = Mathf.Min(profile.startThrottleMph, EffectiveMaxThrottleMph);
             afterburnerSpoolDownActive = false;
             IsAfterburning = false;
             currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
@@ -168,7 +204,7 @@ namespace F89.Flight
             currentSpeedMph = Mathf.Clamp(
                 speedMph,
                 profile.minThrottleMph,
-                profile.maxThrottleMph);
+                EffectiveMaxThrottleMph);
             afterburnerSpoolDownActive = false;
             IsAfterburning = false;
             currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
@@ -192,7 +228,7 @@ namespace F89.Flight
                 return;
             }
 
-            currentSpeedMph = Mathf.Clamp(speedMph, 0f, profile.maxThrottleMph);
+            currentSpeedMph = Mathf.Clamp(speedMph, 0f, EffectiveMaxThrottleMph);
             afterburnerSpoolDownActive = false;
             IsAfterburning = false;
             currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
@@ -323,7 +359,7 @@ namespace F89.Flight
                 var rampRate = profile.throttleChangeMphPerSecond * profile.afterburnerThrottleChangeMultiplier;
                 currentSpeedMph = Mathf.MoveTowards(
                     currentSpeedMph,
-                    profile.afterburnerMaxThrottleMph,
+                    EffectiveAfterburnerMaxThrottleMph,
                     rampRate * dt);
             }
             else if (afterburnerSpoolDownActive)
@@ -340,9 +376,9 @@ namespace F89.Flight
 
                 currentSpeedMph = Mathf.Max(currentSpeedMph, profile.minThrottleMph);
 
-                if (currentSpeedMph <= profile.maxThrottleMph + 0.5f)
+                if (currentSpeedMph <= EffectiveMaxThrottleMph + 0.5f)
                 {
-                    currentSpeedMph = Mathf.Min(currentSpeedMph, profile.maxThrottleMph);
+                    currentSpeedMph = Mathf.Min(currentSpeedMph, EffectiveMaxThrottleMph);
                     afterburnerSpoolDownActive = false;
                 }
             }
@@ -361,7 +397,7 @@ namespace F89.Flight
                 currentSpeedMph = Mathf.Clamp(
                     currentSpeedMph,
                     profile.minThrottleMph,
-                    profile.maxThrottleMph);
+                    EffectiveMaxThrottleMph);
             }
 
             currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
@@ -402,7 +438,7 @@ namespace F89.Flight
 
             if (IsAfterburning && !wantsAfterburner)
             {
-                afterburnerSpoolDownActive = currentSpeedMph > profile.maxThrottleMph + 0.5f;
+                afterburnerSpoolDownActive = currentSpeedMph > EffectiveMaxThrottleMph + 0.5f;
             }
 
             IsAfterburning = wantsAfterburner;
@@ -418,7 +454,7 @@ namespace F89.Flight
                 afterburnerFuelRemaining = 0f;
                 if (IsAfterburning)
                 {
-                    afterburnerSpoolDownActive = currentSpeedMph > profile.maxThrottleMph + 0.5f;
+                    afterburnerSpoolDownActive = currentSpeedMph > EffectiveMaxThrottleMph + 0.5f;
                 }
 
                 IsAfterburning = false;

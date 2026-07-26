@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: fdfd8a51df464be8bbcf0ed4a974082b
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 16
+  forceReadable: 0
+  includeFontData: 1
+  asdfEncoding: 1
+  fontNames:
+  - Stencil
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

@@ -4,17 +4,40 @@ namespace F89.UI
 {
     public static class MissionScoreDisplayUi
     {
-        private const int CharacterPageFontSize = 44;
+        private const int CharacterPageFontSize = 34;
 
         private static GUIStyle characterPageLabelStyle;
         private static GUIStyle characterPageValueStyle;
         private static GUIStyle dossierValueStyle;
+        private static GUIStyle dossierValueOverrideStyle;
 
         public static string FormatScore(int score) => score.ToString("N0");
 
         public static void DrawDossierValue(Rect rect, int score)
         {
-            GUI.Label(rect, FormatScore(score), GetDossierValueStyle());
+            DrawDossierValue(rect, score, GetTextColor(), TextAnchor.MiddleRight);
+        }
+
+        public static void DrawDossierValue(
+            Rect rect,
+            int score,
+            Color color,
+            TextAnchor alignment,
+            int fontSizeOffset = 0)
+        {
+            var style = GetDossierValueStyle(color, alignment, fontSizeOffset);
+            GUI.Label(rect, FormatScore(score), style);
+        }
+
+        public static float MeasureDossierValueTextWidth(string text, int fontSizeOffset = 0)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return 0f;
+            }
+
+            return GetDossierValueStyle(GetTextColor(), TextAnchor.MiddleRight, fontSizeOffset)
+                .CalcSize(new GUIContent(text)).x;
         }
 
         public static void DrawCharacterPageRow(
@@ -24,19 +47,16 @@ namespace F89.UI
             float labelColumnWidth,
             float onesColumnX)
         {
+            const float valueGapFromLabelDesignPx = 6f;
             var labelStyle = GetCharacterPageLabelStyle();
             var valueStyle = GetCharacterPageValueStyle();
-            GUI.Label(new Rect(rect.x, rect.y, labelColumnWidth, rect.height), label, labelStyle);
-            DrawCharacterPageValue(onesColumnX, rect.y, rect.height, score, valueStyle);
-        }
-
-        private static void DrawCharacterPageValue(float onesColumnX, float y, float height, int score, GUIStyle style)
-        {
-            var value = FormatScore(score);
-            var valueSize = style.CalcSize(new GUIContent(value));
-            var lastCharWidth = style.CalcSize(new GUIContent(value[value.Length - 1].ToString())).x;
-            var drawX = onesColumnX - (valueSize.x - lastCharWidth);
-            GUI.Label(new Rect(drawX, y, valueSize.x, height), value, style);
+            var lineHeight = rect.height * 0.5f;
+            var valueGap = UiFitCanvas.Px(valueGapFromLabelDesignPx);
+            GUI.Label(new Rect(rect.x, rect.y, rect.width, lineHeight), label, labelStyle);
+            GUI.Label(
+                new Rect(rect.x, rect.y + lineHeight + valueGap, rect.width, lineHeight),
+                FormatScore(score),
+                valueStyle);
         }
 
         private static GUIStyle GetCharacterPageLabelStyle()
@@ -46,8 +66,13 @@ namespace F89.UI
                 characterPageLabelStyle = HudStyleFactory.CreateLabel(
                     CharacterPageFontSize,
                     FontStyle.Bold,
-                    TextAnchor.UpperRight,
+                    TextAnchor.UpperCenter,
                     GetTextColor());
+            }
+            else
+            {
+                characterPageLabelStyle.fontSize = CharacterPageFontSize;
+                characterPageLabelStyle.alignment = TextAnchor.UpperCenter;
             }
 
             return characterPageLabelStyle;
@@ -60,31 +85,65 @@ namespace F89.UI
                 characterPageValueStyle = HudStyleFactory.CreateLabel(
                     CharacterPageFontSize,
                     FontStyle.Bold,
-                    TextAnchor.UpperLeft,
-                    GetTextColor());
+                    TextAnchor.UpperCenter,
+                    Color.white);
+            }
+            else
+            {
+                characterPageValueStyle.fontSize = CharacterPageFontSize;
+                characterPageValueStyle.alignment = TextAnchor.UpperCenter;
+                characterPageValueStyle.normal.textColor = Color.white;
             }
 
             return characterPageValueStyle;
         }
 
-        private static GUIStyle GetDossierValueStyle()
+        private static GUIStyle GetDossierValueStyle(Color color, TextAnchor alignment, int fontSizeOffset = 0)
         {
-            if (dossierValueStyle == null)
+            var fontSize = GetDossierFontSize() + fontSizeOffset;
+            if (color == GetTextColor() && alignment == TextAnchor.MiddleRight && fontSizeOffset == 0)
             {
-                dossierValueStyle = HudStyleFactory.CreateLabel(
-                    GetDossierFontSize(),
+                if (dossierValueStyle == null)
+                {
+                    dossierValueStyle = HudStyleFactory.CreateLabel(
+                        fontSize,
+                        FontStyle.Bold,
+                        alignment,
+                        color);
+                    dossierValueStyle.padding = new RectOffset(0, 0, 0, 0);
+                    dossierValueStyle.clipping = TextClipping.Overflow;
+                }
+                else
+                {
+                    dossierValueStyle.fontSize = fontSize;
+                }
+
+                return dossierValueStyle;
+            }
+
+            if (dossierValueOverrideStyle == null)
+            {
+                dossierValueOverrideStyle = HudStyleFactory.CreateLabel(
+                    fontSize,
                     FontStyle.Bold,
-                    TextAnchor.MiddleRight,
-                    GetTextColor());
-                dossierValueStyle.padding = new RectOffset(0, 0, 0, 0);
-                dossierValueStyle.clipping = TextClipping.Overflow;
+                    alignment,
+                    color);
+                dossierValueOverrideStyle.padding = new RectOffset(0, 0, 0, 0);
+                dossierValueOverrideStyle.clipping = TextClipping.Overflow;
             }
             else
             {
-                dossierValueStyle.fontSize = GetDossierFontSize();
+                dossierValueOverrideStyle.fontSize = fontSize;
+                dossierValueOverrideStyle.alignment = alignment;
+                dossierValueOverrideStyle.normal.textColor = color;
             }
 
-            return dossierValueStyle;
+            return dossierValueOverrideStyle;
+        }
+
+        private static GUIStyle GetDossierValueStyle()
+        {
+            return GetDossierValueStyle(GetTextColor(), TextAnchor.MiddleRight);
         }
 
         private static int GetDossierFontSize()

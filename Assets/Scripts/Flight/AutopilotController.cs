@@ -276,7 +276,6 @@ namespace F89.Flight
                 }
                 else
                 {
-                    mapOverlay?.ClearMapRouteOnArrival();
                     Disengage($"Arrived at {destinationLabel}.", closeMap: true);
                 }
             }
@@ -309,8 +308,25 @@ namespace F89.Flight
                     return;
                 }
 
-                ResumeAutopilot();
-                return;
+                // Already sitting on the paused destination — drop it so P can start a new trip.
+                if (IsWithinArrivalRange(destinationWorld))
+                {
+                    AbandonSuspendedRoute();
+                    mapOverlay?.ClearMapRouteOnArrival();
+                }
+                else
+                {
+                    var shiftHeldWhilePaused =
+                        Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                    if (!shiftHeldWhilePaused)
+                    {
+                        ResumeAutopilot();
+                        return;
+                    }
+
+                    AbandonSuspendedRoute();
+                    mapOverlay?.ClearMapRouteOnArrival();
+                }
             }
 
             if (IsSelectingDestination)
@@ -324,24 +340,29 @@ namespace F89.Flight
                 return;
             }
 
-            if (HasHostileContact())
-            {
-                Debug.Log(
-                    "F-89: Autopilot blocked — hostile contact within 40 MI.");
-                return;
-            }
-
             if (mapOverlay == null)
             {
                 mapOverlay = Object.FindAnyObjectByType<AntarcticaMapOverlay>();
             }
 
             var shiftHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-            if (!shiftHeld && mapOverlay != null && mapOverlay.TryEngageAutopilotToMapTarget())
+            if (!shiftHeld && mapOverlay != null && mapOverlay.HasAutopilotMapTarget)
             {
-                return;
+                if (HasHostileContact())
+                {
+                    Debug.Log(
+                        "F-89: Autopilot blocked — hostile contact within 40 MI.");
+                    BeginDestinationSelection();
+                    return;
+                }
+
+                if (mapOverlay.TryEngageAutopilotToMapTarget())
+                {
+                    return;
+                }
             }
 
+            // Still allow opening the map to pick a new destination while near hostiles.
             BeginDestinationSelection();
         }
 
@@ -367,11 +388,11 @@ namespace F89.Flight
             CommitRoute(new[] { new RouteLeg(worldPosition, label) });
         }
 
-        public void CommitRoute(IReadOnlyList<RouteLeg> legs)
+        public bool CommitRoute(IReadOnlyList<RouteLeg> legs)
         {
             if (legs == null || legs.Count == 0)
             {
-                return;
+                return false;
             }
 
             routeQueue.Clear();
@@ -381,6 +402,23 @@ namespace F89.Flight
             }
 
             ApplyDestination(legs[0].World, legs[0].Label);
+            DestinationDistanceMiles = MeasureDistanceMiles(destinationWorld);
+
+            // Sticky map/base selection after arrival used to re-engage the same target and
+            // instantly "arrive" again, which blocked starting a second trip.
+            if (DestinationDistanceMiles <= ArrivalThresholdMiles && routeQueue.Count == 0)
+            {
+                hasDestination = false;
+                destinationLabel = string.Empty;
+                DestinationDistanceMiles = 0f;
+                IsSelectingDestination = false;
+                IsFlying = false;
+                mapOverlay?.ClearMapRouteOnArrival();
+                ShowToast("Already at destination.");
+                Debug.Log("F-89: Autopilot ignored — already at destination.");
+                return false;
+            }
+
             IsSelectingDestination = false;
             IsFlying = true;
             aircraft?.ApplyAutopilotState(
@@ -392,6 +430,7 @@ namespace F89.Flight
             ShowToast(destinationLabel);
             Debug.Log(
                 $"F-89: Autopilot engaged — {destinationLabel}{routeHint} at {currentTimeWarpScale:0}x speed.");
+            return true;
         }
 
         public void AppendRouteLeg(Vector3 worldPosition, string label)
@@ -527,6 +566,7 @@ namespace F89.Flight
             DestinationDistanceMiles = 0f;
             routeQueue.Clear();
             Time.timeScale = 1f;
+            mapOverlay?.ClearMapRouteOnArrival();
             mapOverlay?.EndAutopilotFlight();
             if (closeMap)
             {
@@ -535,6 +575,27 @@ namespace F89.Flight
 
             aircraft?.ApplyAutopilotState(0f, false);
             Debug.Log($"F-89: {reason}");
+        }
+
+        private bool IsWithinArrivalRange(Vector3 worldTarget)
+        {
+            return MeasureDistanceMiles(worldTarget) <= ArrivalThresholdMiles;
+        }
+
+        private float MeasureDistanceMiles(Vector3 worldTarget)
+        {
+            if (aircraft?.WorldMap == null || aircraft.Profile == null)
+            {
+                var delta = transform.position - worldTarget;
+                delta.y = 0f;
+                return delta.magnitude;
+            }
+
+            return CombatThreatRange.DistanceMiles(
+                transform.position,
+                worldTarget,
+                aircraft.WorldMap,
+                aircraft.Profile.ticSizeWorldUnits);
         }
 
         private bool HasHostileContact()

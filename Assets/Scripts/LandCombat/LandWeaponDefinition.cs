@@ -15,6 +15,7 @@ namespace F89.LandCombat
         public string Description = string.Empty;
         public LandWeaponKind Kind = LandWeaponKind.Bullet;
         public LandItemRarity Rarity = LandItemRarity.White;
+        public LandItemCategory Category = LandItemCategory.Military;
 
         [Header("Combat Stats")]
         [Tooltip("Damage per hit.")]

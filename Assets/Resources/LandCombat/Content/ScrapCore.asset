@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 53dcbdcdd70f3504db4870b8e43bdc05, type: 3}
   m_Name: ScrapCore
   m_EditorClassIdentifier: Assembly-CSharp::F89.LandCombat.LandGearDefinition
-  DisplayName: Core
-  Description: Salvaged reactor core.
+  DisplayName: M-Vest
+  Description: Standard Military basic-loadout vest.
   Slot: 1
   Rarity: 0
+  Category: 0

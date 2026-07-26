@@ -10,6 +10,7 @@ namespace F89.LandCombat
         public string Description = string.Empty;
         public LandEquipmentSlot Slot = LandEquipmentSlot.Core;
         public LandItemRarity Rarity = LandItemRarity.White;
+        public LandItemCategory Category = LandItemCategory.Military;
         // Non-weapon gear has no MTAU attribute stats. Weapon items use LandWeaponDefinition
         // for Damage and RateOfFire (ROF).
     }

@@ -11,14 +11,12 @@ namespace F89.UI
             Keymap = 1
         }
 
-        private const float DialogWidth = 420f;
         private const float ButtonWidth = 280f;
-        private const float ButtonHeight = 40f;
-        private const float ButtonSpacing = 10f;
-        private const float KeymapRowHeight = 34f;
+        private const float ButtonHeight = 48f;
+        private const float ButtonSpacing = 14f;
+        private const float KeymapRowHeight = 40f;
 
         private static GUIStyle titleStyle;
-        private static GUIStyle buttonStyle;
         private static GUIStyle rowLabelStyle;
         private static GUIStyle rowKeyStyle;
         private static GUIStyle promptStyle;
@@ -27,6 +25,7 @@ namespace F89.UI
         public static View Draw(View view, System.Action onExitSettings)
         {
             EnsureStyles();
+            DrawDarkBackground();
 
             if (GameKeyBindings.TryHandleListenEvent(Event.current))
             {
@@ -41,28 +40,39 @@ namespace F89.UI
             return DrawRootMenu(onExitSettings);
         }
 
+        private static void DrawDarkBackground()
+        {
+            GUI.color = new Color(0.04f, 0.05f, 0.07f, 0.96f);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+        }
+
         private static View DrawRootMenu(System.Action onExitSettings)
         {
-            var buttonCount = 3;
-            var dialogRect = GetDialogRect(GetDialogHeight(buttonCount));
-            DrawDialogFrame(dialogRect, "Settings");
+            DrawTitle("SETTINGS");
 
-            var buttonX = dialogRect.x + (dialogRect.width - ButtonWidth) * 0.5f;
-            var buttonY = dialogRect.y + 64f;
+            var buttonX = (Screen.width - ButtonWidth) * 0.5f;
+            var buttonY = Screen.height * 0.34f;
 
-            if (DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "Keymap"))
+            if (StartPageMenuStyles.DrawMenuButton(
+                    new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight),
+                    "KEYMAP",
+                    fontSize: 24))
             {
                 return View.Keymap;
             }
 
             buttonY += ButtonHeight + ButtonSpacing;
-            if (DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), GameSettings.DisplayLabel))
+            if (StartPageMenuStyles.DrawMenuButton(
+                    new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight),
+                    GameSettings.DisplayLabel.ToUpperInvariant(),
+                    fontSize: 24))
             {
                 GameSettings.ToggleFullscreen();
             }
 
-            buttonY += ButtonHeight + ButtonSpacing;
-            if (DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "Back"))
+            var backRect = GetBackButtonRect();
+            if (StartPageMenuStyles.DrawMenuButton(backRect, "BACK", fontSize: 28))
             {
                 onExitSettings?.Invoke();
             }
@@ -72,18 +82,21 @@ namespace F89.UI
 
         private static bool DrawKeymapMenu()
         {
-            var dialogHeight = Mathf.Min(Screen.height - 80f, 620f);
-            var dialogRect = new Rect(
-                (Screen.width - DialogWidth) * 0.5f,
-                (Screen.height - dialogHeight) * 0.5f,
-                DialogWidth,
-                dialogHeight);
-            DrawDialogFrame(dialogRect, "Keymap");
+            DrawTitle("KEYMAP");
 
-            var buttonX = dialogRect.x + (dialogRect.width - ButtonWidth) * 0.5f;
-            var backRect = new Rect(buttonX, dialogRect.yMax - ButtonHeight - 16f, ButtonWidth, ButtonHeight);
-            var defaultsRect = new Rect(buttonX, backRect.y - ButtonSpacing - ButtonHeight, ButtonWidth, ButtonHeight);
-            var listRect = new Rect(dialogRect.x + 16f, dialogRect.y + 58f, dialogRect.width - 32f, defaultsRect.y - dialogRect.y - 74f);
+            var backRect = GetBackButtonRect();
+            var defaultsRect = new Rect(
+                backRect.x,
+                backRect.y - ButtonSpacing - ButtonHeight,
+                backRect.width,
+                backRect.height);
+
+            var listTop = Screen.height * 0.14f;
+            var listRect = new Rect(
+                Screen.width * 0.18f,
+                listTop,
+                Screen.width * 0.64f,
+                defaultsRect.y - listTop - ButtonSpacing);
             var contentHeight = GameKeyBindingCatalog.Bindings.Length * KeymapRowHeight;
             var viewRect = new Rect(0f, 0f, listRect.width - 18f, contentHeight);
 
@@ -96,7 +109,7 @@ namespace F89.UI
             for (var i = 0; i < GameKeyBindingCatalog.Bindings.Length; i++)
             {
                 var binding = GameKeyBindingCatalog.Bindings[i];
-                var rowRect = new Rect(0f, i * KeymapRowHeight, viewRect.width, KeymapRowHeight - 4f);
+                var rowRect = new Rect(0f, i * KeymapRowHeight, viewRect.width, KeymapRowHeight - 6f);
                 DrawKeymapRow(rowRect, binding);
             }
 
@@ -106,18 +119,18 @@ namespace F89.UI
             if (GameKeyBindings.IsListening)
             {
                 GUI.Label(
-                    new Rect(dialogRect.x + 16f, defaultsRect.y - 28f, dialogRect.width - 32f, 24f),
+                    new Rect(listRect.x, defaultsRect.y - 30f, listRect.width, 24f),
                     "Press a key or mouse button. Escape cancels.",
                     promptStyle);
             }
 
-            if (DrawMenuButton(defaultsRect, "Restore Defaults"))
+            if (StartPageMenuStyles.DrawMenuButton(defaultsRect, "RESTORE DEFAULTS", fontSize: 22))
             {
                 GameKeyBindings.ResetToDefaults();
                 GameKeyBindings.CancelListening();
             }
 
-            if (DrawMenuButton(backRect, "Back"))
+            if (StartPageMenuStyles.DrawMenuButton(backRect, "BACK", fontSize: 28))
             {
                 GameKeyBindings.CancelListening();
                 return true;
@@ -128,16 +141,20 @@ namespace F89.UI
 
         private static void DrawKeymapRow(Rect rowRect, GameKeyBindingDefinition binding)
         {
-            HudGuiUtility.DrawWireBox(rowRect, 1f);
+            StartPageMenuStyles.DrawMenuButtonChrome(rowRect, panelAlpha: 0.88f);
 
-            var labelRect = new Rect(rowRect.x + 10f, rowRect.y, rowRect.width * 0.58f, rowRect.height);
-            var keyRect = new Rect(rowRect.x + rowRect.width * 0.58f, rowRect.y, rowRect.width * 0.42f - 8f, rowRect.height);
+            var labelRect = new Rect(rowRect.x + 14f, rowRect.y, rowRect.width * 0.58f, rowRect.height);
+            var keyRect = new Rect(
+                rowRect.x + rowRect.width * 0.58f,
+                rowRect.y,
+                rowRect.width * 0.42f - 14f,
+                rowRect.height);
 
             var listening = GameKeyBindings.ListeningBindingId == binding.Id;
-            GUI.Label(labelRect, binding.Label, rowLabelStyle);
+            GUI.Label(labelRect, binding.Label.ToUpperInvariant(), rowLabelStyle);
             GUI.Label(
                 keyRect,
-                listening ? "Press key..." : GameKeyBindings.GetDisplayLabel(binding.Id),
+                listening ? "PRESS KEY..." : GameKeyBindings.GetDisplayLabel(binding.Id).ToUpperInvariant(),
                 rowKeyStyle);
 
             if (GUI.Button(rowRect, GUIContent.none, GUIStyle.none))
@@ -146,34 +163,19 @@ namespace F89.UI
             }
         }
 
-        private static void DrawDialogFrame(Rect dialogRect, string title)
+        private static void DrawTitle(string title)
         {
-            GUI.color = new Color(0.93f, 0.93f, 0.93f);
-            GUI.DrawTexture(dialogRect, Texture2D.whiteTexture);
-            GUI.color = Color.black;
-            HudGuiUtility.DrawWireBox(dialogRect, 2f);
-            GUI.Label(new Rect(dialogRect.x + 16f, dialogRect.y + 18f, dialogRect.width - 32f, 32f), title, titleStyle);
+            titleStyle.normal.textColor = new Color(0.78f, 0.86f, 0.95f);
+            GUI.Label(new Rect(0f, Screen.height * 0.06f, Screen.width, 48f), title, titleStyle);
         }
 
-        private static Rect GetDialogRect(float dialogHeight)
+        private static Rect GetBackButtonRect()
         {
             return new Rect(
-                (Screen.width - DialogWidth) * 0.5f,
-                (Screen.height - dialogHeight) * 0.5f,
-                DialogWidth,
-                dialogHeight);
-        }
-
-        private static float GetDialogHeight(int buttonCount)
-        {
-            return 64f + buttonCount * ButtonHeight + Mathf.Max(0, buttonCount - 1) * ButtonSpacing + 28f;
-        }
-
-        private static bool DrawMenuButton(Rect rect, string label)
-        {
-            HudGuiUtility.DrawWireBox(rect, 2f);
-            GUI.Label(rect, label, buttonStyle);
-            return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+                (Screen.width - ButtonWidth) * 0.5f,
+                Screen.height - ButtonHeight - Screen.height * 0.05f,
+                ButtonWidth,
+                ButtonHeight);
         }
 
         private static void EnsureStyles()
@@ -183,11 +185,22 @@ namespace F89.UI
                 return;
             }
 
-            titleStyle = HudStyleFactory.CreateLabel(20, FontStyle.Bold, TextAnchor.UpperCenter, Color.black);
-            buttonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
-            rowLabelStyle = HudStyleFactory.CreateLabel(15, FontStyle.Normal, TextAnchor.MiddleLeft, Color.black);
-            rowKeyStyle = HudStyleFactory.CreateLabel(15, FontStyle.Bold, TextAnchor.MiddleRight, Color.black);
-            promptStyle = HudStyleFactory.CreateLabel(14, FontStyle.Normal, TextAnchor.MiddleCenter, Color.black);
+            titleStyle = HudStyleFactory.CreateLabel(32, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+            rowLabelStyle = HudStyleFactory.CreateLabel(
+                16,
+                FontStyle.Bold,
+                TextAnchor.MiddleLeft,
+                new Color(0.82f, 0.88f, 0.94f));
+            rowKeyStyle = HudStyleFactory.CreateLabel(
+                16,
+                FontStyle.Bold,
+                TextAnchor.MiddleRight,
+                new Color(0.82f, 0.88f, 0.94f));
+            promptStyle = HudStyleFactory.CreateLabel(
+                16,
+                FontStyle.Normal,
+                TextAnchor.MiddleCenter,
+                new Color(0.78f, 0.86f, 0.95f));
         }
     }
 }
