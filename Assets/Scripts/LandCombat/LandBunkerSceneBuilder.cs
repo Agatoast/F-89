@@ -200,6 +200,8 @@ namespace F89.LandCombat
             }
 
             transitioning = true;
+            CharacterGearSession.PersistActive();
+            LandBossEncounter.CaptureActiveBossHealthFromBunker();
             LandBunkerHandoffState.Clear();
             LandSurfaceSession.BeginReturnAtBunker();
             Time.timeScale = 1f;

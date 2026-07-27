@@ -39,6 +39,9 @@ EditorBuildSettings:
     path: Assets/Scenes/Bunker.unity
     guid: 4c8e2a91f6b74d0e9a3b5c7d1e2f3041
   - enabled: 1
+    path: Assets/Scenes/MissionComplete.unity
+    guid: 70f9ca7dcece4453bceb89f5a6dc81c1
+  - enabled: 1
     path: Assets/Scenes/ResearchResults.unity
     guid: 3810fcd7d76fbd5815419345f31126da
   - enabled: 1
@@ -47,5 +50,32 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Boss1.unity
     guid: a0b1c2d3e4f5061728394a5b6c7d8e9f
+  - enabled: 1
+    path: Assets/Scenes/Boss2.unity
+    guid: 6a36d53f01a844c29a30afaf32be5665
+  - enabled: 1
+    path: Assets/Scenes/Boss3.unity
+    guid: 72565fcd78ee4ec58efc5374f4b20c4a
+  - enabled: 1
+    path: Assets/Scenes/Boss4.unity
+    guid: c1acb87808924741aba47aacb1d3fd87
+  - enabled: 1
+    path: Assets/Scenes/Boss5.unity
+    guid: 5765b98fa4074bfd895f4038dc6b060e
+  - enabled: 1
+    path: Assets/Scenes/Boss6.unity
+    guid: ada18dc06bba4c4b84a6ba65aa352d3d
+  - enabled: 1
+    path: Assets/Scenes/Boss7.unity
+    guid: 88f41874e09b4c80828557c9a19a881d
+  - enabled: 1
+    path: Assets/Scenes/Boss8.unity
+    guid: 945f1f9ac9c5470c9352241d148f0fd4
+  - enabled: 1
+    path: Assets/Scenes/Boss9.unity
+    guid: 5ebcf6b08e8149418b45a8a69fe374ae
+  - enabled: 1
+    path: Assets/Scenes/Boss10.unity
+    guid: e36566cbf3ea4646a5cb6ed94444bbca
   m_configObjects:
     com.unity.play-mode-start-scene: {fileID: 102900000, guid: 3baf3bdc5fa4467786f3563a297fe0d6, type: 3}

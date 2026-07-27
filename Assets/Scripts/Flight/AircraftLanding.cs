@@ -8,6 +8,7 @@ namespace F89.Flight
     {
         public const float MaxLandingSpeedMph = 150f;
         public const float LandingClearanceMiles = 5f;
+        public const float CarrierLandingRangeMiles = 0.75f;
         public const float WaterLandingMessageSeconds = 10f;
         public const float LandingBlockedMessageSeconds = 10f;
         public const string LandPromptText = "Press L to Land";
@@ -26,6 +27,14 @@ namespace F89.Flight
         {
             if (aircraft == null || !CanLand(aircraft.CurrentSpeedMph))
             {
+                return;
+            }
+
+            if (IsOverCarrier(aircraft))
+            {
+                var carrierLanding = aircraft.GetComponent<AircraftLandingController>()
+                    ?? aircraft.gameObject.AddComponent<AircraftLandingController>();
+                carrierLanding.BeginCarrierLanding();
                 return;
             }
 
@@ -48,6 +57,34 @@ namespace F89.Flight
             }
 
             landingController.BeginLanding();
+        }
+
+        private static bool IsOverCarrier(AircraftController aircraft)
+        {
+            var worldMap = aircraft.WorldMap;
+            var profile = aircraft.Profile;
+            if (worldMap == null || profile == null)
+            {
+                return false;
+            }
+
+            var rangeWorld = WorldMapConfig.RangeMilesToWorldUnits(
+                CarrierLandingRangeMiles,
+                worldMap,
+                profile.ticSizeWorldUnits);
+            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            for (var i = 0; i < bases.Length; i++)
+            {
+                var baseSite = bases[i];
+                if (baseSite != null
+                    && baseSite.SiteKind == BaseSiteKind.Carrier
+                    && Vector3.Distance(aircraft.transform.position, baseSite.transform.position) <= rangeWorld)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool IsOverLand(AircraftController aircraft)
@@ -78,7 +115,7 @@ namespace F89.Flight
                 return false;
             }
 
-            return CombatThreatRange.HasThreatWithinMiles(
+            return CombatThreatRange.HasHostileUnitWithinMiles(
                 aircraft.transform.position,
                 LandingClearanceMiles,
                 worldMap,

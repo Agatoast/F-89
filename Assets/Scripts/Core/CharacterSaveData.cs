@@ -36,6 +36,31 @@ namespace F89.Core
         public int ResearchVestTechLevel = 1;
         public int ResearchWeaponTechLevel = 1;
         public int ResearchBootsTechLevel = 1;
+        /// <summary>Per-character boss progress. Bit 0 represents Boss 1.</summary>
+        public int DefeatedBossMask;
+        /// <summary>Per-character boss-area guard progress. Bit 0 represents BF1 guards.</summary>
+        public int BossGuardClearedMask;
+        /// <summary>Active boss mission assigned at briefing (0 = none).</summary>
+        public int AssignedBossNumber;
+        /// <summary>Flight-map outpost linked to the active assigned boss mission.</summary>
+        public string AssignedBossOutpostName = string.Empty;
+        /// <summary>Bit 0 set once Boss 1 has been launched; reveals that mission's bunker at its outpost.</summary>
+        public int RevealedBunkerMask;
+        /// <summary>Outpost name permanently linked to each boss mission slot.</summary>
+        public string[] BossMissionOutpostNames = System.Array.Empty<string>();
+        /// <summary>Saved live boss HP by boss number; -1 means no active saved encounter.</summary>
+        public float[] BossPrimaryHitPoints = Array.Empty<float>();
+        /// <summary>Second boss HP slot, used by the two-enemy Boss 10 encounter.</summary>
+        public float[] BossSecondaryHitPoints = Array.Empty<float>();
+        /// <summary>Land outposts whose surface buildings have been destroyed by this character.</summary>
+        public string[] DestroyedOutpostNames = Array.Empty<string>();
+        /// <summary>Flight-map units destroyed by this character, keyed by outpost and unit label.</summary>
+        public string[] DestroyedWorldTargetIds = Array.Empty<string>();
+        /// <summary>Per-character default aircraft payload, restored whenever Aircraft Loadout opens.</summary>
+        public bool HasDefaultAircraftPayload;
+        public int[] DefaultAircraftLinkedPairWeapons = Array.Empty<int>();
+        public int DefaultAircraftWingTipWeapon;
+        public int DefaultAircraftGunRounds = 300;
 
         public string VehicleKillDisplay =>
             string.IsNullOrWhiteSpace(VehicleKillSummary)

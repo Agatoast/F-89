@@ -37,16 +37,16 @@ namespace F89.LandCombat
 
         public static readonly Entry[] Weapons =
         {
-            new(1, "M4", "M-4", 10f, 6f, LandItemRarity.White, LandItemCategory.Military),
-            new(2, "X4", "X-4", 17f, 6f, LandItemRarity.Green, LandItemCategory.Experimental),
-            new(3, "X5", "X-5", 20f, 7f, LandItemRarity.Blue, LandItemCategory.Experimental),
-            new(4, "X6", "X-6", 22f, 7f, LandItemRarity.Purple, LandItemCategory.Experimental),
-            new(5, "X7", "X-7", 24f, 7f, LandItemRarity.Yellow, LandItemCategory.Experimental),
-            new(6, "X8", "X-8", 27f, 8f, LandItemRarity.Orange, LandItemCategory.Experimental),
-            new(7, "X9", "X-9", 29f, 8f, LandItemRarity.Red, LandItemCategory.Experimental),
-            new(8, "X10", "X-10", 31f, 9f, LandItemRarity.Crimson, LandItemCategory.Experimental),
-            new(9, "X11", "X-11", 34f, 9f, LandItemRarity.Black, LandItemCategory.Experimental),
-            new(10, "X12", "X-12", 37f, 10f, LandItemRarity.Gold, LandItemCategory.Experimental)
+            new(1, "M4", "M-4", 40f, 6f, LandItemRarity.White, LandItemCategory.Military),
+            new(2, "X4", "X-4", 47f, 6f, LandItemRarity.Green, LandItemCategory.Experimental),
+            new(3, "X5", "X-5", 50f, 7f, LandItemRarity.Blue, LandItemCategory.Experimental),
+            new(4, "X6", "X-6", 52f, 7f, LandItemRarity.Purple, LandItemCategory.Experimental),
+            new(5, "X7", "X-7", 54f, 7f, LandItemRarity.Yellow, LandItemCategory.Experimental),
+            new(6, "X8", "X-8", 57f, 8f, LandItemRarity.Orange, LandItemCategory.Experimental),
+            new(7, "X9", "X-9", 59f, 8f, LandItemRarity.Red, LandItemCategory.Experimental),
+            new(8, "X10", "X-10", 61f, 9f, LandItemRarity.Crimson, LandItemCategory.Experimental),
+            new(9, "X11", "X-11", 64f, 9f, LandItemRarity.Black, LandItemCategory.Experimental),
+            new(10, "X12", "X-12", 67f, 10f, LandItemRarity.Gold, LandItemCategory.Experimental)
         };
 
         public const string BasicLoadoutDefinitionId = "M4";

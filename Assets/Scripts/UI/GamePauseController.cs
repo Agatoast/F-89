@@ -104,11 +104,6 @@ namespace F89.UI
 
         private static bool CanOpenPauseMenu()
         {
-            if (AntarcticaMapOverlay.IsOpen)
-            {
-                return false;
-            }
-
             var sceneName = SceneManager.GetActiveScene().name;
             return sceneName != GameScenes.LoadingScreen;
         }

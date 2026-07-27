@@ -191,6 +191,22 @@ namespace F89.Core
 
             NormalizeLoadoutInventory(save.Loadout);
             NormalizeVaultItems(save.Vault);
+            EnsureBossProgressInitialized(save);
+            EnsureBossMissionInitialized(save);
+        }
+
+        public static void EnsureBossMissionInitialized(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            const int bossSlotCount = 10;
+            if (save.BossMissionOutpostNames == null || save.BossMissionOutpostNames.Length != bossSlotCount)
+            {
+                save.BossMissionOutpostNames = new string[bossSlotCount];
+            }
         }
 
         public static void WriteGear(CharacterSaveData save)
@@ -203,6 +219,56 @@ namespace F89.Core
             EnsureLoaded();
             EnsureGearInitialized(save);
             WriteToDisk();
+        }
+
+        public static void WriteBossProgress(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            EnsureLoaded();
+            EnsureGearInitialized(save);
+            WriteToDisk();
+        }
+
+        /// <summary>Persists per-character flight-map world state.</summary>
+        public static void WriteWorldProgress(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            EnsureLoaded();
+            EnsureGearInitialized(save);
+            WriteToDisk();
+        }
+
+        private static void EnsureBossProgressInitialized(CharacterSaveData save)
+        {
+            const int bossSlotCount = 11;
+            if (save.BossPrimaryHitPoints == null || save.BossPrimaryHitPoints.Length != bossSlotCount)
+            {
+                save.BossPrimaryHitPoints = CreateBossHealthSlots(bossSlotCount);
+            }
+
+            if (save.BossSecondaryHitPoints == null || save.BossSecondaryHitPoints.Length != bossSlotCount)
+            {
+                save.BossSecondaryHitPoints = CreateBossHealthSlots(bossSlotCount);
+            }
+        }
+
+        private static float[] CreateBossHealthSlots(int count)
+        {
+            var slots = new float[count];
+            for (var i = 0; i < slots.Length; i++)
+            {
+                slots[i] = -1f;
+            }
+
+            return slots;
         }
 
         public static void RecordGroundSession(CharacterSaveData save, LandGroundSessionResult result)

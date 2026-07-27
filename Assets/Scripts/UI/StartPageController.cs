@@ -62,20 +62,38 @@ namespace F89.UI
                 EnterLandCombatDirect();
             }
 
-            var bossRect = new Rect(x, y + height + gap, width, height);
-            if (StartPageMenuStyles.DrawMenuButton(bossRect, "BOSS 1", fontSize: 22))
+            for (var bossNumber = LandBossEncounter.FirstBossNumber;
+                 bossNumber <= LandBossEncounter.LastBossNumber;
+                 bossNumber++)
             {
-                Time.timeScale = 1f;
-                SceneManager.LoadScene(GameScenes.Boss1);
+                var bossRect = new Rect(x, y + (height + gap) * bossNumber, width, height);
+                if (!StartPageMenuStyles.DrawMenuButton(bossRect, $"BOSS {bossNumber}", fontSize: 22))
+                {
+                    continue;
+                }
+
+                EnterLandCombatDirect(bossNumber);
             }
         }
 
-        private static void EnterLandCombatDirect()
+        private static void EnterLandCombatDirect(int bossNumber = 0)
         {
             Time.timeScale = 1f;
             EnsureActiveSaveForDevJump();
             CharacterGearSession.Bind(CharacterSessionState.ActiveSave, forceReload: true);
-            LandDevWeaponFill.FillInventoryAndFootlockerOnce(CharacterSessionState.ActiveSave);
+            if (bossNumber != 0)
+            {
+                if (LandCombatTestCheats.ResetAllBossProgressOnDevEntry)
+                {
+                    LandBossEncounter.ResetAllBossesForTest();
+                }
+
+                LandBossAreaState.BeginArea(bossNumber);
+            }
+            else
+            {
+                LandBossAreaState.Clear();
+            }
 
             var snapshot = new LandSortieSnapshot
             {

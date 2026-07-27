@@ -10,6 +10,11 @@ namespace F89.Testing
         {
             if (Object.FindAnyObjectByType<GroundAttackScreenController>() != null)
             {
+                if (LandSurfaceSession.HasPendingReturnAtBunker)
+                {
+                    LandGroundSceneBuilder.BuildIfNeeded();
+                }
+
                 return;
             }
 

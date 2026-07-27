@@ -150,6 +150,11 @@ namespace F89.Weapons
                 return false;
             }
 
+            if (TryRejectFriendlyWithIff(candidate))
+            {
+                return true;
+            }
+
             if (lockWeapon != null && !IsSelectableTarget(candidate))
             {
                 return true;
@@ -182,6 +187,11 @@ namespace F89.Weapons
             if (target == null || !target.IsAlive)
             {
                 return false;
+            }
+
+            if (TryRejectFriendlyWithIff(target))
+            {
+                return true;
             }
 
             if (lockWeapon != null && !IsSelectableTarget(target))
@@ -263,6 +273,11 @@ namespace F89.Weapons
             {
                 var nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1 + step) % candidates.Count;
                 var nextTarget = candidates[nextIndex];
+                if (TryRejectFriendlyWithIff(nextTarget))
+                {
+                    continue;
+                }
+
                 if (lockWeapon != null && !IsSelectableTarget(nextTarget))
                 {
                     continue;
@@ -283,6 +298,18 @@ namespace F89.Weapons
             }
 
             return false;
+        }
+
+        private bool TryRejectFriendlyWithIff(LockableTarget target)
+        {
+            if (target == null || !target.IsFriendly)
+            {
+                return false;
+            }
+
+            EnsureAudio();
+            TriggerIffFriendResponse(target);
+            return true;
         }
 
         private static float HorizontalDistanceMeters(Vector3 observer, Vector3 targetPosition)
@@ -343,6 +370,13 @@ namespace F89.Weapons
         private bool IsSelectableTarget(LockableTarget target)
         {
             if (target == null || !target.IsAlive)
+            {
+                return false;
+            }
+
+            var baseSite = target.GetComponent<AntarcticaBase>();
+            if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Land
+                && (!baseSite.IsActive || baseSite.IsDestroyed))
             {
                 return false;
             }

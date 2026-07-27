@@ -400,7 +400,18 @@ namespace F89.Weapons
             }
 
             var lockWeapon = GetActiveLockWeapon();
-            return lockWeapon != null && target.MatchesWeapon(lockWeapon.ValidTargetKind);
+            if (lockWeapon == null || !target.MatchesWeapon(lockWeapon.ValidTargetKind))
+            {
+                return false;
+            }
+
+            var baseSite = target.GetComponent<AntarcticaBase>();
+            if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Land)
+            {
+                return baseSite.IsActive && !baseSite.IsDestroyed;
+            }
+
+            return true;
         }
 
         private void FireActiveWeapon(Vector2 aimScreen)

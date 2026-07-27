@@ -14,6 +14,7 @@ namespace F89.Core
         public const string FlightTest = "FlightTest";
         public const string GroundAttack = "GroundAttack";
         public const string Bunker = "Bunker";
+        public const string MissionComplete = "MissionComplete";
 
         /// <summary>Shared runtime scene for end-of-mission R&amp;D report pages.</summary>
         public const string ResearchResults = "ResearchResults";
@@ -30,6 +31,15 @@ namespace F89.Core
         public const string EscapedScreen = "EscapedScreen";
         public const string FrozenDeath = "FrozenDeath";
         public const string Boss1 = "Boss1";
+        public const string Boss2 = "Boss2";
+        public const string Boss3 = "Boss3";
+        public const string Boss4 = "Boss4";
+        public const string Boss5 = "Boss5";
+        public const string Boss6 = "Boss6";
+        public const string Boss7 = "Boss7";
+        public const string Boss8 = "Boss8";
+        public const string Boss9 = "Boss9";
+        public const string Boss10 = "Boss10";
 
         public static bool IsGameplayScene(string sceneName)
         {
@@ -57,6 +67,39 @@ namespace F89.Core
                 || sceneName == POWScreen
                 || sceneName == EscapedScreen
                 || sceneName == FrozenDeath;
+        }
+
+        public static int GetBossNumber(string sceneName)
+        {
+            if (sceneName == Boss1) return 1;
+            if (sceneName == Boss2) return 2;
+            if (sceneName == Boss3) return 3;
+            if (sceneName == Boss4) return 4;
+            if (sceneName == Boss5) return 5;
+            if (sceneName == Boss6) return 6;
+            if (sceneName == Boss7) return 7;
+            if (sceneName == Boss8) return 8;
+            if (sceneName == Boss9) return 9;
+            if (sceneName == Boss10) return 10;
+            return 0;
+        }
+
+        public static string GetBossScene(int bossNumber)
+        {
+            switch (bossNumber)
+            {
+                case 1: return Boss1;
+                case 2: return Boss2;
+                case 3: return Boss3;
+                case 4: return Boss4;
+                case 5: return Boss5;
+                case 6: return Boss6;
+                case 7: return Boss7;
+                case 8: return Boss8;
+                case 9: return Boss9;
+                case 10: return Boss10;
+                default: return Boss1;
+            }
         }
     }
 }

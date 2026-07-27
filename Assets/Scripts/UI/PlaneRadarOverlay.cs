@@ -24,6 +24,7 @@ namespace F89.UI
 
         private static readonly Color FriendlyDotColor = Color.white;
         private static readonly Color HostileDotColor = new Color(0.92f, 0.15f, 0.1f);
+        private static readonly Color DestroyedOutpostColor = new Color(0.48f, 0.82f, 1f);
 
         public static Color GetBlipColor(LockableTarget target)
         {
@@ -59,6 +60,7 @@ namespace F89.UI
         private Texture2D circleFaceTexture;
         private Texture2D circleBorderTexture;
         private Texture2D dotTexture;
+        private Texture2D triangleTexture;
         private Texture2D outerRingTexture;
         private Texture2D[] bandRingTextures = System.Array.Empty<Texture2D>();
         private RadarScopeKind cachedTextureScope = (RadarScopeKind)(-1);
@@ -68,6 +70,14 @@ namespace F89.UI
         {
             public RadarContact Contact;
             public Vector2 GuiCenter;
+        }
+
+        private enum RadarBlipShape
+        {
+            Circle,
+            Square,
+            Triangle,
+            WireSquare
         }
 
         private struct MissileBlipLayout
@@ -410,9 +420,9 @@ namespace F89.UI
             {
                 var contact = layout.Contact;
                 var guiCenter = layout.GuiCenter;
-                var isSelected = contact.Target != null && contact.Target == activeTarget;
+                var isSelected = contact.CanBeTargeted && contact.Target != null && contact.Target == activeTarget;
                 var dotSize = contact.IsHostile ? HostileDotSize : FriendlyDotSize;
-                var dotColor = contact.IsHostile ? HostileDotColor : FriendlyDotColor;
+                ResolveBlipSymbology(contact, out var dotColor, out var shape);
 
                 if (isSelected)
                 {
@@ -421,8 +431,45 @@ namespace F89.UI
                     dotSize += 2f;
                 }
 
-                DrawDot(guiCenter, dotSize, dotColor);
+                if (contact.IsDestroyed)
+                {
+                    DrawWireSquare(guiCenter, dotSize, DestroyedOutpostColor, lineThickness: 1f);
+                    continue;
+                }
+
+                if (contact.HasBunker)
+                {
+                    DrawBunkerBlip(guiCenter, dotSize, contact.IsDestroyed);
+                    continue;
+                }
+
+                DrawBlip(guiCenter, dotSize, dotColor, shape);
             }
+        }
+
+        private static void ResolveBlipSymbology(
+            RadarContact contact,
+            out Color color,
+            out RadarBlipShape shape)
+        {
+            if (contact.IsBase || contact.BaseSite != null)
+            {
+                color = FriendlyDotColor;
+                shape = contact.IsDestroyed ? RadarBlipShape.WireSquare : RadarBlipShape.Square;
+                return;
+            }
+
+            if (contact.IsHostile)
+            {
+                color = HostileDotColor;
+                shape = contact.Target != null && contact.Target.IsGroundVehicle
+                    ? RadarBlipShape.Square
+                    : RadarBlipShape.Circle;
+                return;
+            }
+
+            color = FriendlyDotColor;
+            shape = RadarBlipShape.Triangle;
         }
 
         private void DrawIncomingMissileThreats(Vector2 center, float displayRadius)
@@ -578,6 +625,69 @@ namespace F89.UI
             GUI.color = previous;
         }
 
+        private void DrawBlip(Vector2 center, float size, Color color, RadarBlipShape shape)
+        {
+            if (shape == RadarBlipShape.Circle)
+            {
+                DrawDot(center, size, color);
+                return;
+            }
+
+            if (shape == RadarBlipShape.WireSquare)
+            {
+                DrawWireSquare(center, size, color);
+                return;
+            }
+
+            var previous = GUI.color;
+            GUI.color = color;
+            var rect = new Rect(center.x - size * 0.5f, center.y - size * 0.5f, size, size);
+            GUI.DrawTexture(rect, shape == RadarBlipShape.Square ? Texture2D.whiteTexture : triangleTexture);
+            GUI.color = previous;
+        }
+
+        private static void DrawBunkerBlip(Vector2 center, float size, bool isDestroyed)
+        {
+            var frameColor = isDestroyed ? Color.black : FriendlyDotColor;
+            var xColor = isDestroyed ? Color.black : HostileDotColor;
+            DrawWireSquare(center, size, frameColor);
+            DrawX(center, size, xColor);
+        }
+
+        private static void DrawWireSquare(Vector2 center, float size, Color color, float lineThickness = 2f)
+        {
+            var previous = GUI.color;
+            GUI.color = color;
+            var rect = new Rect(center.x - size * 0.5f, center.y - size * 0.5f, size, size);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, lineThickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - lineThickness, rect.width, lineThickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, lineThickness, rect.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.xMax - lineThickness, rect.y, lineThickness, rect.height), Texture2D.whiteTexture);
+            GUI.color = previous;
+        }
+
+        private static void DrawX(Vector2 center, float size, Color color)
+        {
+            const float lineThickness = 2f;
+            var previous = GUI.color;
+            GUI.color = color;
+            var inset = Mathf.Max(1f, size * 0.2f);
+            var span = Mathf.Max(1f, size - inset * 2f);
+            var steps = Mathf.Max(1, Mathf.CeilToInt(span));
+            for (var i = 0; i < steps; i++)
+            {
+                var offset = i / (float)steps * span;
+                GUI.DrawTexture(
+                    new Rect(center.x - span * 0.5f + offset, center.y - span * 0.5f + offset, lineThickness, lineThickness),
+                    Texture2D.whiteTexture);
+                GUI.DrawTexture(
+                    new Rect(center.x + span * 0.5f - offset, center.y - span * 0.5f + offset, lineThickness, lineThickness),
+                    Texture2D.whiteTexture);
+            }
+
+            GUI.color = previous;
+        }
+
         private bool TryHandleRadarClick(Vector2 guiPoint)
         {
             if (lockController == null)
@@ -633,7 +743,7 @@ namespace F89.UI
             {
                 var contact = blipLayout.Contact;
                 var target = contact.Target;
-                if (target == null || !target.IsAlive)
+                if (!contact.CanBeTargeted || target == null || !target.IsAlive)
                 {
                     continue;
                 }
@@ -752,6 +862,7 @@ namespace F89.UI
             circleFaceTexture = CreateFilledCircleTexture(diameter, 1f);
             circleBorderTexture = CreateCircleBorderTexture(diameter, 2f);
             dotTexture = CreateFilledCircleTexture(Mathf.RoundToInt(24f * RadarMfdBezelRenderer.LayoutScale), 1f);
+            triangleTexture = CreateTriangleTexture(Mathf.RoundToInt(24f * RadarMfdBezelRenderer.LayoutScale));
             outerRingTexture = CreateDottedCircleTexture(diameter, 5);
 
             var bandMiles = GetRangeBandMiles();
@@ -806,6 +917,31 @@ namespace F89.UI
                 RadarContactScanner.HostileDetectionMiles,
                 RadarContactScanner.MidRangeBandMiles
             };
+        }
+
+        private static Texture2D CreateTriangleTexture(int size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear
+            };
+            var pixels = new Color[size * size];
+            for (var y = 0; y < size; y++)
+            {
+                var halfWidth = (y + 1) * 0.5f;
+                var center = (size - 1) * 0.5f;
+                for (var x = 0; x < size; x++)
+                {
+                    if (Mathf.Abs(x - center) <= halfWidth)
+                    {
+                        pixels[y * size + x] = Color.white;
+                    }
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply(false, true);
+            return texture;
         }
 
         private static Texture2D CreateFilledCircleTexture(int diameter, float edgeSoftness)

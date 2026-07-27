@@ -20,6 +20,8 @@ namespace F89.LandCombat
         {
             EnsureTexture();
             var hotspot = new Vector2(texture.width * 0.5f - 0.5f, texture.height * 0.5f - 0.5f);
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
             Cursor.SetCursor(texture, hotspot, CursorMode.ForceSoftware);
             applied = true;
         }

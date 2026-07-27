@@ -12,8 +12,8 @@ namespace F89.Core
 
         public static void PrepareNextMission(CharacterSaveData save)
         {
-            MissionObjective =
-                "Establish air superiority over the Antarctic theater and support allied ground operations.";
+            F89.LandCombat.LandBossMissionAssignment.PrepareNextAssignment(save);
+            MissionObjective = F89.LandCombat.LandBossMissionAssignment.BuildMissionObjective(save);
         }
     }
 }

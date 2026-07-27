@@ -112,7 +112,13 @@ namespace F89.Testing
                 return;
             }
 
-            if (sceneName == GameScenes.Boss1)
+            if (sceneName == GameScenes.MissionComplete)
+            {
+                MissionCompleteRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (GameScenes.GetBossNumber(sceneName) != 0)
             {
                 Boss1RuntimeBuilder.BuildIfNeeded();
                 return;

@@ -17,6 +17,14 @@ namespace F89.UI
             var downed = health != null && health.IsUnconscious
                 ? health.DownedOutcome
                 : LandDownedOutcome.None;
+            if (downed != LandDownedOutcome.None)
+            {
+                LandBossEncounter.ResetActiveBossHealthAfterDeath();
+            }
+            else if (SceneManager.GetActiveScene().name == GameScenes.Bunker)
+            {
+                LandBossEncounter.CaptureActiveBossHealthFromBunker();
+            }
 
             var result = new LandGroundSessionResult
             {
@@ -42,6 +50,7 @@ namespace F89.UI
             if (downed != LandDownedOutcome.None)
             {
                 LandCombatModule.ShutdownWithoutHandoff();
+                LandMissionHealthState.Clear();
                 LandDownedOutcomeState.Begin(downed);
                 SceneManager.LoadScene(GameScenes.DownedOutcome);
                 return;
@@ -62,6 +71,14 @@ namespace F89.UI
             {
                 LandCombatModule.ExitToFlight(result);
                 continueScene = LandMissionHandoffState.PendingReturnSceneName;
+            }
+
+            // Taking off from a ground landing immediately returns to active flight.
+            // Mission completion is evaluated only when the aircraft later lands on the CV.
+            if (continueScene == GameScenes.FlightTest)
+            {
+                SceneManager.LoadScene(continueScene);
+                return;
             }
 
             var discoveries = LandResearchBreakthroughService.RollMissionBreakthroughs(save);

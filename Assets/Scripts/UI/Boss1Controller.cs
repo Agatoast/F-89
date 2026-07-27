@@ -5,22 +5,30 @@ using UnityEngine.SceneManagement;
 
 namespace F89.UI
 {
-    /// <summary>Boss 1 dialogue page. Continue returns to the bunker for the fight intro.</summary>
+    /// <summary>Boss dialogue page. Continue returns to the bunker for the selected fight intro.</summary>
     public sealed class Boss1Controller : MonoBehaviour
     {
-        private const string BackgroundResourcePath = "LandCombat/Boss1";
-
         private Texture2D backgroundTexture;
+        private int bossNumber;
 
         private void Start()
         {
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
             Time.timeScale = 1f;
-            backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
+            bossNumber = GameScenes.GetBossNumber(SceneManager.GetActiveScene().name);
+            if (bossNumber == 0)
+            {
+                bossNumber = LandBunkerHandoffState.PendingBossNumber;
+            }
+
+            bossNumber = Mathf.Clamp(bossNumber, LandBossEncounter.FirstBossNumber, LandBossEncounter.LastBossNumber);
+            var backgroundResourcePath = $"LandCombat/Boss{bossNumber}";
+            backgroundTexture = Resources.Load<Texture2D>(backgroundResourcePath);
             if (backgroundTexture == null)
             {
-                Debug.LogWarning($"F-89: Boss1 background missing from Resources/{BackgroundResourcePath}.");
+                backgroundTexture = Resources.Load<Texture2D>("LandCombat/Boss1");
+                Debug.LogWarning($"F-89: Boss {bossNumber} background missing from Resources/{backgroundResourcePath}; using Boss1 background.");
             }
         }
 
@@ -35,6 +43,13 @@ namespace F89.UI
         private void OnGUI()
         {
             StartPageMenuStyles.DrawFullscreenBackground(backgroundTexture);
+            var titleStyle = HudStyleFactory.CreateLabel(26, FontStyle.Bold, TextAnchor.UpperCenter, Color.white);
+            var bossCount = LandBossEncounter.GetEnemyCount(bossNumber);
+            var encounterLabel = bossCount == 1
+                ? $"UR LEVEL {LandBossEncounter.GetEnemyLevel(bossNumber)}"
+                : $"{bossCount}x UR LEVEL {LandBossEncounter.GetEnemyLevel(bossNumber)}";
+            GUI.Label(new Rect(0f, UiFitCanvas.Rect.y + UiFitCanvas.Px(24f), Screen.width, UiFitCanvas.Px(36f)),
+                $"BOSS {bossNumber}  |  {encounterLabel}", titleStyle);
 
             var buttonWidth = UiFitCanvas.Px(280f);
             var buttonHeight = UiFitCanvas.Px(52f);
@@ -46,11 +61,11 @@ namespace F89.UI
 
             if (StartPageMenuStyles.DrawMenuButton(continueRect, "CONTINUE", fontSize: 28))
             {
-                ContinueToBunkerFight();
+                ContinueToBunkerFight(bossNumber);
             }
         }
 
-        private static void ContinueToBunkerFight()
+        private static void ContinueToBunkerFight(int bossNumber)
         {
             Time.timeScale = 1f;
             EnsureActiveSaveForDevJump();
@@ -59,11 +74,19 @@ namespace F89.UI
             // From surface bunker pad: layout already queued. From Main Menu BOSS 1: pick a layout.
             if (LandBunkerHandoffState.HasPendingLayout)
             {
-                LandBunkerHandoffState.EnsureBossFightPending();
+                LandBunkerHandoffState.EnsureBossFightPending(bossNumber);
             }
             else
             {
-                LandBunkerHandoffState.BeginBossFightEnter(layoutIndex: 1);
+                // A Main Menu boss jump has no existing surface map to capture. Create one so
+                // SURFACE returns next to an actual bunker entrance instead of the landed plane.
+                if (!LandSurfaceSession.HasSnapshot)
+                {
+                    LandCombatConsumables.ResetForMission();
+                    LandSurfaceSession.PrepareDirectBossReturn();
+                }
+
+                LandBunkerHandoffState.BeginBossFightEnter(layoutIndex: 1, bossNumber);
             }
 
             SceneManager.LoadScene(GameScenes.Bunker);

@@ -89,6 +89,60 @@ namespace F89.Core
             WingTipWeapon = AircraftLoadoutWeapon.None;
         }
 
+        public static void LoadCharacterDefault(CharacterSaveData save)
+        {
+            ResetForNewSortie();
+            if (save == null || !save.HasDefaultAircraftPayload)
+            {
+                return;
+            }
+
+            var savedPairs = save.DefaultAircraftLinkedPairWeapons;
+            for (var i = 0; i < LinkedHardpointPairWeapons.Length; i++)
+            {
+                var savedWeapon = savedPairs != null && i < savedPairs.Length
+                    ? (AircraftLoadoutWeapon)savedPairs[i]
+                    : AircraftLoadoutWeapon.None;
+                LinkedHardpointPairWeapons[i] = IsValidWeapon(savedWeapon)
+                    ? savedWeapon
+                    : AircraftLoadoutWeapon.None;
+            }
+
+            var wingTip = (AircraftLoadoutWeapon)save.DefaultAircraftWingTipWeapon;
+            WingTipWeapon = wingTip == AircraftLoadoutWeapon.Aim9z
+                ? wingTip
+                : AircraftLoadoutWeapon.None;
+            GunRounds = Mathf.Clamp(save.DefaultAircraftGunRounds, 0, MaxGunRounds);
+        }
+
+        public static void SaveCharacterDefault(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            var pairs = new int[LinkedHardpointPairWeapons.Length];
+            for (var i = 0; i < pairs.Length; i++)
+            {
+                pairs[i] = (int)LinkedHardpointPairWeapons[i];
+            }
+
+            save.HasDefaultAircraftPayload = true;
+            save.DefaultAircraftLinkedPairWeapons = pairs;
+            save.DefaultAircraftWingTipWeapon = (int)WingTipWeapon;
+            save.DefaultAircraftGunRounds = GunRounds;
+            CharacterSaveRepository.WriteWorldProgress(save);
+        }
+
+        public static void ClearPayload()
+        {
+            Array.Clear(LinkedHardpointPairWeapons, 0, LinkedHardpointPairWeapons.Length);
+            WingTipWeapon = AircraftLoadoutWeapon.None;
+            GunRounds = 0;
+            HasConfiguredLoadout = false;
+        }
+
         public static void MarkConfigured()
         {
             HasConfiguredLoadout = true;
@@ -248,6 +302,11 @@ namespace F89.Core
             }
 
             CountSingleWeapon(WingTipWeapon, mirrored: true, ref aim9z, ref agm88j, ref gbu12, ref agm114);
+        }
+
+        private static bool IsValidWeapon(AircraftLoadoutWeapon weapon)
+        {
+            return weapon >= AircraftLoadoutWeapon.None && weapon <= AircraftLoadoutWeapon.Aim9z;
         }
 
         private static void CountSingleWeapon(

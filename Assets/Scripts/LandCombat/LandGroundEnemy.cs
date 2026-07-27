@@ -66,11 +66,11 @@ namespace F89.LandCombat
 
         public IReadOnlyList<LandGearInstance> LootItems => lootItems;
 
-        public void Initialize(Vector2 position, int enemyLevel, Transform faceTarget = null)
+        public void Initialize(Vector2 position, int enemyLevel, Transform faceTarget = null, float startingHealth = -1f)
         {
             level = LandUrEnemyStats.ClampLevel(enemyLevel);
             transform.position = position;
-            currentHealth = MaxHealth;
+            currentHealth = startingHealth < 0f ? MaxHealth : Mathf.Clamp(startingHealth, 0f, MaxHealth);
             phase = CorpsePhase.Alive;
             checkedForLoot = false;
             hasLootBag = false;
@@ -110,7 +110,14 @@ namespace F89.LandCombat
             var afterDr = Mathf.Max(0f, amount - DamageResistance);
             if (afterDr <= 0f)
             {
-                return;
+                // Boss progression uses levels above starter-weapon damage. A landed hit still
+                // chips bosses so every encounter remains winnable and visibly responds to fire.
+                if (!LandBossEncounter.IsBossObjectName(gameObject.name))
+                {
+                    return;
+                }
+
+                afterDr = 1f;
             }
 
             currentHealth = Mathf.Max(0f, currentHealth - afterDr);
@@ -134,7 +141,15 @@ namespace F89.LandCombat
             if (Random.value <= LandEnemyLootRules.LootBagChance)
             {
                 hasLootBag = true;
-                LandEnemyLootGenerator.FillRandomLoot(level, lootItems);
+                if (LandBossEncounter.IsBossObjectName(gameObject.name))
+                {
+                    LandEnemyLootGenerator.FillBossLoot(level, lootItems);
+                }
+                else
+                {
+                    LandEnemyLootGenerator.FillRandomLoot(level, lootItems);
+                }
+
                 while (lootItems.Count < LandEnemyLootRules.LootBagSlotCount)
                 {
                     lootItems.Add(null);
@@ -148,8 +163,8 @@ namespace F89.LandCombat
                 }
                 else
                 {
-                    // Loot on the ground endures until taken — no lifetime despawn.
-                    despawnAtTime = -1f;
+                    // Loot follows the same five-minute corpse lifetime as every other body.
+                    despawnAtTime = corpseSpawnTime + LandEnemyLootRules.EmptyCorpseLifetimeSeconds;
                 }
             }
             else
@@ -203,10 +218,7 @@ namespace F89.LandCombat
         private void BeginDeath()
         {
             phase = CorpsePhase.Dying;
-            if (gameObject.name == LandBossEncounter.Boss1ObjectName)
-            {
-                LandBossEncounter.MarkBoss1Defeated();
-            }
+            LandBossEncounter.TryMarkDefeated(gameObject.name);
 
             LandGroundSceneController.RegisterKill(level);
             if (hitCollider != null)
@@ -403,13 +415,6 @@ namespace F89.LandCombat
 
             if (phase != CorpsePhase.Corpse)
             {
-                return;
-            }
-
-            // Bags with remaining loot never expire.
-            if (hasLootBag && HasLootRemaining)
-            {
-                despawnAtTime = -1f;
                 return;
             }
 

@@ -1,5 +1,6 @@
 using F89.Controls;
 using F89.Core;
+using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -20,8 +21,11 @@ namespace F89.Flight
         private float sequenceStartTime;
         private float currentVisualScale = 1f;
         private bool sequenceActive;
+        private bool carrierLanding;
         private bool takeoffActive;
         private bool landingComplete;
+        private bool hasGroundReturnPosition;
+        private Vector3 groundReturnPosition;
 
         public static bool IsLandingActive => activeInstance != null && activeInstance.sequenceActive;
         public static bool IsTakeoffActive => activeInstance != null && activeInstance.takeoffActive;
@@ -56,6 +60,7 @@ namespace F89.Flight
             }
 
             sequenceActive = true;
+            carrierLanding = false;
             activeInstance = this;
             sequenceStartTime = Time.time;
 
@@ -66,6 +71,15 @@ namespace F89.Flight
 
             var autopilot = GetComponent<AutopilotController>();
             autopilot?.DisengageAutopilot("Landing.");
+            // L initiates a VTOL landing at the exact current point. Stop horizontal
+            // travel immediately so the landing animation cannot carry the aircraft
+            // into a neighboring map square.
+            aircraft?.SetLandingLocked(true);
+            if (body != null)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
 
             if (input != null)
             {
@@ -73,12 +87,33 @@ namespace F89.Flight
             }
         }
 
+        public void BeginCarrierLanding()
+        {
+            if (sequenceActive || landingComplete)
+            {
+                return;
+            }
+
+            carrierLanding = true;
+            BeginLanding();
+            carrierLanding = true;
+        }
+
         public void PrepareForGroundReturn()
+        {
+            PrepareForGroundReturn(Vector3.zero);
+            hasGroundReturnPosition = false;
+        }
+
+        /// <summary>Prepares VTOL takeoff from a specific flight-map grid square.</summary>
+        public void PrepareForGroundReturn(Vector3 returnPosition)
         {
             activeInstance = this;
             sequenceActive = false;
             takeoffActive = false;
             landingComplete = false;
+            hasGroundReturnPosition = true;
+            groundReturnPosition = returnPosition;
             currentVisualScale = TargetVisualScale;
 
             if (visualPivot != null)
@@ -188,6 +223,14 @@ namespace F89.Flight
                 body.linearVelocity = Vector3.zero;
             }
 
+            if (carrierLanding)
+            {
+                LandMissionCompleteState.BeginCarrierLanding();
+                Time.timeScale = 1f;
+                SceneManager.LoadScene(GameScenes.MissionComplete);
+                return;
+            }
+
             var snapshot = CaptureSortieSnapshot(gameObject);
             LandMissionHandoffState.BeginEnterFromFlight(snapshot);
             Time.timeScale = 1f;
@@ -219,6 +262,15 @@ namespace F89.Flight
                 snapshot.FuelNormalized = aircraftController.TotalFuelCapacityGallons > 0f
                     ? aircraftController.TotalFuelGallons / aircraftController.TotalFuelCapacityGallons
                     : 1f;
+                snapshot.HasOutpostBunker = AntarcticaOutpostLandingResolver.TryResolveOutpost(
+                    snapshot.AircraftWorldPosition,
+                    aircraftController.WorldMap,
+                    aircraftController.Profile != null ? aircraftController.Profile.ticSizeWorldUnits : 1f,
+                    out snapshot.OutpostName)
+                    && LandBossMissionAssignment.IsBunkerRevealedAtOutpost(
+                        CharacterSessionState.ActiveSave,
+                        snapshot.OutpostName);
+                CaptureLandingGridCell(ref snapshot, aircraftController);
             }
             else
             {
@@ -245,6 +297,32 @@ namespace F89.Flight
             }
 
             return snapshot;
+        }
+
+        private static void CaptureLandingGridCell(ref LandSortieSnapshot snapshot, AircraftController aircraftController)
+        {
+            if (aircraftController?.WorldMap == null)
+            {
+                return;
+            }
+
+            var ticSize = aircraftController.Profile != null
+                ? aircraftController.Profile.ticSizeWorldUnits
+                : 1f;
+            var worldMap = aircraftController.WorldMap;
+            if (!worldMap.TryWorldPositionToGridCell(snapshot.AircraftWorldPosition, ticSize, out var cell))
+            {
+                return;
+            }
+
+            snapshot.HasLandingGridCell = true;
+            snapshot.LandingGridCellX = cell.x;
+            snapshot.LandingGridCellZ = cell.y;
+            snapshot.GridCoordinateVersion = 1;
+            snapshot.LandingGridWorldCenter = worldMap.GridCellToWorldCenter(
+                cell,
+                ticSize,
+                snapshot.AircraftWorldPosition.y);
         }
 
         private void UpdateTakeoffVisual()

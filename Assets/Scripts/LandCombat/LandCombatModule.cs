@@ -21,6 +21,7 @@ namespace F89.LandCombat
             }
 
             IsActive = true;
+            LandOutpostLandingState.BeginFromSortie(snapshot);
             Debug.Log($"[LandCombat] Module active ({ModuleVersion}). Return scene: {snapshot.ReturnSceneName}");
         }
 
@@ -40,6 +41,8 @@ namespace F89.LandCombat
             }
 
             LandSurfaceSession.Clear();
+            LandBossAreaState.Clear();
+            LandOutpostLandingState.Clear();
             LandMissionHandoffState.BeginReturnToFlight(returnSnapshot, result);
             IsActive = false;
             Debug.Log(
@@ -50,6 +53,8 @@ namespace F89.LandCombat
         {
             IsActive = false;
             LandSurfaceSession.Clear();
+            LandBossAreaState.Clear();
+            LandOutpostLandingState.Clear();
             LandMissionHandoffState.Clear();
         }
     }

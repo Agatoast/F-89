@@ -9,8 +9,8 @@ namespace F89.LandCombat
     {
         public static bool HasPendingLayout { get; private set; }
         public static int PendingLayoutIndex { get; private set; }
-        /// <summary>After Boss1 dialogue: bunker starts a countdown, then the boss engages.</summary>
-        public static bool PendingBossFight { get; private set; }
+        /// <summary>After a boss dialogue page: bunker starts a countdown, then this boss engages.</summary>
+        public static int PendingBossNumber { get; private set; }
 
         public static void BeginEnter(int layoutIndex)
         {
@@ -18,16 +18,16 @@ namespace F89.LandCombat
             HasPendingLayout = true;
         }
 
-        public static void BeginBossFightEnter(int layoutIndex = 1)
+        public static void BeginBossFightEnter(int layoutIndex, int bossNumber)
         {
             BeginEnter(layoutIndex);
-            PendingBossFight = true;
+            PendingBossNumber = bossNumber;
         }
 
         /// <summary>Keep the pending layout; ensure the bunker will run the boss intro.</summary>
-        public static void EnsureBossFightPending()
+        public static void EnsureBossFightPending(int bossNumber)
         {
-            PendingBossFight = true;
+            PendingBossNumber = bossNumber;
         }
 
         public static int ConsumeLayoutIndex(int layoutCount)
@@ -40,10 +40,10 @@ namespace F89.LandCombat
             return index;
         }
 
-        public static bool ConsumeBossFightPending()
+        public static int ConsumeBossFightPending()
         {
-            var pending = PendingBossFight;
-            PendingBossFight = false;
+            var pending = PendingBossNumber;
+            PendingBossNumber = 0;
             return pending;
         }
 
@@ -51,7 +51,7 @@ namespace F89.LandCombat
         {
             HasPendingLayout = false;
             PendingLayoutIndex = 0;
-            PendingBossFight = false;
+            PendingBossNumber = 0;
         }
     }
 
@@ -137,12 +137,28 @@ namespace F89.LandCombat
             Time.timeScale = 1f;
             LandSurfaceSession.CaptureFromWorld();
 
-            // First bunker visit before Boss 1 is defeated → dialogue page, then fight.
-            if (!LandBossEncounter.Boss1Defeated)
+            var bossNumber = LandBossAreaState.TryGetActiveArea(out var bossArea)
+                ? bossArea.BossNumber
+                : 0;
+            if (LandBossAreaState.HasActiveArea)
             {
-                LandBunkerHandoffState.BeginBossFightEnter(layout);
-                Debug.Log($"F-89 Land: Boss 1 briefing before bunker layout {layout + 1}/{LayoutCount}.");
-                SceneManager.LoadScene(GameScenes.Boss1);
+                LandBossEncounter.MarkGuardsCleared(bossNumber);
+            }
+
+            if (bossNumber != 0 && LandBossEncounter.IsDefeated(bossNumber))
+            {
+                LandBunkerHandoffState.BeginEnter(layout);
+                Debug.Log($"F-89 Land: Entering cleared {LandBossAreaState.BunkerCode} layout {layout + 1}/{LayoutCount}.");
+                SceneManager.LoadScene(GameScenes.Bunker);
+                return;
+            }
+
+            if (bossNumber != 0)
+            {
+                LandBunkerHandoffState.BeginBossFightEnter(layout, bossNumber);
+                var bunkerName = LandBossAreaState.HasActiveArea ? LandBossAreaState.BunkerCode : "Bunker";
+                Debug.Log($"F-89 Land: {bunkerName} briefing before bunker layout {layout + 1}/{LayoutCount}.");
+                SceneManager.LoadScene(GameScenes.GetBossScene(bossNumber));
                 return;
             }
 

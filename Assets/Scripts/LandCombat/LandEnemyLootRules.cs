@@ -17,5 +17,7 @@ namespace F89.LandCombat
         public const int LootMinItems = 1;
         public const int LootMaxItems = 4;
         public const int LootBagSlotCount = 4;
+        public const int BossLootMinExtraItems = 1;
+        public const int BossLootMaxExtraItems = 3;
     }
 }

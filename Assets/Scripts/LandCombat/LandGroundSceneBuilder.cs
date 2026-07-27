@@ -9,6 +9,19 @@ namespace F89.LandCombat
 
         public static void BuildIfNeeded()
         {
+            // Bunker return takes priority over any stale scene objects left by an editor
+            // domain/scene-reload configuration, otherwise the player falls back to the plane.
+            if (LandSurfaceSession.TryConsumeReturnAtBunker(
+                    out var planePos,
+                    out var bunkerPos,
+                    out var enemies))
+            {
+                LandGroundSceneController.ResetSession();
+                LandGroundTerrainBuilder.BuildArena();
+                RestoreSurfaceFromBunker(planePos, bunkerPos, enemies);
+                return;
+            }
+
             if (Object.FindAnyObjectByType<LandPlayerController>() != null)
             {
                 // Scene already built (e.g. domain reload) — still ensure terrain follow, cold, plane.
@@ -22,15 +35,6 @@ namespace F89.LandCombat
             LandGroundSceneController.ResetSession();
             LandGroundTerrainBuilder.BuildArena();
 
-            if (LandSurfaceSession.TryConsumeReturnAtBunker(
-                    out var planePos,
-                    out var bunkerPos,
-                    out var enemies))
-            {
-                RestoreSurfaceFromBunker(planePos, bunkerPos, enemies);
-                return;
-            }
-
             // Fresh sortie: player at landed plane; objectives in one random bearing.
             var planePosition = Vector3.zero;
             LandLandedPlane.SpawnAt(planePosition);
@@ -38,7 +42,14 @@ namespace F89.LandCombat
                 + new Vector3(LandGameConstants.LandedPlaneOffsetWorldUnits, 0f, 0f);
             BuildPlayer(playerPosition);
             BindTerrainFollow();
-            SpawnObjectiveCluster(planePosition);
+            if (LandBossAreaState.TryGetActiveArea(out var bossArea))
+            {
+                SpawnBossArea(planePosition, bossArea);
+            }
+            else if (LandOutpostLandingState.HasActiveOutpost)
+            {
+                SpawnOutpostBunker(planePosition, LandOutpostLandingState.ActiveOutpostName);
+            }
         }
 
         private static void RestoreSurfaceFromBunker(
@@ -232,6 +243,48 @@ namespace F89.LandCombat
                 + $"{enemyCount} enemies at {LandGameConstants.EnemySpawnMinRangeLandUnits:0}-"
                 + $"{LandGameConstants.EnemySpawnMaxRangeLandUnits:0} range, "
                 + $"bunker at {bunkerLandRange:0.0} range.");
+        }
+
+        private static void SpawnOutpostBunker(Vector3 planeWorldPosition, string outpostName)
+        {
+            var bunkerPosition = (Vector2)planeWorldPosition + Vector2.up * LandUnits.ToWorld(70f);
+            var bunker = LandBunkerEntrance.Spawn(bunkerPosition);
+            bunker.name = $"{outpostName} Bunker";
+            Debug.Log($"F-89 Land: Landed at {outpostName}; bunker access available, no surface enemies spawned.");
+        }
+
+        private static void SpawnBossArea(Vector3 planeWorldPosition, LandBossAreaCatalog.Definition area)
+        {
+            var bearing = area.BearingDegrees * Mathf.Deg2Rad;
+            var bearingDir = new Vector2(Mathf.Cos(bearing), Mathf.Sin(bearing));
+            var plane = (Vector2)planeWorldPosition;
+            var player = Object.FindAnyObjectByType<LandPlayerController>();
+            var faceTarget = player != null ? player.transform : null;
+
+            var guardRange = (LandGameConstants.EnemySpawnMinRangeLandUnits
+                              + LandGameConstants.EnemySpawnMaxRangeLandUnits) * 0.5f;
+            var spawnGuards = !LandBossEncounter.IsGuardCleared(area.BossNumber);
+            for (var i = 0; spawnGuards && i < area.GuardCount; i++)
+            {
+                var lateral = (i - (area.GuardCount - 1) * 0.5f) * 2.2f;
+                var distanceOffset = (i % 2 == 0 ? -2f : 2f);
+                var spawn = plane
+                            + bearingDir * LandUnits.ToWorld(guardRange + distanceOffset)
+                            + new Vector2(-bearingDir.y, bearingDir.x) * lateral;
+                var enemyObject = new GameObject($"{area.SurfaceCode}_Guard_{i + 1}");
+                var enemy = enemyObject.AddComponent<LandGroundEnemy>();
+                enemy.Initialize(spawn, area.GuardLevel, faceTarget);
+            }
+
+            var bunkerRange = (LandGameConstants.BunkerEntranceMinRangeLandUnits
+                               + LandGameConstants.BunkerEntranceMaxRangeLandUnits) * 0.5f;
+            var bunkerPos = plane + bearingDir * LandUnits.ToWorld(bunkerRange);
+            var bunker = LandBunkerEntrance.Spawn(bunkerPos);
+            bunker.name = area.BunkerCode;
+
+            Debug.Log(
+                $"F-89 Land: {area.SurfaceCode} ready — {(spawnGuards ? area.GuardCount : 0)} UR level {area.GuardLevel} guards; "
+                + $"{area.BunkerCode} at {bunkerRange:0.0} range.");
         }
     }
 }

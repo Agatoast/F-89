@@ -46,6 +46,13 @@ namespace F89.UI
             IsAutopilotFlightMode = false;
         }
 
+        private void OnDestroy()
+        {
+            IsOpen = false;
+            IsAutopilotSelectMode = false;
+            IsAutopilotFlightMode = false;
+        }
+
         private AutopilotController autopilot;
         private string baseNamePopup = string.Empty;
         private float baseNamePopupUntil;
@@ -1041,6 +1048,11 @@ namespace F89.UI
                         ? dotSize * 4f * CarrierMarkerScale
                         : dotSize;
                     DrawMapFrame(guiPoint, destroyedSize);
+                    if (baseSite.SiteKind == BaseSiteKind.Land)
+                    {
+                        DrawMapX(guiPoint, destroyedSize);
+                    }
+
                     continue;
                 }
 
@@ -1459,6 +1471,49 @@ namespace F89.UI
             GUI.DrawTexture(new Rect(rect.x, rect.y, border, rect.height), Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(rect.xMax - border, rect.y, border, rect.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
+        }
+
+        private static void DrawMapX(Vector2 center, float size)
+        {
+            if (Event.current == null || Event.current.type != EventType.Repaint)
+            {
+                return;
+            }
+
+            const float lineThickness = 2f;
+            const float xAlign = -1f;
+            var half = size * 0.5f;
+            var topLeft = new Vector2(center.x - half + xAlign, center.y - half);
+            var topRight = new Vector2(center.x + half + xAlign, center.y - half);
+            var bottomLeft = new Vector2(center.x - half + xAlign, center.y + half);
+            var bottomRight = new Vector2(center.x + half + xAlign, center.y + half);
+
+            var previous = GUI.color;
+            GUI.color = Color.black;
+            DrawMapDiagonalLine(topLeft, bottomRight, lineThickness);
+            DrawMapDiagonalLine(topRight, bottomLeft, lineThickness);
+            GUI.color = previous;
+        }
+
+        private static void DrawMapDiagonalLine(Vector2 start, Vector2 end, float thickness)
+        {
+            var delta = end - start;
+            var length = delta.magnitude;
+            if (length < 0.5f)
+            {
+                return;
+            }
+
+            var angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+            var midpoint = (start + end) * 0.5f;
+            var rect = new Rect(
+                midpoint.x - length * 0.5f,
+                midpoint.y - thickness * 0.5f,
+                length,
+                thickness);
+            GUIUtility.RotateAroundPivot(angle, midpoint);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUIUtility.RotateAroundPivot(-angle, midpoint);
         }
 
         private static void DrawMapOutlinedDot(Vector2 center, float size, Color fillColor, float outlinePixels = 2f)

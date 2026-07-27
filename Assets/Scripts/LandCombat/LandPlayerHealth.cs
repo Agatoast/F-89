@@ -25,12 +25,12 @@ namespace F89.LandCombat
         private void Awake()
         {
             attributes = GetComponent<LandPlayerAttributes>();
-            currentHealth = MaxHealth;
+            currentHealth = LandMissionHealthState.GetOrInitialize(MaxHealth);
         }
 
         public void ApplyDamage(float amount)
         {
-            if (unconscious || amount <= 0f)
+            if (LandCombatTestCheats.PlayerInvulnerable || unconscious || amount <= 0f)
             {
                 return;
             }
@@ -43,6 +43,7 @@ namespace F89.LandCombat
             }
 
             currentHealth = Mathf.Max(0f, currentHealth - afterDr);
+            LandMissionHealthState.Set(currentHealth, MaxHealth);
             if (currentHealth <= 0f)
             {
                 BecomeUnconscious();
@@ -57,6 +58,7 @@ namespace F89.LandCombat
             }
 
             currentHealth = Mathf.Min(MaxHealth, currentHealth + amount);
+            LandMissionHealthState.Set(currentHealth, MaxHealth);
         }
 
         public void RestoreFullHealth()
@@ -64,6 +66,7 @@ namespace F89.LandCombat
             unconscious = false;
             downedOutcome = LandDownedOutcome.None;
             currentHealth = MaxHealth;
+            LandMissionHealthState.Set(currentHealth, MaxHealth);
         }
 
         /// <summary>Forces unconsciousness with a fixed outcome (e.g. frozen to death).</summary>
@@ -76,6 +79,7 @@ namespace F89.LandCombat
 
             unconscious = true;
             currentHealth = 0f;
+            LandMissionHealthState.Set(currentHealth, MaxHealth);
             downedOutcome = outcome;
             Unconscious?.Invoke(downedOutcome);
             Debug.Log(
@@ -91,6 +95,7 @@ namespace F89.LandCombat
 
             unconscious = true;
             currentHealth = 0f;
+            LandMissionHealthState.Set(currentHealth, MaxHealth);
             downedOutcome = LandDownedResolver.RollOutcome();
             Unconscious?.Invoke(downedOutcome);
             Debug.Log(

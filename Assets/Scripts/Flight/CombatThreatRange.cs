@@ -37,7 +37,12 @@ namespace F89.Flight
             var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
             foreach (var target in targets)
             {
-                if (target == null || !target.IsAlive || target.IsFriendly)
+                // Static outposts/buildings have a LockableTarget for radar identity,
+                // but are not mobile enemies and must never block a landing.
+                if (target == null
+                    || !target.IsAlive
+                    || target.IsFriendly
+                    || target.GetComponent<AntarcticaBase>() != null)
                 {
                     continue;
                 }

@@ -1,3 +1,4 @@
+using F89.Core;
 using UnityEngine;
 
 namespace F89.Weapons
@@ -15,6 +16,7 @@ namespace F89.Weapons
         public TargetAffiliation Affiliation => affiliation;
         public TargetUnitClass UnitClass => unitClass;
         public bool IsFriendly => affiliation == TargetAffiliation.Friendly;
+        public bool IsNeutral => affiliation == TargetAffiliation.Neutral;
         public bool IsInfantry => unitClass == TargetUnitClass.Infantry;
         public bool IsFlareDecoy => unitClass == TargetUnitClass.FlareDecoy;
         public bool IsPlayerAircraft => unitClass == TargetUnitClass.PlayerAircraft;
@@ -68,6 +70,11 @@ namespace F89.Weapons
             return targetKind == weaponTargetKind;
         }
 
+        public void RestoreTargeting()
+        {
+            IsAlive = true;
+        }
+
         public void RegisterHit(string weaponName, bool wasLockedShot, float destroyChance = 1f)
         {
             if (!IsAlive || IsFlareDecoy)
@@ -93,6 +100,22 @@ namespace F89.Weapons
             }
 
             IsAlive = false;
+            var baseSite = GetComponent<AntarcticaBase>();
+            if (baseSite != null)
+            {
+                baseSite.Destroy();
+                Debug.Log(
+                    $"Outpost {baseSite.BaseName} destroyed by {weaponName} "
+                    + $"({(wasLockedShot ? "locked" : "direct collision")}).");
+                return;
+            }
+
+            var parentBase = GetComponentInParent<AntarcticaBase>();
+            if (parentBase != null)
+            {
+                AntarcticaOutpostState.MarkTargetDestroyed(parentBase.BaseName, targetLabel);
+            }
+
             Debug.Log(
                 $"Target {targetLabel} destroyed by {weaponName} ({(wasLockedShot ? "locked" : "direct collision")}).");
             gameObject.SetActive(false);

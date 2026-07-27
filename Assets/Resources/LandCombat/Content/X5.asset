@@ -17,7 +17,7 @@ MonoBehaviour:
   Kind: 0
   Rarity: 2
   Category: 2
-  Damage: 20
+  Damage: 50
   Range: 7
   RateOfFire: 4
   MinRangeTiles: 0

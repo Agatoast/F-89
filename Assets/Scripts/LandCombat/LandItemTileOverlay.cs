@@ -4,7 +4,7 @@ using UnityEngine;
 namespace F89.LandCombat
 {
     /// <summary>
-    /// Shared OnGUI item-tile overlays: category silhouette, name bottom, level upper-right.
+    /// Shared OnGUI item-tile overlays: category silhouette and level upper-right.
     /// Black silhouettes tint white when the rarity tile is too dark for black ink.
     /// </summary>
     public static class LandItemTileOverlay
@@ -91,7 +91,6 @@ namespace F89.LandCombat
             Color overlayColor,
             bool scaleFonts)
         {
-            var nameFontSize = Scale(baseNameFontSize, scaleFonts);
             var levelFontSize = Scale(Mathf.Max(8, baseNameFontSize), scaleFonts);
             var level = LandTechLevelRules.GetTechLevel(item);
 
@@ -122,11 +121,7 @@ namespace F89.LandCombat
             }
 
             // Level sits in the free corner on the rarity tile — match overlay ink (black on L1).
-            // Vest name sits on the silhouette, so invert that ink only.
             var levelColor = overlayColor;
-            var nameColor = slot == LandEquipmentSlot.Core
-                ? InvertInk(overlayColor)
-                : overlayColor;
 
             var levelStyle = HudStyleFactory.CreateLabel(
                 levelFontSize,
@@ -134,48 +129,9 @@ namespace F89.LandCombat
                 TextAnchor.UpperRight,
                 levelColor,
                 wordWrap: false);
-            var nameAnchor = slot == LandEquipmentSlot.Core ? TextAnchor.MiddleCenter : TextAnchor.LowerCenter;
-            var nameStyle = HudStyleFactory.CreateLabel(
-                nameFontSize,
-                FontStyle.Bold,
-                nameAnchor,
-                nameColor,
-                wordWrap: true);
-
             var inset = 2f;
-            var levelRect = new Rect(cell.x + inset, cell.y + 1f, cell.width - inset * 2f - 1f, levelFontSize + 4f);
-            var nameRect = slot == LandEquipmentSlot.Core
-                ? new Rect(
-                    cell.x + inset,
-                    cell.y + cell.height * 0.22f,
-                    cell.width - inset * 2f,
-                    cell.height * 0.34f)
-                : new Rect(
-                    cell.x + inset,
-                    cell.y + cell.height * 0.62f,
-                    cell.width - inset * 2f,
-                    cell.height * 0.35f);
-
-            if (slot == LandEquipmentSlot.Boots)
-            {
-                if (LandItemCategoryRules.TryResolve(item, catalog, out var category)
-                    && category == LandItemCategory.UltimateReich)
-                {
-                    var urStyle = HudStyleFactory.CreateLabel(
-                        nameFontSize,
-                        FontStyle.Bold,
-                        TextAnchor.LowerCenter,
-                        new Color(0.92f, 0.12f, 0.12f),
-                        wordWrap: false);
-                    GUI.Label(nameRect, "UR", urStyle);
-                }
-            }
-            else
-            {
-                GUI.Label(nameRect, catalog.GetDisplayName(item), nameStyle);
-            }
-
-            // Draw level last so vest center-name never covers the corner badge.
+            // Extend the right edge two pixels so the level number sits 2px farther right.
+            var levelRect = new Rect(cell.x + inset, cell.y + 1f, cell.width - inset * 2f + 1f, levelFontSize + 4f);
             GUI.Label(levelRect, level.ToString(), levelStyle);
         }
 
@@ -190,30 +146,6 @@ namespace F89.LandCombat
             Color labelColor,
             bool scaleFonts)
         {
-            var nameFontSize = Scale(baseNameFontSize, scaleFonts);
-            var statFontSize = Scale(Mathf.Max(7, baseNameFontSize - 2), scaleFonts);
-            var nameStyle = HudStyleFactory.CreateLabel(
-                nameFontSize,
-                FontStyle.Bold,
-                TextAnchor.UpperCenter,
-                labelColor,
-                wordWrap: true);
-            var statStyle = HudStyleFactory.CreateLabel(
-                statFontSize,
-                FontStyle.Normal,
-                TextAnchor.LowerCenter,
-                labelColor,
-                wordWrap: true);
-
-            var nameRect = new Rect(cell.x, cell.y + 2f, cell.width, cell.height * 0.55f);
-            var statRect = new Rect(cell.x, cell.y + cell.height * 0.45f, cell.width, cell.height * 0.5f);
-
-            GUI.Label(nameRect, catalog.GetDisplayName(item), nameStyle);
-            if (catalog.TryGetWeaponSummary(item, out var summary)
-                || catalog.TryGetGearSummary(item, out summary))
-            {
-                GUI.Label(statRect, summary, statStyle);
-            }
         }
 
         private static void DrawConsumableTile(
@@ -245,17 +177,6 @@ namespace F89.LandCombat
                 GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit, alphaBlend: true);
             }
 
-            var nameFontSize = Scale(baseNameFontSize, scaleFonts);
-            var nameStyle = HudStyleFactory.CreateLabel(
-                nameFontSize,
-                FontStyle.Bold,
-                TextAnchor.LowerCenter,
-                labelColor,
-                wordWrap: true);
-            GUI.Label(
-                new Rect(cell.x + 2f, cell.y + cell.height * 0.68f, cell.width - 4f, cell.height * 0.3f),
-                catalog.GetDisplayName(item),
-                nameStyle);
         }
 
         private static bool TryResolveCategory(

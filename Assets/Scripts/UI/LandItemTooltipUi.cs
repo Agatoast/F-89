@@ -24,6 +24,7 @@ namespace F89.UI
         private const float AttrLineGap = 4f;
         private const float ScreenMargin = 8f;
         private const float TipSizeMultiplier = 2f;
+        private const float GroundHudTipSizeMultiplier = 4f;
         private const float FallbackTileSize = 52f;
 
         private static LandGearInstance hoveredItem;
@@ -82,7 +83,9 @@ namespace F89.UI
                 return;
             }
 
-            var tipSize = GetTipSize();
+            var tipSize = placement == Placement.GroundHudPanel
+                ? Mathf.Max(1f, hoveredTileSize * GroundHudTipSizeMultiplier)
+                : GetTipSize();
             ScaleFontsForTip(tipSize);
 
             Rect tipRect;
@@ -124,6 +127,18 @@ namespace F89.UI
             }
 
             name = catalog.GetDisplayName(item);
+            if (LandConsumableIds.IsGrenade(item))
+            {
+                typeLine = "Grenade";
+                return true;
+            }
+
+            if (LandConsumableIds.IsBandage(item))
+            {
+                typeLine = "Bandage";
+                return true;
+            }
+
             if (!LandLoadoutEquipService.TryResolveItemSlot(item, catalog, out var slot))
             {
                 typeLine = "Item";
@@ -138,6 +153,12 @@ namespace F89.UI
                 LandEquipmentSlot.Boots => "Boots",
                 _ => "Item"
             };
+            if (LandItemCategoryRules.TryResolve(item, catalog, out var category))
+            {
+                typeLine = $"{LandItemCategoryRules.GetPrefix(category)} {typeLine}";
+            }
+
+            attributes.Add($"LEVEL {LandTechLevelRules.GetTechLevel(item)}");
 
             if (slot == LandEquipmentSlot.Weapon)
             {

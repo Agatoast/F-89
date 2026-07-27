@@ -43,6 +43,33 @@ namespace F89.LandCombat
             }
         }
 
+        /// <summary>Guaranteed exact-level equipment plus 1–3 normal enemy-loot rolls.</summary>
+        public static void FillBossLoot(int enemyLevel, List<LandGearInstance> into)
+        {
+            into?.Clear();
+            if (into == null)
+            {
+                return;
+            }
+
+            enemyLevel = LandUrEnemyStats.ClampLevel(enemyLevel);
+            if (TryRollLeveledItemAtExactLevel(enemyLevel, out var guaranteedItem))
+            {
+                into.Add(guaranteedItem);
+            }
+
+            var extraCount = Random.Range(
+                LandEnemyLootRules.BossLootMinExtraItems,
+                LandEnemyLootRules.BossLootMaxExtraItems + 1);
+            for (var i = 0; i < extraCount; i++)
+            {
+                if (TryRollItem(enemyLevel, out var item))
+                {
+                    into.Add(item);
+                }
+            }
+        }
+
         private static bool TryRollItem(int enemyLevel, out LandGearInstance item)
         {
             // Even chance among every level from 1 through the enemy's level.
@@ -50,6 +77,18 @@ namespace F89.LandCombat
             // Even chance among item types (revisited later).
             var type = (LootItemType)Random.Range(0, LootTypeCount);
             if (!TryGetItem(type, itemLevel, out item))
+            {
+                return false;
+            }
+
+            item = LandLoadoutEquipService.CloneItem(item);
+            return item != null;
+        }
+
+        private static bool TryRollLeveledItemAtExactLevel(int techLevel, out LandGearInstance item)
+        {
+            var type = (LootItemType)Random.Range(0, 4);
+            if (!TryGetItem(type, techLevel, out item))
             {
                 return false;
             }

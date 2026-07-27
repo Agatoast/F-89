@@ -72,6 +72,17 @@ namespace F89.LandCombat
             pendingReturnAtBunker = true;
         }
 
+        /// <summary>Creates a surface return point for Main Menu boss jumps that did not begin on the ground map.</summary>
+        public static void PrepareDirectBossReturn()
+        {
+            livingEnemies.Clear();
+            planePosition = Vector2.zero;
+            var bunkerRange = (LandGameConstants.BunkerEntranceMinRangeLandUnits
+                               + LandGameConstants.BunkerEntranceMaxRangeLandUnits) * 0.5f;
+            bunkerPosition = Vector2.right * LandUnits.ToWorld(bunkerRange);
+            hasSnapshot = true;
+        }
+
         public static bool TryConsumeReturnAtBunker(
             out Vector2 planePos,
             out Vector2 bunkerPos,

@@ -30,7 +30,7 @@ namespace F89.LandCombat
             fallbackWeapon.Kind = LandWeaponKind.Bullet;
             fallbackWeapon.Category = LandItemCategory.Military;
             fallbackWeapon.Rarity = LandItemRarity.White;
-            fallbackWeapon.Damage = 10f;
+            fallbackWeapon.Damage = 40f;
             fallbackWeapon.Range = 6f;
             fallbackWeapon.RateOfFire = 4f;
             fallbackWeapon.ProjectileSpeed = 22f;

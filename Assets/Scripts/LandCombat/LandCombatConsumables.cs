@@ -47,6 +47,11 @@ namespace F89.LandCombat
 
         public static bool TryUseGrenade()
         {
+            if (LandCombatTestCheats.UnlimitedGrenades)
+            {
+                return true;
+            }
+
             if (GrenadeCount <= 0)
             {
                 return false;

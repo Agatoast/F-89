@@ -35,16 +35,16 @@ namespace F89.LandCombat
 
         public static readonly Entry[] Weapons =
         {
-            new(1, "StG24", "StG-24", 13f, 6f, LandItemRarity.White),
-            new(2, "StG24A", "StG-24A", 15f, 6f, LandItemRarity.Green),
-            new(3, "StG24E", "StG-24E", 17f, 7f, LandItemRarity.Blue),
-            new(4, "StG24R", "StG-24R", 20f, 7f, LandItemRarity.Purple),
-            new(5, "VK24", "VK-24", 22f, 7f, LandItemRarity.Yellow),
-            new(6, "ES1", "ES-1", 24f, 8f, LandItemRarity.Orange),
-            new(7, "RG9", "RG-9", 27f, 8f, LandItemRarity.Red),
-            new(8, "AVG", "AVG", 29f, 9f, LandItemRarity.Crimson),
-            new(9, "AK9", "AK-9", 31f, 9f, LandItemRarity.Black),
-            new(10, "Donar7", "Donar-7", 34f, 10f, LandItemRarity.Gold)
+            new(1, "StG24", "StG-24", 43f, 6f, LandItemRarity.White),
+            new(2, "StG24A", "StG-24A", 45f, 6f, LandItemRarity.Green),
+            new(3, "StG24E", "StG-24E", 47f, 7f, LandItemRarity.Blue),
+            new(4, "StG24R", "StG-24R", 50f, 7f, LandItemRarity.Purple),
+            new(5, "VK24", "VK-24", 52f, 7f, LandItemRarity.Yellow),
+            new(6, "ES1", "ES-1", 54f, 8f, LandItemRarity.Orange),
+            new(7, "RG9", "RG-9", 57f, 8f, LandItemRarity.Red),
+            new(8, "AVG", "AVG", 59f, 9f, LandItemRarity.Crimson),
+            new(9, "AK9", "AK-9", 61f, 9f, LandItemRarity.Black),
+            new(10, "Donar7", "Donar-7", 64f, 10f, LandItemRarity.Gold)
         };
 
         public static bool TryGetByTechLevel(int techLevel, out Entry entry)

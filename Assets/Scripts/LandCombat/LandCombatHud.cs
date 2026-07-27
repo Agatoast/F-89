@@ -165,9 +165,10 @@ namespace F89.LandCombat
         private static void DrawStatusLine()
         {
             var style = HudStyleFactory.CreateLabel(14, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
+            var areaLabel = LandBossAreaState.HasActiveArea ? $"  |  {LandBossAreaState.SurfaceCode}" : string.Empty;
             GUI.Label(
                 LandCombatHudLayout.GetStatusLineRect(),
-                $"Ground Ops  |  Kills: {LandGroundSceneController.SessionKills}  Score: {LandGroundSceneController.SessionScore}"
+                $"Ground Ops{areaLabel}  |  Kills: {LandGroundSceneController.SessionKills}  Score: {LandGroundSceneController.SessionScore}"
                 + (AutoFireState.Enabled ? "  |  AUTO ON" : string.Empty)
                 + $"  |  {FormatColdStatus()}",
                 style);
@@ -244,6 +245,13 @@ namespace F89.LandCombat
                 health.IsAlive
                     ? new Color(0.2f, 0.9f, 0.3f, 0.95f)
                     : new Color(0.75f, 0.12f, 0.12f, 0.95f));
+        }
+
+        /// <summary>Player screen and world HP bars for minimal gameplay HUDs such as the bunker.</summary>
+        public static void DrawPlayerHp()
+        {
+            DrawHpBar();
+            DrawAvatarHpBar();
         }
 
         /// <summary>Floating HP bars over living UR soldiers / bosses (ground + bunker).</summary>

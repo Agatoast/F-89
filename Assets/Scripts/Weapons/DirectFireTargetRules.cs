@@ -15,7 +15,9 @@ namespace F89.Weapons
                 return false;
             }
 
-            return target.GetComponent<AntarcticaBase>() == null;
+            var baseSite = target.GetComponent<AntarcticaBase>();
+            // Neutral land outposts are destructible targets; only the carrier remains protected.
+            return baseSite == null || baseSite.SiteKind != BaseSiteKind.Carrier;
         }
 
         public static LockableTarget FindClosestAtPoint(

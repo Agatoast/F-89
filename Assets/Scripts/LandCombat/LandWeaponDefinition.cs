@@ -20,7 +20,7 @@ namespace F89.LandCombat
 
         [Header("Combat Stats")]
         [Tooltip("Raw damage on hit before DR is applied.")]
-        public float Damage = 10f;
+        public float Damage = 40f;
 
         [Tooltip("Max bullet travel in ground-combat units. 10 units = left/right screen edge.")]
         [FormerlySerializedAs("RangeTiles")]

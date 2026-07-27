@@ -29,6 +29,14 @@ namespace F89.Enemies
                 return;
             }
 
+            if (outpost.IsDestroyed
+                || AntarcticaOutpostState.IsTargetDestroyed(
+                    OutpostSouthBaseName,
+                    BasicTankConfig.DefaultUnitName))
+            {
+                return;
+            }
+
             if (outpost.GetComponentInChildren<BasicTankController>() != null)
             {
                 return;

@@ -23,6 +23,18 @@ namespace F89.Core
         public int GauRoundsRemaining;
         public int FlaresRemaining;
         public string ReturnSceneName;
+        public bool HasOutpostBunker;
+        public string OutpostName;
+        /// <summary>
+        /// Canonical 1-based flight-map square captured at landing: X is right/east,
+        /// Z is up/north, and the southwest square is 1,1.
+        /// </summary>
+        public bool HasLandingGridCell;
+        public int LandingGridCellX;
+        public int LandingGridCellZ;
+        public Vector3 LandingGridWorldCenter;
+        /// <summary>1 means LandingGridCellX/Z use the canonical 1-based southwest-origin map grid.</summary>
+        public int GridCoordinateVersion;
 
         public static LandSortieSnapshot Empty => new LandSortieSnapshot { ReturnSceneName = GameScenes.FlightTest };
     }

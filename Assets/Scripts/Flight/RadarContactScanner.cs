@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using F89.Core;
+using F89.LandCombat;
 using F89.Weapons;
 using UnityEngine;
 
@@ -11,6 +12,9 @@ namespace F89.Flight
         public float DistanceMiles;
         public bool IsHostile;
         public bool IsBase;
+        public bool IsDestroyed;
+        public bool HasBunker;
+        public bool CanBeTargeted;
         public string Label;
         public LockableTarget Target;
         public AntarcticaBase BaseSite;
@@ -60,7 +64,11 @@ namespace F89.Flight
             var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
             foreach (var target in targets)
             {
-                if (target == null || !target.IsAlive)
+                if (target == null
+                    || !target.IsAlive
+                    || target.IsPlayerAircraft
+                    || target.IsFlareDecoy
+                    || target.GetComponent<AntarcticaBase>() != null)
                 {
                     continue;
                 }
@@ -87,6 +95,9 @@ namespace F89.Flight
                     DistanceMiles = distanceMiles,
                     IsHostile = !target.IsFriendly,
                     IsBase = false,
+                    IsDestroyed = false,
+                    HasBunker = false,
+                    CanBeTargeted = true,
                     Label = target.TargetLabel,
                     Target = target,
                     BaseSite = null
@@ -104,7 +115,7 @@ namespace F89.Flight
             var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
             foreach (var baseSite in bases)
             {
-                if (baseSite == null || !baseSite.IsActive || baseSite.IsDestroyed)
+                if (baseSite == null || !baseSite.IsActive)
                 {
                     continue;
                 }
@@ -126,12 +137,21 @@ namespace F89.Flight
                     continue;
                 }
 
+                var hasRevealedBunker = baseSite.SiteKind == BaseSiteKind.Land
+                    && LandBossMissionAssignment.IsBunkerRevealedAtOutpost(
+                        CharacterSessionState.ActiveSave,
+                        baseSite.BaseName);
                 results.Add(new RadarContact
                 {
                     WorldPosition = baseSite.transform.position,
                     DistanceMiles = distanceMiles,
                     IsHostile = isHostile,
                     IsBase = true,
+                    IsDestroyed = baseSite.IsDestroyed,
+                    HasBunker = hasRevealedBunker,
+                    // The outpost is a destructible surface building. Its interior bunker
+                    // remains a separate ground-combat destination after destruction.
+                    CanBeTargeted = !baseSite.IsDestroyed,
                     Label = baseSite.BaseName,
                     Target = baseSite.GetComponent<LockableTarget>(),
                     BaseSite = baseSite

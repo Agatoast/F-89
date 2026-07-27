@@ -52,6 +52,16 @@ namespace F89.UI
             var yesRect = new Rect(dialogRect.x + dialogRect.width * 0.5f - ChoiceWidth - 12f, choiceY, ChoiceWidth, ChoiceHeight);
             var noRect = new Rect(dialogRect.x + dialogRect.width * 0.5f + 12f, choiceY, ChoiceWidth, ChoiceHeight);
 
+            if (Input.GetKeyDown(KeyCode.Y))
+            {
+                return Result.Confirmed;
+            }
+
+            if (Input.GetKeyDown(KeyCode.N) || Input.GetKeyDown(KeyCode.Escape))
+            {
+                return Result.Cancelled;
+            }
+
             if (StartPageMenuStyles.DrawMenuButton(yesRect, "YES", fontSize: ButtonFontSize))
             {
                 return Result.Confirmed;

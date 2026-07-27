@@ -16,6 +16,21 @@ namespace F89.Testing
             var existingPlayer = Object.FindAnyObjectByType<AircraftController>();
             if (existingPlayer != null)
             {
+                if (FlightGroundReturnService.TryGetPendingReturnSpawn(
+                        out var returnPosition,
+                        out var returnRotation))
+                {
+                    existingPlayer.transform.SetPositionAndRotation(returnPosition, returnRotation);
+                    var returnBody = existingPlayer.GetComponent<Rigidbody>();
+                    if (returnBody != null)
+                    {
+                        returnBody.position = returnPosition;
+                        returnBody.rotation = returnRotation;
+                        returnBody.linearVelocity = Vector3.zero;
+                        returnBody.angularVelocity = Vector3.zero;
+                    }
+                }
+
                 EnsureMapSystems(existingPlayer);
                 EnsurePlayerVisuals(existingPlayer);
                 EnsureWeaponSystems(existingPlayer.gameObject);
@@ -256,7 +271,11 @@ namespace F89.Testing
             player.transform.position = Vector3.zero;
             player.transform.rotation = Quaternion.identity;
 
-            if (AntarcticaBaseSpawner.TryGetPlayerSpawn(worldMap, profile, out var spawnPosition, out var spawnRotation))
+            if (FlightGroundReturnService.TryGetPendingReturnSpawn(out var returnPosition, out var returnRotation))
+            {
+                player.transform.SetPositionAndRotation(returnPosition, returnRotation);
+            }
+            else if (AntarcticaBaseSpawner.TryGetPlayerSpawn(worldMap, profile, out var spawnPosition, out var spawnRotation))
             {
                 player.transform.SetPositionAndRotation(spawnPosition, spawnRotation);
             }

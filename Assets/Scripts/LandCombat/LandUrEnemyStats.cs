@@ -52,12 +52,12 @@ namespace F89.LandCombat
             4,  // 2
             5,  // 3
             6,  // 4
-            7,  // 5
-            8,  // 6
-            9,  // 7
-            10, // 8
-            11, // 9
-            12  // 10
+            6,  // 5
+            6,  // 6
+            6,  // 7
+            6,  // 8
+            6,  // 9
+            7   // 10
         };
 
         public static int ClampLevel(int level) =>

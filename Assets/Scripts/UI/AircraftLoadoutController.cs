@@ -1,4 +1,5 @@
 using F89.Core;
+using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -8,8 +9,9 @@ namespace F89.UI
     {
         private const string MockupResourcePath = "Loadout/plane_loadout";
         private const float ActionButtonMargin = 20f;
-        private const float ActionButtonWidth = 190f;
-        private const float ActionButtonHeight = 44f;
+        private const float ActionButtonWidth = 285f;
+        private const float ActionButtonHeight = 66f;
+        private const float PayloadButtonWidth = 380f;
         private static readonly Color HudYellow = new Color(1f, 0.88f, 0f);
 
         private GUIStyle loadoutValueStyle;
@@ -18,11 +20,14 @@ namespace F89.UI
         private GUIStyle weightParagraphLabelStyle;
         private GUIStyle weaponCounterStyle;
         private GUIStyle gunCounterFieldStyle;
+        private GUIStyle payloadConfirmStyle;
+        private GUIStyle disabledActionButtonStyle;
 
         private Texture2D mockupTexture;
         private Rect mockupRect;
         private bool showBailOutConfirm;
         private bool showOverweightWarning;
+        private PayloadConfirmAction pendingPayloadConfirm;
         private bool isDraggingWeapon;
         private bool isEditingGunRounds;
         private bool gunRoundsFocusPending;
@@ -34,6 +39,13 @@ namespace F89.UI
             None = 0,
             Plane = 1,
             Tray = 2
+        }
+
+        private enum PayloadConfirmAction
+        {
+            None = 0,
+            SetDefault = 1,
+            Clear = 2
         }
 
         private GunRoundsEditSource gunRoundsEditSource;
@@ -90,7 +102,7 @@ namespace F89.UI
 
         private void OnEnable()
         {
-            AircraftLoadoutState.ResetForNewSortie();
+            AircraftLoadoutState.LoadCharacterDefault(CharacterSessionState.ActiveSave);
             mockupTexture = Resources.Load<Texture2D>(MockupResourcePath);
             ResetDragState();
         }
@@ -118,7 +130,7 @@ namespace F89.UI
             DrawSpeedDecrease();
             DrawLoadoutInstructions();
             DrawGunRoundsEditOverlay();
-            if (!showOverweightWarning && !showBailOutConfirm)
+            if (!showOverweightWarning && !showBailOutConfirm && pendingPayloadConfirm == PayloadConfirmAction.None)
             {
                 DrawDraggedWeapon();
             }
@@ -143,6 +155,10 @@ namespace F89.UI
                 {
                     showOverweightWarning = false;
                 }
+            }
+            else if (pendingPayloadConfirm != PayloadConfirmAction.None)
+            {
+                DrawPayloadConfirmDialog();
             }
         }
 
@@ -255,7 +271,7 @@ namespace F89.UI
 
         private void HandleDragAndDropInput()
         {
-            if (showBailOutConfirm || showOverweightWarning)
+            if (showBailOutConfirm || showOverweightWarning || pendingPayloadConfirm != PayloadConfirmAction.None)
             {
                 return;
             }
@@ -513,7 +529,9 @@ namespace F89.UI
                 && instructionStyle != null
                 && weightParagraphLabelStyle != null
                 && weaponCounterStyle != null
-                && gunCounterFieldStyle != null)
+                && gunCounterFieldStyle != null
+                && payloadConfirmStyle != null
+                && disabledActionButtonStyle != null)
             {
                 speedDecreaseLabelStyle.font = HudStyleFactory.ArialFont;
                 speedDecreaseLabelStyle.fontStyle = FontStyle.Bold;
@@ -552,6 +570,12 @@ namespace F89.UI
             gunCounterFieldStyle.focused.background = Texture2D.whiteTexture;
             gunCounterFieldStyle.active.background = Texture2D.whiteTexture;
             gunCounterFieldStyle.hover.background = Texture2D.whiteTexture;
+            payloadConfirmStyle = HudStyleFactory.CreateLabel(20, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black, wordWrap: true);
+            disabledActionButtonStyle = HudStyleFactory.CreateLabel(
+                20,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                new Color(0.82f, 0.88f, 0.94f));
         }
 
         private void DrawWeaponTrayCounters()
@@ -1020,7 +1044,7 @@ namespace F89.UI
 
         private void DrawActionButtons()
         {
-            if (isDraggingWeapon || showBailOutConfirm || showOverweightWarning)
+            if (showBailOutConfirm || showOverweightWarning || pendingPayloadConfirm != PayloadConfirmAction.None)
             {
                 return;
             }
@@ -1028,22 +1052,37 @@ namespace F89.UI
             var buttonWidth = UiFitCanvas.Px(ActionButtonWidth);
             var buttonHeight = UiFitCanvas.Px(ActionButtonHeight);
             var margin = UiFitCanvas.Px(ActionButtonMargin);
-            var gap = UiFitCanvas.Px(16f);
+            var payloadButtonWidth = UiFitCanvas.Px(PayloadButtonWidth);
+            var defaultRect = new Rect(UiFitCanvas.Rect.x + margin, UiFitCanvas.Rect.y + margin, payloadButtonWidth, buttonHeight);
+            var clearRect = new Rect(defaultRect.x, defaultRect.yMax + UiFitCanvas.Px(20f), payloadButtonWidth, buttonHeight);
+            if (DrawActionButton(defaultRect, "SET AS DEFAULT PAYLOAD", 20))
+            {
+                ResetDragState();
+                pendingPayloadConfirm = PayloadConfirmAction.SetDefault;
+            }
+
+            if (DrawActionButton(clearRect, "CLEAR PAYLOAD", 20))
+            {
+                ResetDragState();
+                pendingPayloadConfirm = PayloadConfirmAction.Clear;
+            }
+
+            var gap = UiFitCanvas.Px(32f);
             var totalWidth = buttonWidth * 2f + gap;
-            var startX = UiFitCanvas.Rect.xMax - totalWidth - margin;
+            var startX = UiFitCanvas.Rect.xMax - totalWidth - margin + UiFitCanvas.Px(160f);
             var y = UiFitCanvas.Rect.yMax - buttonHeight - margin;
 
             var bailRect = new Rect(startX, y, buttonWidth, buttonHeight);
             var startRect = new Rect(startX + buttonWidth + gap, y, buttonWidth, buttonHeight);
 
-            if (StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15))
+            if (DrawActionButton(bailRect, "BAIL OUT?", 20))
             {
                 heldGunArrowIndex = -1;
                 CancelGunRoundsEdit();
                 showBailOutConfirm = true;
             }
 
-            if (StartPageMenuStyles.DrawMenuButton(startRect, "START MISSION", fontSize: 15))
+            if (DrawActionButton(startRect, "START MISSION", 20))
             {
                 heldGunArrowIndex = -1;
                 CancelGunRoundsEdit();
@@ -1051,9 +1090,77 @@ namespace F89.UI
             }
         }
 
+        private bool DrawActionButton(Rect rect, string label, int fontSize)
+        {
+            if (!isDraggingWeapon)
+            {
+                return StartPageMenuStyles.DrawMenuButton(rect, label, fontSize: fontSize);
+            }
+
+            StartPageMenuStyles.DrawMenuButtonChrome(rect);
+            disabledActionButtonStyle.fontSize = fontSize;
+            GUI.Label(rect, label, disabledActionButtonStyle);
+            return false;
+        }
+
+        private void DrawPayloadConfirmDialog()
+        {
+            GUI.color = new Color(0f, 0f, 0f, 0.55f);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var width = UiFitCanvas.Px(500f);
+            var height = UiFitCanvas.Px(210f);
+            var dialog = new Rect(
+                UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - width) * 0.5f,
+                UiFitCanvas.Rect.y + (UiFitCanvas.Rect.height - height) * 0.5f,
+                width,
+                height);
+            GUI.color = new Color(0.93f, 0.93f, 0.93f);
+            GUI.DrawTexture(dialog, Texture2D.whiteTexture);
+            GUI.color = Color.black;
+            HudGuiUtility.DrawWireBox(dialog, 2f);
+
+            var message = pendingPayloadConfirm == PayloadConfirmAction.SetDefault
+                ? "Save the currently mounted weapons and gun rounds as this character's default payload?"
+                : "Remove every mounted weapon and all gun rounds from this payload?";
+            GUI.Label(
+                new Rect(dialog.x + UiFitCanvas.Px(28f), dialog.y + UiFitCanvas.Px(28f), dialog.width - UiFitCanvas.Px(56f), UiFitCanvas.Px(84f)),
+                message,
+                payloadConfirmStyle);
+
+            var buttonWidth = UiFitCanvas.Px(140f);
+            var buttonHeight = UiFitCanvas.Px(42f);
+            var y = dialog.yMax - buttonHeight - UiFitCanvas.Px(24f);
+            var yes = new Rect(dialog.center.x - buttonWidth - UiFitCanvas.Px(12f), y, buttonWidth, buttonHeight);
+            var no = new Rect(dialog.center.x + UiFitCanvas.Px(12f), y, buttonWidth, buttonHeight);
+            if (StartPageMenuStyles.DrawMenuButton(yes, "YES", fontSize: 16))
+            {
+                if (pendingPayloadConfirm == PayloadConfirmAction.SetDefault)
+                {
+                    AircraftLoadoutState.SaveCharacterDefault(CharacterSessionState.ActiveSave);
+                }
+                else
+                {
+                    AircraftLoadoutState.ClearPayload();
+                }
+
+                pendingPayloadConfirm = PayloadConfirmAction.None;
+            }
+            else if (StartPageMenuStyles.DrawMenuButton(no, "NO", fontSize: 16))
+            {
+                pendingPayloadConfirm = PayloadConfirmAction.None;
+            }
+        }
+
         private void HandleGunArrowInput()
         {
-            if (isDraggingWeapon || showBailOutConfirm || showOverweightWarning || isEditingGunRounds || mockupTexture == null)
+            if (isDraggingWeapon
+                || showBailOutConfirm
+                || showOverweightWarning
+                || pendingPayloadConfirm != PayloadConfirmAction.None
+                || isEditingGunRounds
+                || mockupTexture == null)
             {
                 return;
             }
@@ -1159,6 +1266,7 @@ namespace F89.UI
         private static void StartMission()
         {
             AircraftLoadoutState.MarkConfigured();
+            LandBossMissionAssignment.MarkAssignedMissionRun(CharacterSessionState.ActiveSave);
             Time.timeScale = 1f;
             FlightMissionLaunchState.BeginCarrierLaunch();
             SceneManager.LoadScene(GameScenes.FlightTest);

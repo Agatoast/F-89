@@ -1,3 +1,4 @@
+using F89.Core;
 using F89.LandCombat;
 using F89.UI;
 using UnityEngine;
@@ -32,17 +33,19 @@ namespace F89.UI
         private const float DownedExitDelaySeconds = 2.5f;
         private bool exitingAfterDowned;
         private float downedExitAt;
-        private bool pendingBossSpawn;
+        private int pendingBossNumber;
 
         private void Start()
         {
             LandGroundCrosshair.Apply();
+            CharacterGearSession.Bind(CharacterSessionState.ActiveSave);
             LandBossEncounter.ClearIntro();
-            if (LandBunkerHandoffState.ConsumeBossFightPending())
+            pendingBossNumber = LandBunkerHandoffState.ConsumeBossFightPending();
+            if (pendingBossNumber != 0)
             {
-                pendingBossSpawn = true;
+                LandBossEncounter.BeginBossFight(pendingBossNumber);
                 LandBossEncounter.BeginIntroCountdown();
-                Debug.Log("F-89 Bunker: Boss fight intro — 5s countdown.");
+                Debug.Log($"F-89 Bunker: Boss {pendingBossNumber} intro — 5s countdown.");
             }
         }
 
@@ -59,22 +62,24 @@ namespace F89.UI
 
         private void Update()
         {
+            LandCombatHud.HandleHotkeys();
             TryScheduleDownedExit();
             TryFinishBossIntro();
         }
 
         private void TryFinishBossIntro()
         {
-            if (!pendingBossSpawn || !LandBossEncounter.TickIntroFinished())
+            if (pendingBossNumber == 0 || !LandBossEncounter.TickIntroFinished())
             {
                 return;
             }
 
-            pendingBossSpawn = false;
-            SpawnBoss();
+            var bossNumber = pendingBossNumber;
+            pendingBossNumber = 0;
+            SpawnBoss(bossNumber);
         }
 
-        private static void SpawnBoss()
+        private static void SpawnBoss(int bossNumber)
         {
             var player = Object.FindAnyObjectByType<LandPlayerController>();
             if (player == null)
@@ -83,12 +88,30 @@ namespace F89.UI
                 return;
             }
 
-            var spawnPos = (Vector2)player.transform.position + Vector2.up * 4.5f;
-            var go = new GameObject("Boss1");
-            var enemy = go.AddComponent<LandGroundEnemy>();
-            enemy.Initialize(spawnPos, 2, player.transform);
-            go.name = "Boss1";
-            Debug.Log("F-89 Bunker: Boss 1 engaged.");
+            var bossCount = LandBossEncounter.GetEnemyCount(bossNumber);
+            for (var enemyIndex = 0; enemyIndex < bossCount; enemyIndex++)
+            {
+                var savedHitPoints = LandBossEncounter.GetSavedHitPoints(bossNumber, enemyIndex);
+                if (savedHitPoints == 0f)
+                {
+                    continue;
+                }
+
+                var lateralOffset = bossCount == 1 ? 0f : (enemyIndex == 0 ? -1.25f : 1.25f);
+                var spawnPos = (Vector2)player.transform.position + Vector2.up * 4.5f + Vector2.right * lateralOffset;
+                var objectName = LandBossEncounter.GetObjectName(bossNumber, enemyIndex);
+                var go = new GameObject(objectName);
+                var enemy = go.AddComponent<LandGroundEnemy>();
+                enemy.Initialize(
+                    spawnPos,
+                    LandBossEncounter.GetEnemyLevel(bossNumber),
+                    player.transform,
+                    savedHitPoints);
+                go.name = objectName;
+            }
+
+            var enemyLabel = bossCount == 1 ? "enemy" : "enemies";
+            Debug.Log($"F-89 Bunker: Boss {bossNumber} engaged with {bossCount} UR level {LandBossEncounter.GetEnemyLevel(bossNumber)} {enemyLabel}.");
         }
 
         private void TryScheduleDownedExit()
@@ -123,25 +146,12 @@ namespace F89.UI
                 return;
             }
 
-            LandCombatHud.DrawEnemyHpBars();
+            LandCombatHud.Draw(null);
+            LandLootBagUi.Draw();
 
             var style = HudStyleFactory.CreateLabel(14, FontStyle.Bold, TextAnchor.UpperLeft, Color.white);
-            GUI.Label(new Rect(12f, 12f, 480f, 40f), "BUNKER  |  Blue pad returns to surface", style);
-
-            var exitRect = new Rect(12f, Screen.height - 48f, 180f, 36f);
-            if (StartPageMenuStyles.DrawMenuButton(exitRect, "SURFACE", fontSize: 14))
-            {
-                Time.timeScale = 1f;
-                LandBunkerHandoffState.Clear();
-                LandSurfaceSession.BeginReturnAtBunker();
-                UnityEngine.SceneManagement.SceneManager.LoadScene(F89.Core.GameScenes.GroundAttack);
-            }
-
-            var settingsRect = new Rect(Screen.width - 230f, Screen.height - 48f, 100f, 36f);
-            if (StartPageMenuStyles.DrawMenuButton(settingsRect, "SETTINGS", fontSize: 14))
-            {
-                GamePauseController.OpenSettingsMenu();
-            }
+            var bunkerCode = LandBossAreaState.HasActiveArea ? LandBossAreaState.BunkerCode : "BUNKER";
+            GUI.Label(new Rect(12f, 12f, 480f, 40f), $"{bunkerCode}  |  Blue pad returns to surface", style);
         }
 
         private static void DrawBossCountdown()

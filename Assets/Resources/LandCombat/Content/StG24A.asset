@@ -1,4 +1,4 @@
-﻿%YAML 1.1
+%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!114 &11400000
 MonoBehaviour:
@@ -17,7 +17,7 @@ MonoBehaviour:
   Kind: 0
   Rarity: 1
   Category: 1
-  Damage: 15
+  Damage: 45
   Range: 6
   RateOfFire: 4
   MinRangeTiles: 0

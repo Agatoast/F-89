@@ -76,7 +76,7 @@ namespace F89.Testing
                     AntarcticaWorldLocations.SetCarrierPositionMiles(lockedCarrierMiles);
                     EnsureCarrierAtLockedPosition(worldUnitsPerMile, lockedCarrierMiles);
                     EnsureAllCarrierVisuals(worldUnitsPerMile);
-                    SyncAllBasePositions(worldUnitsPerMile);
+                    SyncAllLandBaseWorldState(worldUnitsPerMile);
                     LogCarrierReadyState();
                     return;
                 }
@@ -138,7 +138,7 @@ namespace F89.Testing
             SpawnAnchorRelativeBases(root.transform, mapSizeMiles, worldUnitsPerMile);
             MarkMissionObjective(root.transform, mission.firstObjectiveBaseName);
             EnsureCarrierAtLockedPosition(worldUnitsPerMile, carrierPositionMiles);
-            SyncAllBasePositions(worldUnitsPerMile);
+            SyncAllLandBaseWorldState(worldUnitsPerMile);
             LogCarrierReadyState();
         }
 
@@ -177,7 +177,7 @@ namespace F89.Testing
             CarrierWorldVisual.Attach(carrier.gameObject, worldUnitsPerMile);
         }
 
-        private static void SyncAllBasePositions(float worldUnitsPerMile)
+        private static void SyncAllLandBaseWorldState(float worldUnitsPerMile)
         {
             var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
             foreach (var baseSite in bases)
@@ -187,7 +187,15 @@ namespace F89.Testing
                     continue;
                 }
 
-                baseSite.ApplyWorldPosition(worldUnitsPerMile);
+                baseSite.RefreshPersistedWorldState(worldUnitsPerMile);
+                if (baseSite.SiteKind == BaseSiteKind.Land)
+                {
+                    EnsureBaseLockableTarget(
+                        baseSite.gameObject,
+                        baseSite.BaseName,
+                        baseSite.Control,
+                        BaseSiteKind.Land);
+                }
             }
         }
 
@@ -402,13 +410,14 @@ namespace F89.Testing
             CarrierWorldVisual.Attach(carrierObject, worldUnitsPerMile);
             Debug.Log(
                 $"F-89: Carrier spawned at ({positionMiles.x:0}, {positionMiles.y:0}) MI.");
-            EnsureBaseLockableTarget(carrierObject, carrier.BaseName, BaseControl.Friendly);
+            EnsureBaseLockableTarget(carrierObject, carrier.BaseName, BaseControl.Friendly, BaseSiteKind.Carrier);
         }
 
         private static void EnsureBaseLockableTarget(
             GameObject baseObject,
             string label,
-            BaseControl control)
+            BaseControl control,
+            BaseSiteKind siteKind)
         {
             var lockable = baseObject.GetComponent<LockableTarget>();
             if (lockable == null)
@@ -416,10 +425,17 @@ namespace F89.Testing
                 lockable = baseObject.AddComponent<LockableTarget>();
             }
 
-            var affiliation = control == BaseControl.Friendly
-                ? TargetAffiliation.Friendly
-                : TargetAffiliation.Hostile;
+            var affiliation = siteKind == BaseSiteKind.Land
+                ? TargetAffiliation.Neutral
+                : control == BaseControl.Friendly
+                    ? TargetAffiliation.Friendly
+                    : TargetAffiliation.Hostile;
             lockable.Configure(label, LockableTargetKind.Ground, affiliation);
+            var baseSite = baseObject.GetComponent<AntarcticaBase>();
+            if (baseSite != null && !baseSite.IsDestroyed)
+            {
+                lockable.RestoreTargeting();
+            }
         }
 
         private static void MarkMissionObjective(Transform root, string objectiveBaseName)
@@ -592,9 +608,11 @@ namespace F89.Testing
             var lockable = baseSite.GetComponent<LockableTarget>();
             if (lockable != null)
             {
-                var affiliation = baseSite.Control == BaseControl.Friendly
-                    ? TargetAffiliation.Friendly
-                    : TargetAffiliation.Hostile;
+                var affiliation = baseSite.SiteKind == BaseSiteKind.Land
+                    ? TargetAffiliation.Neutral
+                    : baseSite.Control == BaseControl.Friendly
+                        ? TargetAffiliation.Friendly
+                        : TargetAffiliation.Hostile;
                 lockable.Configure(newName, LockableTargetKind.Ground, affiliation);
             }
         }
@@ -606,9 +624,9 @@ namespace F89.Testing
         {
             var baseObject = new GameObject(definition.baseName);
             baseObject.transform.SetParent(parent, false);
-            var baseSite = baseObject.AddComponent<AntarcticaBase>();
+            var baseSite = baseObject.AddComponent<Outpost>();
             baseSite.Configure(definition.baseName, definition.control, definition.positionMiles, worldUnitsPerMile, true);
-            EnsureBaseLockableTarget(baseObject, definition.baseName, definition.control);
+            EnsureBaseLockableTarget(baseObject, definition.baseName, definition.control, BaseSiteKind.Land);
         }
 
         private static Vector3 MilesToWorld(Vector2 miles, float worldUnitsPerMile)
