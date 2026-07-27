@@ -54,7 +54,10 @@ namespace F89.Core
                 Name = TrimCharacterName(name),
                 LastPlayedUtc = DateTime.UtcNow.ToString("o"),
                 HighestAward = MilitaryMedalIds.DefaultForNewCharacter,
-                EarnedRibbonIds = new[] { MilitaryRibbonIds.FruitSalad }
+                EarnedRibbonIds = new[] { MilitaryRibbonIds.FruitSalad },
+                MaxHitPoints = 100,
+                Move = 3,
+                DamageResistance = 0
             };
 
             EnsureGearInitialized(save);
@@ -264,8 +267,41 @@ namespace F89.Core
             NormalizeLoadedRibbons();
             NormalizeLoadedScores();
             NormalizeLoadedGear();
+            NormalizeLoadedAttributes();
 
             if (cachedSaves.Count == 0)
+            {
+                WriteToDisk();
+            }
+        }
+
+        private static void NormalizeLoadedAttributes()
+        {
+            const int moveMin = 3;
+            const int moveMax = 15;
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null)
+                {
+                    continue;
+                }
+
+                var maxHp = save.MaxHitPoints <= 0 ? 100 : save.MaxHitPoints;
+                var move = Mathf.Clamp(save.Move <= 0 ? 3 : save.Move, moveMin, moveMax);
+                var dr = Mathf.Max(0, save.DamageResistance);
+                if (save.MaxHitPoints == maxHp && save.Move == move && save.DamageResistance == dr)
+                {
+                    continue;
+                }
+
+                save.MaxHitPoints = maxHp;
+                save.Move = move;
+                save.DamageResistance = dr;
+                changed = true;
+            }
+
+            if (changed)
             {
                 WriteToDisk();
             }

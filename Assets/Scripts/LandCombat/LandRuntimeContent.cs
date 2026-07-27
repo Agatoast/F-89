@@ -4,31 +4,37 @@ namespace F89.LandCombat
 {
     public static class LandRuntimeContent
     {
-        private static LandWeaponDefinition fallbackBlaster;
+        private static LandWeaponDefinition fallbackWeapon;
 
-        public static LandWeaponDefinition GetFallbackBlaster()
+        public static LandWeaponDefinition GetFallbackBlaster() => GetFallbackWeapon();
+
+        public static LandWeaponDefinition GetFallbackWeapon()
         {
-            if (fallbackBlaster != null)
+            if (fallbackWeapon != null)
             {
-                return fallbackBlaster;
+                return fallbackWeapon;
             }
 
-            var loaded = Resources.Load<LandWeaponDefinition>("LandCombat/Content/Blaster");
+            var loaded = Resources.Load<LandWeaponDefinition>(
+                "LandCombat/Content/" + LandUsWeaponCatalog.BasicLoadoutDefinitionId);
             if (loaded != null)
             {
-                fallbackBlaster = loaded;
-                return fallbackBlaster;
+                fallbackWeapon = loaded;
+                return fallbackWeapon;
             }
 
-            fallbackBlaster = ScriptableObject.CreateInstance<LandWeaponDefinition>();
-            fallbackBlaster.name = "RuntimeBlaster";
-            fallbackBlaster.DisplayName = "Blaster";
-            fallbackBlaster.Kind = LandWeaponKind.Bullet;
-            fallbackBlaster.Damage = 12f;
-            fallbackBlaster.RateOfFire = 1f;
-            fallbackBlaster.RangeTiles = 8f;
-            fallbackBlaster.ProjectileSpeed = 16f;
-            return fallbackBlaster;
+            // Last resort if assets are missing.
+            fallbackWeapon = ScriptableObject.CreateInstance<LandWeaponDefinition>();
+            fallbackWeapon.name = LandUsWeaponCatalog.BasicLoadoutDefinitionId;
+            fallbackWeapon.DisplayName = "M-4";
+            fallbackWeapon.Kind = LandWeaponKind.Bullet;
+            fallbackWeapon.Category = LandItemCategory.Military;
+            fallbackWeapon.Rarity = LandItemRarity.White;
+            fallbackWeapon.Damage = 10f;
+            fallbackWeapon.Range = 6f;
+            fallbackWeapon.RateOfFire = 4f;
+            fallbackWeapon.ProjectileSpeed = 22f;
+            return fallbackWeapon;
         }
     }
 }

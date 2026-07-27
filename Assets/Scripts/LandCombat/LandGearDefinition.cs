@@ -11,7 +11,12 @@ namespace F89.LandCombat
         public LandEquipmentSlot Slot = LandEquipmentSlot.Core;
         public LandItemRarity Rarity = LandItemRarity.White;
         public LandItemCategory Category = LandItemCategory.Military;
-        // Non-weapon gear has no MTAU attribute stats. Weapon items use LandWeaponDefinition
-        // for Damage and RateOfFire (ROF).
+
+        [Header("Combat Stats")]
+        [Tooltip("Damage Resistance contributed while equipped. Stacks across helmet/vest/boots.")]
+        public int DamageResistance;
+
+        [Tooltip("Boots only: while worn, sets character Move to this value.")]
+        public int Move;
     }
 }

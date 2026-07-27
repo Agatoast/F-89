@@ -58,11 +58,13 @@ namespace F89.LandCombat
             ref LandGearInstance best,
             ref int bestRank)
         {
+            // Catalog tray gear is Military Basic Loadout only.
+            // Experimental R&D pieces appear when owned in loadout/vault.
             var gearDefs = Resources.LoadAll<LandGearDefinition>(ContentRoot);
             for (var i = 0; i < gearDefs.Length; i++)
             {
                 var def = gearDefs[i];
-                if (def == null || def.Slot != slot)
+                if (def == null || def.Slot != slot || def.Category != LandItemCategory.Military)
                 {
                     continue;
                 }
@@ -84,11 +86,13 @@ namespace F89.LandCombat
                 return;
             }
 
+            // Catalog weapons in the tray are Military Basic Loadout only (M-4).
+            // Experimental R&D guns appear when owned in loadout/vault.
             var weaponDefs = Resources.LoadAll<LandWeaponDefinition>(ContentRoot);
             for (var i = 0; i < weaponDefs.Length; i++)
             {
                 var def = weaponDefs[i];
-                if (def == null)
+                if (def == null || def.Category != LandItemCategory.Military)
                 {
                     continue;
                 }

@@ -15,10 +15,10 @@ namespace F89.UI
         private const float DialogHeight = 180f;
         private const float ChoiceWidth = 120f;
         private const float ChoiceHeight = 38f;
+        private const int ButtonFontSize = 16;
 
         private static GUIStyle titleStyle;
         private static GUIStyle messageStyle;
-        private static GUIStyle buttonStyle;
 
         public static Result Draw(bool visible, string characterDisplayName)
         {
@@ -70,26 +70,17 @@ namespace F89.UI
                 ChoiceWidth,
                 ChoiceHeight);
 
-            DrawChoiceButton(deleteRect, "Delete");
-            DrawChoiceButton(backRect, "Back");
-
-            if (GUI.Button(deleteRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(deleteRect, "DELETE", fontSize: ButtonFontSize))
             {
                 return Result.Confirmed;
             }
 
-            if (GUI.Button(backRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(backRect, "BACK", fontSize: ButtonFontSize))
             {
                 return Result.Back;
             }
 
             return Result.None;
-        }
-
-        private static void DrawChoiceButton(Rect rect, string label)
-        {
-            HudGuiUtility.DrawWireBox(rect, 2f);
-            GUI.Label(rect, label, buttonStyle);
         }
 
         private static void EnsureStyles()
@@ -101,7 +92,6 @@ namespace F89.UI
 
             titleStyle = HudStyleFactory.CreateLabel(20, FontStyle.Bold, TextAnchor.UpperCenter, Color.black);
             messageStyle = HudStyleFactory.CreateLabel(16, FontStyle.Normal, TextAnchor.MiddleCenter, Color.black, wordWrap: true);
-            buttonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
         }
     }
 }

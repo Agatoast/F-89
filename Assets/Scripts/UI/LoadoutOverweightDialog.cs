@@ -8,9 +8,9 @@ namespace F89.UI
         private const float DialogHeight = 160f;
         private const float OkWidth = 120f;
         private const float OkHeight = 40f;
+        private const int ButtonFontSize = 16;
 
         private static GUIStyle messageStyle;
-        private static GUIStyle buttonStyle;
 
         public static bool Draw(bool visible)
         {
@@ -48,10 +48,7 @@ namespace F89.UI
                 OkWidth,
                 OkHeight);
 
-            HudGuiUtility.DrawWireBox(okRect, 2f);
-            GUI.Label(okRect, "OK", buttonStyle);
-
-            return GUI.Button(okRect, GUIContent.none, GUIStyle.none);
+            return StartPageMenuStyles.DrawMenuButton(okRect, "OK", fontSize: ButtonFontSize);
         }
 
         private static void EnsureStyles()
@@ -62,7 +59,6 @@ namespace F89.UI
             }
 
             messageStyle = HudStyleFactory.CreateLabel(16, FontStyle.Normal, TextAnchor.MiddleCenter, Color.black, wordWrap: true);
-            buttonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
         }
     }
 }

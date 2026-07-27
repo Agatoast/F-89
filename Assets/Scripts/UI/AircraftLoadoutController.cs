@@ -156,25 +156,31 @@ namespace F89.UI
 
         private void DrawMockupBackground()
         {
-            GUI.color = Color.black;
-            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
             if (mockupTexture == null)
             {
+                UiFitCanvas.Begin(16f / 9f);
+                GUI.color = Color.black;
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+                mockupRect = UiFitCanvas.Rect;
                 return;
             }
 
-            mockupRect = GetFullscreenImageRect(mockupTexture);
-            GUI.DrawTexture(mockupRect, mockupTexture, ScaleMode.StretchToFill, true);
+            UiFitCanvas.DrawLetterboxedBackground(mockupTexture);
+            mockupRect = UiFitCanvas.Rect;
         }
 
         private void EnsureMockupRect()
         {
-            if (mockupTexture != null)
+            if (mockupTexture == null)
             {
-                mockupRect = GetFullscreenImageRect(mockupTexture);
+                UiFitCanvas.Begin(16f / 9f);
+                mockupRect = UiFitCanvas.Rect;
+                return;
             }
+
+            UiFitCanvas.Begin(mockupTexture);
+            mockupRect = UiFitCanvas.Rect;
         }
 
         private void BuildHardpointHitRects()
@@ -968,7 +974,7 @@ namespace F89.UI
             var layout = GetLoadoutWeightParagraphLayout();
             var currentLabelWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("CURRENT LOADOUT")).x;
             var currentLabelRight = layout.CurrentLabelRect.center.x + currentLabelWidth * 0.5f;
-            var payloadLeft = currentLabelRight + UiFitCanvas.Px(50f);
+            var payloadLeft = currentLabelRight + UiFitCanvas.Px(50f) - UiFitCanvas.Px(10f);
 
             var labelContent = new GUIContent("PAYLOAD EFFECT ON MAXIMUM SPEED");
             var labelSize = speedDecreaseLabelStyle.CalcSize(labelContent);
@@ -1019,13 +1025,16 @@ namespace F89.UI
                 return;
             }
 
-            const float gap = 16f;
-            var totalWidth = ActionButtonWidth * 2f + gap;
-            var startX = Screen.width - totalWidth - ActionButtonMargin;
-            var y = Screen.height - ActionButtonHeight - ActionButtonMargin;
+            var buttonWidth = UiFitCanvas.Px(ActionButtonWidth);
+            var buttonHeight = UiFitCanvas.Px(ActionButtonHeight);
+            var margin = UiFitCanvas.Px(ActionButtonMargin);
+            var gap = UiFitCanvas.Px(16f);
+            var totalWidth = buttonWidth * 2f + gap;
+            var startX = UiFitCanvas.Rect.xMax - totalWidth - margin;
+            var y = UiFitCanvas.Rect.yMax - buttonHeight - margin;
 
-            var bailRect = new Rect(startX, y, ActionButtonWidth, ActionButtonHeight);
-            var startRect = new Rect(startX + ActionButtonWidth + gap, y, ActionButtonWidth, ActionButtonHeight);
+            var bailRect = new Rect(startX, y, buttonWidth, buttonHeight);
+            var startRect = new Rect(startX + buttonWidth + gap, y, buttonWidth, buttonHeight);
 
             if (StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15))
             {
@@ -1165,21 +1174,6 @@ namespace F89.UI
 
             Time.timeScale = 1f;
             SceneManager.LoadScene(GameScenes.CharacterPage);
-        }
-
-        private static Rect GetFullscreenImageRect(Texture2D texture)
-        {
-            var screenAspect = (float)Screen.width / Screen.height;
-            var textureAspect = (float)texture.width / (float)texture.height;
-
-            if (textureAspect > screenAspect)
-            {
-                var height = Screen.width / textureAspect;
-                return new Rect(0f, (Screen.height - height) * 0.5f, Screen.width, height);
-            }
-
-            var width = Screen.height * textureAspect;
-            return new Rect((Screen.width - width) * 0.5f, 0f, width, Screen.height);
         }
     }
 }

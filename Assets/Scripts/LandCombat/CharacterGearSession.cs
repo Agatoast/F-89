@@ -40,13 +40,14 @@ namespace F89.LandCombat
 
             CharacterSaveRepository.EnsureGearInitialized(save);
             var clearedLegacy = LandDefaultLoadout.TryClearLegacyAutoEquippedStarters(save);
-            if (clearedLegacy)
+            var filledDevWeapons = LandDevWeaponFill.FillInventoryAndFootlockerOnce(save);
+            if (clearedLegacy && !filledDevWeapons)
             {
                 CharacterSaveRepository.WriteGear(save);
             }
 
             if (!forceReload
-                && !clearedLegacy
+                && !filledDevWeapons
                 && boundSaveId == save.Id
                 && ActiveLoadout != null)
             {

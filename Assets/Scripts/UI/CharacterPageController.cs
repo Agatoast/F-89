@@ -55,6 +55,7 @@ namespace F89.UI
         private void OnGUI()
         {
             MilitaryAwardTooltipUi.BeginFrame();
+            LandItemTooltipUi.BeginFrame();
             CharacterGearSession.Bind(CharacterSessionState.ActiveSave);
             DrawPageBackground();
 
@@ -71,6 +72,7 @@ namespace F89.UI
             CharacterPageGearUi.DrawEquipmentSlots();
             CharacterPageGearUi.DrawInventory(CharacterPageLayout.GetInventoryGridRect());
             DrawPaperdoll();
+            LandPaperdollDrUi.DrawOnPaperdoll(CharacterPageLayout.GetPaperdollRect(), offsetX: -2f);
             DrawLeftColumn(save);
             CharacterPageGearUi.DrawFootlocker(CharacterPageLayout.GetFootlockerGridRect());
             DrawPortrait(save);
@@ -81,9 +83,25 @@ namespace F89.UI
             DrawMissionBriefButton();
             CharacterPageGearUi.DrawDragOverlay();
             DrawResearchConfirmDialog();
+            DrawGearDeleteConfirmDialog();
             DrawResearchTechTooLowDialog();
             DrawResearchWrongCategoryDialog();
+            DrawBasicLoadoutSlotOccupiedDialog();
             MilitaryAwardTooltipUi.Draw();
+            LandItemTooltipUi.Draw(LandItemTooltipUi.Placement.AboveCursor);
+        }
+
+        private static void DrawBasicLoadoutSlotOccupiedDialog()
+        {
+            if (!CharacterPageGearUi.IsBasicLoadoutSlotOccupiedPending)
+            {
+                return;
+            }
+
+            if (BasicLoadoutSlotOccupiedDialog.Draw(true) == BasicLoadoutSlotOccupiedDialog.Result.Acknowledged)
+            {
+                CharacterPageGearUi.AcknowledgeBasicLoadoutSlotOccupied();
+            }
         }
 
         private static void DrawResearchConfirmDialog()
@@ -101,6 +119,24 @@ namespace F89.UI
             else if (result == ResearchDestroyConfirmDialog.Result.Cancelled)
             {
                 CharacterPageGearUi.CancelResearchConfirm();
+            }
+        }
+
+        private static void DrawGearDeleteConfirmDialog()
+        {
+            if (!CharacterPageGearUi.IsDeleteConfirmPending)
+            {
+                return;
+            }
+
+            var result = GearDeleteConfirmDialog.Draw(true);
+            if (result == GearDeleteConfirmDialog.Result.Confirmed)
+            {
+                CharacterPageGearUi.ConfirmDeleteItem();
+            }
+            else if (result == GearDeleteConfirmDialog.Result.Cancelled)
+            {
+                CharacterPageGearUi.CancelDeleteConfirm();
             }
         }
 

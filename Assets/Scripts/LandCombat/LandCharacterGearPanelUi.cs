@@ -220,17 +220,14 @@ namespace F89.LandCombat
 
         private static void DrawItemLabel(Rect cell, LandGearInstance item, int nameFontSize)
         {
-            var catalog = CharacterGearSession.Catalog;
-            var nameStyle = HudStyleFactory.CreateLabel(nameFontSize, FontStyle.Bold, TextAnchor.UpperCenter, Color.black, wordWrap: true);
-            var statStyle = HudStyleFactory.CreateLabel(Mathf.Max(7, nameFontSize - 2), FontStyle.Normal, TextAnchor.LowerCenter, Color.black, wordWrap: true);
-            var nameRect = new Rect(cell.x, cell.y + 2f, cell.width, cell.height * 0.55f);
-            var statRect = new Rect(cell.x, cell.y + cell.height * 0.45f, cell.width, cell.height * 0.5f);
-
-            GUI.Label(nameRect, catalog.GetDisplayName(item), nameStyle);
-            if (catalog.TryGetWeaponSummary(item, out var summary))
-            {
-                GUI.Label(statRect, summary, statStyle);
-            }
+            LandItemTileOverlay.Draw(
+                cell,
+                item,
+                CharacterGearSession.Catalog,
+                nameFontSize,
+                Color.black,
+                scaleFonts: false,
+                paintRarityFill: true);
         }
 
         private static void HandleInventoryClick(int index)

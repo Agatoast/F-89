@@ -1,4 +1,3 @@
-using F89.Core;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -7,82 +6,49 @@ namespace F89.LandCombat
     public static class LandGroundTerrainBuilder
     {
         private const string ShaderName = "F89/LandCombatGround";
-        private const string LandMaskResourcePath = "F89_AntarcticaMap";
-        private const string WorldMapResourcePath = "F89_WorldMapConfig";
-
-        private static readonly int ArenaCenterMilesId = Shader.PropertyToID("_ArenaCenterMiles");
-        private static readonly int MapSizeMilesId = Shader.PropertyToID("_MapSizeMiles");
-        private static readonly int MapAspectWidthOverHeightId = Shader.PropertyToID("_MapAspectWidthOverHeight");
-        private static readonly int SatelliteBlendId = Shader.PropertyToID("_SatelliteBlend");
-        private static readonly int WorldUnitsPerMileId = Shader.PropertyToID("_WorldUnitsPerMile");
-        private static readonly int ArenaHalfSizeWorldId = Shader.PropertyToID("_ArenaHalfSizeWorld");
 
         public static GameObject BuildArena()
         {
-            var worldMap = Resources.Load<WorldMapConfig>(WorldMapResourcePath);
-            var mapSizeMiles = worldMap != null ? worldMap.antarcticaSizeMiles : 3000f;
-            var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap);
-            var arenaSize = LandGameConstants.ArenaSizeWorldUnits;
-            var centerMiles = ResolveArenaCenterMiles(worldUnitsPerMile);
-
+            var terrainSize = LandGameConstants.InfiniteTerrainWorldSize;
             var terrainObject = new GameObject("AntarcticaGroundTerrain");
             terrainObject.transform.position = new Vector3(0f, 0f, 1f);
 
             var meshFilter = terrainObject.AddComponent<MeshFilter>();
-            meshFilter.sharedMesh = CreateQuadMesh(arenaSize, arenaSize);
+            meshFilter.sharedMesh = CreateQuadMesh(terrainSize, terrainSize);
 
             var meshRenderer = terrainObject.AddComponent<MeshRenderer>();
-            meshRenderer.sharedMaterial = CreateTerrainMaterial(centerMiles, mapSizeMiles, worldUnitsPerMile);
+            meshRenderer.sharedMaterial = CreateTerrainMaterial();
             meshRenderer.shadowCastingMode = ShadowCastingMode.Off;
             meshRenderer.receiveShadows = false;
             meshRenderer.sortingOrder = -100;
 
+            terrainObject.AddComponent<LandGroundTerrainFollow>();
             return terrainObject;
         }
 
-        private static float ResolveWorldUnitsPerMile(WorldMapConfig worldMap)
+        public static void BindFollowTarget(Transform target)
         {
-            if (worldMap == null)
+            var follow = Object.FindAnyObjectByType<LandGroundTerrainFollow>();
+            if (follow != null)
             {
-                return LandGameConstants.WorldUnitsPerMile;
+                follow.SetTarget(target);
             }
-
-            return worldMap.GridSpacingTics * LandGameConstants.WorldUnitsPerTile / worldMap.milesPerGrid;
         }
 
-        private static Vector2 ResolveArenaCenterMiles(float worldUnitsPerMile)
-        {
-            var snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
-            if (snapshot.IsValid)
-            {
-                return WorldMapConfig.WorldToMileOffset(snapshot.AircraftWorldPosition, worldUnitsPerMile);
-            }
-
-            return new Vector2(-420f, -780f);
-        }
-
-        private static Material CreateTerrainMaterial(Vector2 centerMiles, float mapSizeMiles, float worldUnitsPerMile)
+        private static Material CreateTerrainMaterial()
         {
             var shader = Shader.Find(ShaderName);
             if (shader == null)
             {
                 Debug.LogWarning("[LandCombat] F89/LandCombatGround shader not found; using fallback color.");
-                return new Material(Shader.Find("Sprites/Default"));
+                var fallback = new Material(Shader.Find("Sprites/Default"));
+                fallback.color = new Color(0.86f, 0.90f, 0.94f);
+                return fallback;
             }
 
             var material = new Material(shader);
-            var landMask = AntarcticaLandMask.GetReadableMap();
-            if (landMask != null)
-            {
-                material.SetTexture("_LandMask", landMask);
-            }
-
-            material.SetVector(ArenaCenterMilesId, new Vector4(centerMiles.x, centerMiles.y, 0f, 0f));
-            material.SetFloat(MapSizeMilesId, mapSizeMiles);
-            material.SetFloat(MapAspectWidthOverHeightId, AntarcticaLandMask.GetMapWidthOverHeight());
-            material.SetFloat(SatelliteBlendId, 1f);
-            material.SetFloat(WorldUnitsPerMileId, worldUnitsPerMile);
-            material.SetFloat(ArenaHalfSizeWorldId, LandGameConstants.ArenaHalfSizeWorldUnits);
+            material.SetFloat("_SatelliteBlend", 0f);
+            material.SetFloat("_LandNoiseScale", 0.09f);
             return material;
         }
 

@@ -48,9 +48,12 @@ namespace F89.UI
         public static void DrawSubpage(string title, string message)
         {
             EnsureStyles();
+            UiFitCanvas.Begin(16f / 9f);
 
-            GUI.color = new Color(0.04f, 0.05f, 0.07f, 0.96f);
+            GUI.color = Color.black;
             GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), GetWhiteTexture());
+            GUI.color = new Color(0.04f, 0.05f, 0.07f, 0.96f);
+            GUI.DrawTexture(UiFitCanvas.Rect, GetWhiteTexture());
             GUI.color = Color.white;
 
             Rect titleRect;
@@ -61,23 +64,27 @@ namespace F89.UI
             else
             {
                 subpageTitleStyle.normal.textColor = new Color(0.78f, 0.86f, 0.95f);
-                titleRect = new Rect(0f, Screen.height * 0.06f, Screen.width, 48f);
+                titleRect = new Rect(
+                    UiFitCanvas.Rect.x,
+                    UiFitCanvas.NormY(0.06f),
+                    UiFitCanvas.Rect.width,
+                    UiFitCanvas.Px(48f));
                 GUI.Label(titleRect, title, subpageTitleStyle);
             }
 
-            const float buttonWidth = 240f;
-            const float buttonHeight = 48f;
+            var buttonWidth = UiFitCanvas.Px(240f);
+            var buttonHeight = UiFitCanvas.Px(48f);
             var backRect = new Rect(
-                (Screen.width - buttonWidth) * 0.5f,
-                Screen.height - buttonHeight - Screen.height * 0.05f,
+                UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - buttonWidth) * 0.5f,
+                UiFitCanvas.Rect.yMax - buttonHeight - UiFitCanvas.Px(54f),
                 buttonWidth,
                 buttonHeight);
 
             var messageArea = new Rect(
-                Screen.width * 0.12f,
-                titleRect.yMax + Screen.height * 0.02f,
-                Screen.width * 0.76f,
-                backRect.y - (titleRect.yMax + Screen.height * 0.04f));
+                UiFitCanvas.NormX(0.12f),
+                titleRect.yMax + UiFitCanvas.Px(22f),
+                UiFitCanvas.Rect.width * 0.76f,
+                backRect.y - (titleRect.yMax + UiFitCanvas.Px(44f)));
 
             var content = new GUIContent(message ?? string.Empty);
             var isStory = title == StoryPageContent.Title;
@@ -123,18 +130,18 @@ namespace F89.UI
                 saveAntarcticaLogoTexture = Resources.Load<Texture2D>("CharacterPage/save_antarctica_logo");
             }
 
-            var topY = Screen.height * 0.04f;
+            var topY = UiFitCanvas.NormY(0.04f);
             if (saveAntarcticaLogoTexture == null)
             {
-                return new Rect(0f, topY, Screen.width, 48f);
+                return new Rect(UiFitCanvas.Rect.x, topY, UiFitCanvas.Rect.width, UiFitCanvas.Px(48f));
             }
 
             var aspect = saveAntarcticaLogoTexture.height / (float)Mathf.Max(1, saveAntarcticaLogoTexture.width);
             // Keep the layout slot unchanged so story text / flag / back stay put.
-            var layoutWidth = Screen.width * 0.42f * 0.5f;
+            var layoutWidth = UiFitCanvas.Rect.width * 0.42f * 0.5f;
             var layoutHeight = layoutWidth * aspect;
             var layoutRect = new Rect(
-                (Screen.width - layoutWidth) * 0.5f - UiFitCanvas.Px(100f),
+                UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - layoutWidth) * 0.5f - UiFitCanvas.Px(100f),
                 topY,
                 layoutWidth,
                 layoutHeight);
@@ -144,11 +151,11 @@ namespace F89.UI
             var sideMargin = UiFitCanvas.Px(10f);
             var maxHeight = Mathf.Max(layoutHeight, layoutRect.yMax - topMargin);
             var maxWidth = maxHeight / aspect;
-            maxWidth = Mathf.Min(maxWidth, Screen.width - sideMargin * 2f);
+            maxWidth = Mathf.Min(maxWidth, UiFitCanvas.Rect.width - sideMargin * 2f);
             maxHeight = maxWidth * aspect;
 
-            var drawX = (Screen.width - maxWidth) * 0.5f - UiFitCanvas.Px(100f);
-            drawX = Mathf.Clamp(drawX, sideMargin, Screen.width - maxWidth - sideMargin);
+            var drawX = UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - maxWidth) * 0.5f - UiFitCanvas.Px(100f);
+            drawX = Mathf.Clamp(drawX, UiFitCanvas.Rect.x + sideMargin, UiFitCanvas.Rect.xMax - maxWidth - sideMargin);
             var drawRect = new Rect(drawX, layoutRect.yMax - maxHeight, maxWidth, maxHeight);
 
             GUI.color = Color.white;
@@ -181,7 +188,7 @@ namespace F89.UI
 
             var lineWidth = subpageMessageStyle.CalcSize(new GUIContent(StoryPageContent.FlagAnchorLine)).x;
             var lineHeight = Mathf.Max(
-                28f,
+                UiFitCanvas.Px(28f),
                 subpageMessageStyle.CalcHeight(new GUIContent("Ag"), textWidth));
             var flagLeft = messageArea.x + Mathf.Min(lineWidth + 28f, textWidth * 0.52f);
 
@@ -199,7 +206,8 @@ namespace F89.UI
                 return;
             }
 
-            GUI.BeginClip(new Rect(0f, messageArea.y, Screen.width, messageArea.height));
+            GUI.BeginClip(new Rect(messageArea.x, messageArea.y, messageArea.width, messageArea.height));
+            flagRect.x -= messageArea.x;
             flagRect.y -= messageArea.y;
             GUI.color = Color.white;
             GUI.DrawTexture(flagRect, storyFlagTexture, ScaleMode.ScaleToFit, true);

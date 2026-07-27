@@ -11,10 +11,10 @@ namespace F89.LandCombat
             SessionScore = 0;
         }
 
-        public static void RegisterKill()
+        public static void RegisterKill(int enemyLevel)
         {
             SessionKills++;
-            SessionScore += 25;
+            SessionScore += LandUrEnemyStats.ClampLevel(enemyLevel);
         }
     }
 }

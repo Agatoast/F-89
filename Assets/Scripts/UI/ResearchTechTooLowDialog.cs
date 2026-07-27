@@ -14,9 +14,9 @@ namespace F89.UI
         private const float DialogHeight = 160f;
         private const float ChoiceWidth = 120f;
         private const float ChoiceHeight = 40f;
+        private const int ButtonFontSize = 16;
 
         private static GUIStyle messageStyle;
-        private static GUIStyle buttonStyle;
 
         public static Result Draw(bool visible)
         {
@@ -52,10 +52,8 @@ namespace F89.UI
                 dialogRect.yMax - ChoiceHeight - 24f,
                 ChoiceWidth,
                 ChoiceHeight);
-            HudGuiUtility.DrawWireBox(okRect, 2f);
-            GUI.Label(okRect, "OK", buttonStyle);
 
-            if (GUI.Button(okRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(okRect, "OK", fontSize: ButtonFontSize))
             {
                 return Result.Acknowledged;
             }
@@ -71,7 +69,6 @@ namespace F89.UI
             }
 
             messageStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black, wordWrap: true);
-            buttonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
         }
     }
 }

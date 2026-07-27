@@ -1,3 +1,4 @@
+using F89.Core;
 using F89.UI;
 using UnityEngine;
 
@@ -7,16 +8,23 @@ namespace F89.LandCombat
     {
         private LandPlayerMotor motor;
         private LandPlayerCombat combat;
+        private LandPlayerHealth health;
 
         private void Awake()
         {
             motor = GetComponent<LandPlayerMotor>();
             combat = GetComponent<LandPlayerCombat>();
+            health = GetComponent<LandPlayerHealth>();
         }
 
         private void Update()
         {
-            if (GamePauseController.IsPaused)
+            LandLootBagUi.HandleCloseHotkey();
+
+            if (GamePauseController.IsPaused
+                || LandBossEncounter.IsIntroActive
+                || LandLandedPlane.IsTakeOffPromptPending
+                || (health != null && health.IsUnconscious))
             {
                 motor.SetMoveInput(Vector2.zero);
                 combat.SetFireHeld(false);
@@ -34,7 +42,30 @@ namespace F89.LandCombat
                 ? (Vector2)Camera.main.ScreenToWorldPoint(Input.mousePosition)
                 : (Vector2)transform.position + Vector2.right;
             motor.SetAimDirection(worldMouse);
-            combat.SetFireHeld(Input.GetMouseButton(0));
+
+            LandCorpseLootInput.UpdateHover(transform.position);
+            LandLandedPlane.HandleTakeOffClick();
+
+            if (GameKeyBindings.WasPressed(GameKeyBindingIds.AutoFireToggle))
+            {
+                AutoFireState.Toggle();
+            }
+
+            var manualFire = Input.GetMouseButton(0);
+            var blockAllFire = LandLandedPlane.IsTakeOffPromptPending
+                                || LandLandedPlane.IsWorldPointerOverPlane()
+                                || LandLootBagUi.IsPointerOverPanel()
+                                || (LandLootBagSession.IsOpen && !LandLootBagSession.IsPinned);
+            var blockManualFire = blockAllFire
+                                  || LandCombatHud.IsPointerOverHud()
+                                  || CharacterPageGearUi.IsDraggingGear;
+
+            if (blockManualFire)
+            {
+                manualFire = false;
+            }
+
+            combat.SetFireHeld(!blockAllFire && (manualFire || AutoFireState.Enabled));
         }
     }
 }

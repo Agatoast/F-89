@@ -19,10 +19,10 @@ namespace F89.UI
         private const float OptionSpacing = 16f;
         private const float ChoiceWidth = 140f;
         private const float ChoiceHeight = 38f;
+        private const int ButtonFontSize = 16;
 
         private static GUIStyle titleStyle;
         private static GUIStyle sectionStyle;
-        private static GUIStyle buttonStyle;
 
         public static Result Draw(bool visible, out string selectedPortraitId)
         {
@@ -102,15 +102,12 @@ namespace F89.UI
                 ChoiceWidth,
                 ChoiceHeight);
 
-            DrawChoiceButton(browseRect, "Browse...");
-            DrawChoiceButton(cancelRect, "Cancel");
-
-            if (GUI.Button(browseRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(browseRect, "BROWSE...", fontSize: ButtonFontSize))
             {
                 return Result.Browse;
             }
 
-            if (GUI.Button(cancelRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(cancelRect, "CANCEL", fontSize: ButtonFontSize))
             {
                 return Result.Cancel;
             }
@@ -129,12 +126,6 @@ namespace F89.UI
             return GUI.Button(rect, GUIContent.none, GUIStyle.none);
         }
 
-        private static void DrawChoiceButton(Rect rect, string label)
-        {
-            HudGuiUtility.DrawWireBox(rect, 2f);
-            GUI.Label(rect, label, buttonStyle);
-        }
-
         private static void EnsureStyles()
         {
             if (titleStyle != null)
@@ -144,7 +135,6 @@ namespace F89.UI
 
             titleStyle = HudStyleFactory.CreateLabel(20, FontStyle.Bold, TextAnchor.UpperCenter, Color.black);
             sectionStyle = HudStyleFactory.CreateLabel(16, FontStyle.Bold, TextAnchor.UpperLeft, Color.black);
-            buttonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
         }
     }
 }

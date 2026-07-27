@@ -72,6 +72,11 @@ namespace F89.Weapons
 
             UpdateIffDisplay();
 
+            if (!GameSettings.MissileSoundsEnabled)
+            {
+                StopLockTone();
+            }
+
             if (SelectedTarget != null && !SelectedTarget.IsAlive)
             {
                 ClearSelection();
@@ -474,7 +479,7 @@ namespace F89.Weapons
 
         private void UpdateBeepAudio()
         {
-            if (LockState == MissileLockState.Locked || lockWeapon == null)
+            if (LockState == MissileLockState.Locked || lockWeapon == null || !GameSettings.MissileSoundsEnabled)
             {
                 return;
             }
@@ -499,7 +504,7 @@ namespace F89.Weapons
 
         private void PlayLockToneIfNeeded()
         {
-            if (lockTonePlaying)
+            if (lockTonePlaying || !GameSettings.MissileSoundsEnabled)
             {
                 return;
             }
@@ -528,7 +533,16 @@ namespace F89.Weapons
             IffFriendActive = true;
             IffFriendLabel = target != null ? target.TargetLabel : string.Empty;
             iffDisplayTimer = 2.5f;
-            audioSource.PlayOneShot(iffFriendClip);
+            if (!GameSettings.MissileSoundsEnabled)
+            {
+                return;
+            }
+
+            EnsureAudio();
+            if (audioSource != null && iffFriendClip != null)
+            {
+                audioSource.PlayOneShot(iffFriendClip);
+            }
         }
 
         private void UpdateIffDisplay()

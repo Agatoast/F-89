@@ -1,111 +1,85 @@
 using F89.Core;
 using F89.LandCombat;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace F89.UI
 {
     public class GroundAttackScreenController : MonoBehaviour
     {
-        private void OnGUI()
+        private const float DownedExitDelaySeconds = 2.5f;
+        private bool exitingAfterDowned;
+        private float downedExitAt;
+
+        private void Start()
         {
-            DrawHudOverlay();
-            DrawHealthBar();
-            DrawReturnButton();
+            LandCombatConsumables.ResetForMission();
+            LandGroundCrosshair.Apply();
         }
 
-        private static void DrawHealthBar()
+        private void OnDestroy()
         {
+            LandGroundCrosshair.Clear();
+        }
+
+        private void OnDisable()
+        {
+            LandGroundCrosshair.Clear();
+        }
+
+        private void Update()
+        {
+            LandCombatHud.HandleHotkeys();
+            TryScheduleDownedExit();
+        }
+
+        private void TryScheduleDownedExit()
+        {
+            if (exitingAfterDowned)
+            {
+                if (Time.unscaledTime >= downedExitAt)
+                {
+                    exitingAfterDowned = false;
+                    LandGroundMissionExit.Leave();
+                }
+
+                return;
+            }
+
             var health = Object.FindAnyObjectByType<LandPlayerHealth>();
-            if (health == null)
+            if (health == null || !health.IsUnconscious)
             {
                 return;
             }
 
-            const float barWidth = 220f;
-            const float barHeight = 18f;
-            const float margin = 16f;
-            var barRect = new Rect(margin, Screen.height - barHeight - margin - 52f, barWidth, barHeight);
-            var fillRect = new Rect(barRect.x + 1f, barRect.y + 1f, (barRect.width - 2f) * health.HealthNormalized, barRect.height - 2f);
-
-            GUI.color = new Color(0f, 0f, 0f, 0.55f);
-            GUI.DrawTexture(barRect, Texture2D.whiteTexture);
-            GUI.color = health.IsAlive ? new Color(0.18f, 0.82f, 0.28f, 0.95f) : new Color(0.75f, 0.12f, 0.12f, 0.95f);
-            GUI.DrawTexture(fillRect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            var labelStyle = HudStyleFactory.CreateLabel(12, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
-            GUI.Label(barRect, $"{health.HealthPercent:0}%", labelStyle);
+            exitingAfterDowned = true;
+            downedExitAt = Time.unscaledTime + DownedExitDelaySeconds;
+            Debug.Log($"F-89 Land: Downed ({health.DownedOutcome}) — leaving ground in {DownedExitDelaySeconds:0.0}s.");
         }
 
-        private static void DrawHudOverlay()
+        private void OnGUI()
         {
-            var hudStyle = HudStyleFactory.CreateLabel(14, FontStyle.Normal, TextAnchor.UpperLeft, Color.white);
-            GUI.Label(
-                new Rect(16f, 16f, 520f, 24f),
-                $"Ground Ops  |  Kills: {LandGroundSceneController.SessionKills}  Score: {LandGroundSceneController.SessionScore}",
-                hudStyle);
-
-            var weaponLine = BuildEquippedWeaponLine();
-            if (!string.IsNullOrEmpty(weaponLine))
-            {
-                GUI.Label(new Rect(16f, 40f, 520f, 24f), weaponLine, hudStyle);
-                GUI.Label(new Rect(16f, 64f, 520f, 24f), "WASD move, mouse aim, click to fire.", hudStyle);
-            }
-            else
-            {
-                GUI.Label(new Rect(16f, 40f, 520f, 24f), "WASD move, mouse aim, click to fire.", hudStyle);
-            }
+            LandCombatHud.Draw(LandGroundMissionExit.Leave);
+            LandLootBagUi.Draw();
+            DrawTakeOffDialog();
         }
 
-        private static string BuildEquippedWeaponLine()
+        private static void DrawTakeOffDialog()
         {
-            var weaponItem = CharacterGearSession.ActiveLoadout?.Weapon;
-            if (weaponItem == null || !LandLoadoutSlots.IsValidItem(weaponItem))
+            if (!LandLandedPlane.IsTakeOffPromptPending)
             {
-                return string.Empty;
+                return;
             }
 
-            var catalog = CharacterGearSession.Catalog;
-            if (!catalog.TryGetWeaponSummary(weaponItem, out var summary))
+            var result = TakeOffConfirmDialog.Draw(true);
+            if (result == TakeOffConfirmDialog.Result.Confirmed)
             {
-                return catalog.GetDisplayName(weaponItem);
+                LandLandedPlane.CancelTakeOffPrompt();
+                LandGroundMissionExit.Leave();
             }
-
-            return $"{catalog.GetDisplayName(weaponItem)}  |  {summary}";
-        }
-
-        private static void DrawReturnButton()
-        {
-            const float buttonWidth = 220f;
-            const float buttonHeight = 40f;
-            var buttonX = (Screen.width - buttonWidth) * 0.5f;
-
-            if (GUI.Button(new Rect(buttonX, Screen.height - buttonHeight - 24f, buttonWidth, buttonHeight), "Return to Flight"))
+            else if (result == TakeOffConfirmDialog.Result.Cancelled)
             {
-                ReturnToFlight();
+                LandLandedPlane.CancelTakeOffPrompt();
             }
-        }
-
-        private static void ReturnToFlight()
-        {
-            var result = new LandGroundSessionResult
-            {
-                CompletedVoluntarily = true,
-                TroopsKilled = LandGroundSceneController.SessionKills,
-                ScoreEarned = LandGroundSceneController.SessionScore
-            };
-
-            var save = CharacterSessionState.ActiveSave;
-            if (save != null)
-            {
-                CharacterSaveRepository.RecordGroundSession(save, result);
-            }
-
-            LandCombatModule.ExitToFlight(result);
-
-            Time.timeScale = 1f;
-            SceneManager.LoadScene(LandMissionHandoffState.PendingReturnSceneName);
         }
     }
 }

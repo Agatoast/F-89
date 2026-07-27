@@ -15,9 +15,9 @@ namespace F89.UI
         private const float DialogHeight = 180f;
         private const float ChoiceWidth = 120f;
         private const float ChoiceHeight = 40f;
+        private const int ButtonFontSize = 16;
 
         private static GUIStyle messageStyle;
-        private static GUIStyle buttonStyle;
 
         public static Result Draw(bool visible)
         {
@@ -52,26 +52,17 @@ namespace F89.UI
             var yesRect = new Rect(dialogRect.x + dialogRect.width * 0.5f - ChoiceWidth - 12f, choiceY, ChoiceWidth, ChoiceHeight);
             var noRect = new Rect(dialogRect.x + dialogRect.width * 0.5f + 12f, choiceY, ChoiceWidth, ChoiceHeight);
 
-            DrawChoiceButton(yesRect, "Yes");
-            DrawChoiceButton(noRect, "No");
-
-            if (GUI.Button(yesRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(yesRect, "YES", fontSize: ButtonFontSize))
             {
                 return Result.Confirmed;
             }
 
-            if (GUI.Button(noRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(noRect, "NO", fontSize: ButtonFontSize))
             {
                 return Result.Cancelled;
             }
 
             return Result.None;
-        }
-
-        private static void DrawChoiceButton(Rect rect, string label)
-        {
-            HudGuiUtility.DrawWireBox(rect, 2f);
-            GUI.Label(rect, label, buttonStyle);
         }
 
         private static void EnsureStyles()
@@ -82,7 +73,6 @@ namespace F89.UI
             }
 
             messageStyle = HudStyleFactory.CreateLabel(16, FontStyle.Normal, TextAnchor.MiddleCenter, Color.black, wordWrap: true);
-            buttonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
         }
     }
 }

@@ -1,0 +1,29 @@
+﻿%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6a6ca54a90fff134fa19e9470600dc1b, type: 3}
+  m_Name: AVG
+  m_EditorClassIdentifier: Assembly-CSharp::F89.LandCombat.LandWeaponDefinition
+  DisplayName: AVG
+  Description: Ultimate Reich rifle. Usable as R&D fuel.
+  Kind: 0
+  Rarity: 7
+  Category: 1
+  Damage: 29
+  Range: 9
+  RateOfFire: 4
+  MinRangeTiles: 0
+  ProjectileSpeed: 22
+  SpreadCount: 5
+  SpreadAngle: 32
+  HomingTurnRate: 240
+  ProjectileColor: {r: 1, g: 0.55, b: 0.05, a: 1}
+  ProjectileScale: 0.18

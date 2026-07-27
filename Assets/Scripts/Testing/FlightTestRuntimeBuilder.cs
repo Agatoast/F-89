@@ -16,14 +16,15 @@ namespace F89.Testing
             var existingPlayer = Object.FindAnyObjectByType<AircraftController>();
             if (existingPlayer != null)
             {
-                FlightGroundReturnService.TryApplyPendingReturn(existingPlayer.gameObject);
                 EnsureMapSystems(existingPlayer);
                 EnsurePlayerVisuals(existingPlayer);
                 EnsureWeaponSystems(existingPlayer.gameObject);
                 WeaponTestTargetSpawner.RemoveIfPresent();
                 AntarcticaBaseSpawner.SpawnIfNeeded();
 
-                if (!FlightGroundReturnService.ShouldSkipCarrierSpawn())
+                // Restore landing site after weapon/flare systems init (they refill by default).
+                var restoredFromGround = FlightGroundReturnService.TryApplyPendingReturn(existingPlayer.gameObject);
+                if (!restoredFromGround && !FlightGroundReturnService.ShouldSkipCarrierSpawn())
                 {
                     AntarcticaBaseSpawner.TryMovePlayerToCarrier(existingPlayer.transform);
                     ApplyMissionLaunchIfNeeded(existingPlayer);
@@ -100,9 +101,9 @@ namespace F89.Testing
 
             grid.Configure(player.transform, profile.ticSizeWorldUnits, worldMap);
 
-            FlightGroundReturnService.TryApplyPendingReturn(player);
-
-            if (!FlightGroundReturnService.ShouldSkipCarrierSpawn())
+            // Apply after weapon/flare init so stores/fuel from the landing snapshot win.
+            var restoredFromGround = FlightGroundReturnService.TryApplyPendingReturn(player);
+            if (!restoredFromGround && !FlightGroundReturnService.ShouldSkipCarrierSpawn())
             {
                 ApplyMissionLaunchIfNeeded(player.GetComponent<AircraftController>());
             }

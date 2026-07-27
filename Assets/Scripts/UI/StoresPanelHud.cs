@@ -1,3 +1,4 @@
+using F89.Core;
 using F89.Weapons;
 using UnityEngine;
 
@@ -102,7 +103,8 @@ namespace F89.UI
             var gauRounds = weapons.Gau27aGun != null ? weapons.Gau27aGun.RoundsRemaining : 0;
             var flareCount = flareController != null ? flareController.FlaresRemaining : 0;
             var nameColumnWidth = MeasureNameColumnWidth(s);
-            DrawStoreRow(contentX, contentTop + rowHeight * 0, contentWidth, rowHeight, 1, "GAU-27A", gauRounds.ToString("0"), SelectedWeapon.Gau27a, StoreWireIcon.None, hudColor, s, nameColumnWidth);
+            var gauLabel = AutoFireState.Enabled ? "GAU-27A AF" : "GAU-27A";
+            DrawStoreRow(contentX, contentTop + rowHeight * 0, contentWidth, rowHeight, 1, gauLabel, gauRounds.ToString("0"), SelectedWeapon.Gau27a, StoreWireIcon.None, hudColor, s, nameColumnWidth);
             DrawStoreRow(contentX, contentTop + rowHeight * 1, contentWidth, rowHeight, 2, "AGM-114", weapons.Agm114Remaining.ToString("0"), SelectedWeapon.Agm114Hellfire, StoreWireIcon.Agm114, hudColor, s, nameColumnWidth);
             DrawStoreRow(contentX, contentTop + rowHeight * 2, contentWidth, rowHeight, 3, "GBU-12", weapons.Gbu12Remaining.ToString("0"), SelectedWeapon.Gbu12Paveway, StoreWireIcon.Gbu12, hudColor, s, nameColumnWidth);
             DrawStoreRow(contentX, contentTop + rowHeight * 3, contentWidth, rowHeight, 4, "AGM-88J", weapons.Agm88jRemaining.ToString("0"), SelectedWeapon.Agm88jSiaw, StoreWireIcon.Agm88j, hudColor, s, nameColumnWidth);

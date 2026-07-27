@@ -34,7 +34,12 @@ namespace F89.LandCombat
                 return;
             }
 
-            returnSnapshot.ReturnSceneName = GameScenes.FlightTest;
+            if (string.IsNullOrEmpty(returnSnapshot.ReturnSceneName))
+            {
+                returnSnapshot.ReturnSceneName = GameScenes.FlightTest;
+            }
+
+            LandSurfaceSession.Clear();
             LandMissionHandoffState.BeginReturnToFlight(returnSnapshot, result);
             IsActive = false;
             Debug.Log(
@@ -44,6 +49,7 @@ namespace F89.LandCombat
         public static void ShutdownWithoutHandoff()
         {
             IsActive = false;
+            LandSurfaceSession.Clear();
             LandMissionHandoffState.Clear();
         }
     }

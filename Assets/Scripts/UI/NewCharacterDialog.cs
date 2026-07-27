@@ -22,8 +22,8 @@ namespace F89.UI
         private static GUIStyle titleStyle;
         private static GUIStyle labelStyle;
         private static GUIStyle fieldStyle;
-        private static GUIStyle buttonStyle;
-        private static GUIStyle disabledButtonStyle;
+        private static GUIStyle disabledButtonLabelStyle;
+        private const int ButtonFontSize = 16;
 
         public static Result Draw(bool visible, ref string characterName, ref bool focusField)
         {
@@ -91,15 +91,19 @@ namespace F89.UI
                 ChoiceHeight);
 
             var canAccept = !string.IsNullOrWhiteSpace(characterName);
-            DrawChoiceButton(acceptRect, "Accept", canAccept);
-            DrawChoiceButton(backRect, "Back", true);
-
-            if (canAccept && GUI.Button(acceptRect, GUIContent.none, GUIStyle.none))
+            if (canAccept)
             {
-                return Result.Accepted;
+                if (StartPageMenuStyles.DrawMenuButton(acceptRect, "ACCEPT", fontSize: ButtonFontSize))
+                {
+                    return Result.Accepted;
+                }
+            }
+            else
+            {
+                DrawDisabledMenuButton(acceptRect, "ACCEPT");
             }
 
-            if (GUI.Button(backRect, GUIContent.none, GUIStyle.none))
+            if (StartPageMenuStyles.DrawMenuButton(backRect, "BACK", fontSize: ButtonFontSize))
             {
                 return Result.Back;
             }
@@ -107,10 +111,10 @@ namespace F89.UI
             return Result.None;
         }
 
-        private static void DrawChoiceButton(Rect rect, string label, bool enabled)
+        private static void DrawDisabledMenuButton(Rect rect, string label)
         {
-            HudGuiUtility.DrawWireBox(rect, 2f);
-            GUI.Label(rect, label, enabled ? buttonStyle : disabledButtonStyle);
+            StartPageMenuStyles.DrawMenuButtonChrome(rect, panelAlpha: 0.45f);
+            GUI.Label(rect, label, disabledButtonLabelStyle);
         }
 
         private static void EnsureStyles()
@@ -126,8 +130,11 @@ namespace F89.UI
             fieldStyle.padding = new RectOffset(6, 6, 8, 8);
             fieldStyle.clipping = TextClipping.Overflow;
             fieldStyle.wordWrap = false;
-            buttonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
-            disabledButtonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.45f, 0.45f, 0.45f));
+            disabledButtonLabelStyle = HudStyleFactory.CreateLabel(
+                ButtonFontSize,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                new Color(0.55f, 0.58f, 0.62f));
         }
     }
 }

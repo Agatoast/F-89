@@ -23,27 +23,40 @@ namespace F89.LandCombat
             };
         }
 
-        public static Color GetLabelColor(LandItemRarity rarity)
-        {
-            return rarity is LandItemRarity.White
-                or LandItemRarity.Green
-                or LandItemRarity.Yellow
-                or LandItemRarity.Orange
-                or LandItemRarity.Red
-                or LandItemRarity.Gold
-                ? Color.black
-                : Color.white;
-        }
+        public static Color GetLabelColor(LandItemRarity rarity) => GetOverlayColor(rarity);
 
-        /// <summary>Tech-level number ink (MTAU: black on White/Green tiles, yellow otherwise).</summary>
-        public static Color GetTechLevelNumberColor(LandItemRarity rarity)
+        /// <summary>
+        /// Black silhouette on light rarity tiles; white when the tile is too dark for black.
+        /// Level 4 always black; levels 8–9 (Crimson / Black) always white.
+        /// </summary>
+        public static Color GetOverlayColor(LandItemRarity rarity)
         {
-            if (rarity is LandItemRarity.White or LandItemRarity.Green)
+            var level = LandTechLevelRules.GetTechLevel(rarity);
+            if (level == 4)
             {
                 return Color.black;
             }
 
-            return new Color(1f, 0.92f, 0.08f, 1f);
+            if (level is 8 or 9)
+            {
+                return Color.white;
+            }
+
+            var tile = GetTile(rarity);
+            var luminance = (0.2126f * tile.r) + (0.7152f * tile.g) + (0.0722f * tile.b);
+            return luminance < 0.55f ? Color.white : Color.black;
+        }
+
+        /// <summary>Corner level number: matches overlay, with level 4 forced black.</summary>
+        public static Color GetTechLevelNumberColor(LandItemRarity rarity)
+        {
+            var level = LandTechLevelRules.GetTechLevel(rarity);
+            if (level == 4)
+            {
+                return Color.black;
+            }
+
+            return GetOverlayColor(rarity);
         }
     }
 }

@@ -12,18 +12,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a6ca54a90fff134fa19e9470600dc1b, type: 3}
   m_Name: Blaster
   m_EditorClassIdentifier: Assembly-CSharp::F89.LandCombat.LandWeaponDefinition
-  DisplayName: M-16
-  Description: Standard Military basic-loadout rifle.
+  DisplayName: M-4
+  Description: Legacy alias for M-4 basic-loadout rifle.
   Kind: 0
   Rarity: 0
   Category: 0
-  Damage: 12
-  RateOfFire: 1
-  RangeTiles: 8
+  Damage: 10
+  Range: 6
+  RateOfFire: 4
   MinRangeTiles: 0
-  ProjectileSpeed: 16
+  ProjectileSpeed: 22
   SpreadCount: 5
   SpreadAngle: 32
   HomingTurnRate: 240
-  ProjectileColor: {r: 0.3, g: 0.95, b: 1, a: 1}
+  ProjectileColor: {r: 1, g: 0.55, b: 0.05, a: 1}
   ProjectileScale: 0.18

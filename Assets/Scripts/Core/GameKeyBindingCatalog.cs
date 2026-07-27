@@ -10,6 +10,7 @@ namespace F89.Core
         public const string Airbrake = "airbrake";
         public const string Afterburner = "afterburner";
         public const string Fire = "fire";
+        public const string AutoFireToggle = "autofire_toggle";
         public const string SelectGau27a = "select_gau27a";
         public const string SelectAgm114 = "select_agm114";
         public const string SelectGbu12 = "select_gbu12";
@@ -18,6 +19,8 @@ namespace F89.Core
         public const string Flare = "flare";
         public const string CycleTarget = "cycle_target";
         public const string Land = "land";
+        public const string UseBandage = "use_bandage";
+        public const string ThrowGrenade = "throw_grenade";
     }
 
     public readonly struct GameKeyBindingDefinition
@@ -44,6 +47,7 @@ namespace F89.Core
             new GameKeyBindingDefinition(GameKeyBindingIds.Airbrake, "Airbrake", KeyCode.S),
             new GameKeyBindingDefinition(GameKeyBindingIds.Afterburner, "Afterburner", KeyCode.LeftShift),
             new GameKeyBindingDefinition(GameKeyBindingIds.Fire, "Fire Weapon", KeyCode.Mouse0),
+            new GameKeyBindingDefinition(GameKeyBindingIds.AutoFireToggle, "Auto Fire Toggle", KeyCode.I),
             new GameKeyBindingDefinition(GameKeyBindingIds.SelectGau27a, "Select GAU-27A", KeyCode.Alpha1),
             new GameKeyBindingDefinition(GameKeyBindingIds.SelectAgm114, "Select AGM-114", KeyCode.Alpha2),
             new GameKeyBindingDefinition(GameKeyBindingIds.SelectGbu12, "Select GBU-12", KeyCode.Alpha3),
@@ -51,7 +55,9 @@ namespace F89.Core
             new GameKeyBindingDefinition(GameKeyBindingIds.SelectAim9z, "Select AIM-9Z", KeyCode.Alpha5),
             new GameKeyBindingDefinition(GameKeyBindingIds.Flare, "Deploy Flare", KeyCode.F),
             new GameKeyBindingDefinition(GameKeyBindingIds.CycleTarget, "Cycle Target", KeyCode.Tab),
-            new GameKeyBindingDefinition(GameKeyBindingIds.Land, "Land", KeyCode.L)
+            new GameKeyBindingDefinition(GameKeyBindingIds.Land, "Land", KeyCode.L),
+            new GameKeyBindingDefinition(GameKeyBindingIds.UseBandage, "Use Bandage", KeyCode.R),
+            new GameKeyBindingDefinition(GameKeyBindingIds.ThrowGrenade, "Throw Grenade", KeyCode.Mouse1)
         };
 
         public static bool TryGetDefinition(string bindingId, out GameKeyBindingDefinition definition)

@@ -88,9 +88,33 @@ namespace F89.Testing
                 return;
             }
 
+            if (GameScenes.IsResearchResultsScene(sceneName))
+            {
+                ResearchResultsRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (GameScenes.IsDownedOutcomeScene(sceneName))
+            {
+                DownedOutcomeRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
             if (sceneName == GameScenes.GroundAttack)
             {
                 GroundAttackRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.Bunker)
+            {
+                BunkerRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.Boss1)
+            {
+                Boss1RuntimeBuilder.BuildIfNeeded();
                 return;
             }
 

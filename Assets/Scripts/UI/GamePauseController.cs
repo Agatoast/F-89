@@ -19,6 +19,7 @@ namespace F89.UI
         private const float ButtonWidth = 280f;
         private const float ButtonHeight = 40f;
         private const float ButtonSpacing = 10f;
+        private const int ButtonFontSize = 16;
 
         public static bool IsPaused { get; private set; }
 
@@ -28,7 +29,6 @@ namespace F89.UI
 
         private GUIStyle titleStyle;
         private GUIStyle messageStyle;
-        private GUIStyle buttonStyle;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStaticState()
@@ -141,6 +141,18 @@ namespace F89.UI
                     break;
             }
         }
+        public static void OpenSettingsMenu()
+        {
+            if (!CanOpenPauseMenu())
+            {
+                return;
+            }
+
+            ShowPauseMenu();
+            currentView = PauseView.Settings;
+            settingsView = SettingsMenuUi.View.Root;
+        }
+
         private static void ShowPauseMenu()
         {
             IsPaused = true;
@@ -182,7 +194,8 @@ namespace F89.UI
         {
             var sceneName = SceneManager.GetActiveScene().name;
             return sceneName == GameScenes.FlightTest
-                || sceneName == GameScenes.GroundAttack;
+                || sceneName == GameScenes.GroundAttack
+                || sceneName == GameScenes.Bunker;
         }
 
         private void DrawOverlay()
@@ -194,7 +207,7 @@ namespace F89.UI
 
         private void DrawRootMenu()
         {
-            var buttonCount = 4;
+            var buttonCount = 6;
             var dialogHeight = GetDialogHeight(buttonCount, includeMessage: false);
             var dialogRect = GetDialogRect(dialogHeight);
             DrawDialogFrame(dialogRect, "Paused");
@@ -202,26 +215,38 @@ namespace F89.UI
             var buttonX = dialogRect.x + (dialogRect.width - ButtonWidth) * 0.5f;
             var buttonY = dialogRect.y + 64f;
 
-            if (DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), GameSettings.SoundLabel))
-            {
-                GameSettings.ToggleSound();
-            }
-
-            buttonY += ButtonHeight + ButtonSpacing;
-            if (DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "Main Menu"))
+            if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "MAIN MENU", fontSize: ButtonFontSize))
             {
                 HandleMainMenuRequest();
             }
 
             buttonY += ButtonHeight + ButtonSpacing;
-            if (DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "Settings"))
+            if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), GameSettings.SoundLabel.ToUpperInvariant(), fontSize: ButtonFontSize))
+            {
+                GameSettings.ToggleSound();
+            }
+
+            buttonY += ButtonHeight + ButtonSpacing;
+            if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), GameSettings.MusicLabel.ToUpperInvariant(), fontSize: ButtonFontSize))
+            {
+                GameSettings.ToggleMusic();
+            }
+
+            buttonY += ButtonHeight + ButtonSpacing;
+            if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), GameSettings.MissileSoundsLabel.ToUpperInvariant(), fontSize: ButtonFontSize))
+            {
+                GameSettings.ToggleMissileSounds();
+            }
+
+            buttonY += ButtonHeight + ButtonSpacing;
+            if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "SETTINGS", fontSize: ButtonFontSize))
             {
                 currentView = PauseView.Settings;
                 settingsView = SettingsMenuUi.View.Root;
             }
 
             buttonY += ButtonHeight + ButtonSpacing;
-            if (DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "Exit Game"))
+            if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "EXIT GAME", fontSize: ButtonFontSize))
             {
                 ExitGame();
             }
@@ -229,11 +254,15 @@ namespace F89.UI
 
         private void DrawSettingsMenu()
         {
-            settingsView = SettingsMenuUi.Draw(settingsView, () =>
-            {
-                settingsView = SettingsMenuUi.View.Root;
-                currentView = PauseView.Root;
-            });
+            settingsView = SettingsMenuUi.Draw(
+                settingsView,
+                onExitSettings: () =>
+                {
+                    settingsView = SettingsMenuUi.View.Root;
+                    currentView = PauseView.Root;
+                },
+                onMainMenu: HandleMainMenuRequest,
+                onExitGame: ExitGame);
         }
 
         private void DrawMainMenuConfirm()
@@ -248,15 +277,15 @@ namespace F89.UI
                 messageStyle);
 
             var choiceY = dialogRect.yMax - ButtonHeight - 24f;
-            var yesRect = new Rect(dialogRect.x + dialogRect.width * 0.5f - ButtonWidth * 0.5f - 12f, choiceY, 120f, ButtonHeight);
+            var yesRect = new Rect(dialogRect.x + dialogRect.width * 0.5f - 120f - 12f, choiceY, 120f, ButtonHeight);
             var noRect = new Rect(dialogRect.x + dialogRect.width * 0.5f + 12f, choiceY, 120f, ButtonHeight);
 
-            if (DrawMenuButton(yesRect, "Yes"))
+            if (StartPageMenuStyles.DrawMenuButton(yesRect, "YES", fontSize: ButtonFontSize))
             {
                 QuitToMainMenu(applyMissionPenalty: true);
             }
 
-            if (DrawMenuButton(noRect, "No"))
+            if (StartPageMenuStyles.DrawMenuButton(noRect, "NO", fontSize: ButtonFontSize))
             {
                 currentView = PauseView.Root;
             }
@@ -337,13 +366,6 @@ namespace F89.UI
             return height;
         }
 
-        private bool DrawMenuButton(Rect rect, string label)
-        {
-            HudGuiUtility.DrawWireBox(rect, 2f);
-            GUI.Label(rect, label, buttonStyle);
-            return GUI.Button(rect, GUIContent.none, GUIStyle.none);
-        }
-
         private void EnsureStyles()
         {
             if (titleStyle != null)
@@ -353,7 +375,6 @@ namespace F89.UI
 
             titleStyle = HudStyleFactory.CreateLabel(20, FontStyle.Bold, TextAnchor.UpperCenter, Color.black);
             messageStyle = HudStyleFactory.CreateLabel(15, FontStyle.Normal, TextAnchor.UpperCenter, Color.black, wordWrap: true);
-            buttonStyle = HudStyleFactory.CreateLabel(18, FontStyle.Bold, TextAnchor.MiddleCenter, Color.black);
         }
     }
 }

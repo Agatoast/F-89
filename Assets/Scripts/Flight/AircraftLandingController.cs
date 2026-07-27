@@ -188,18 +188,63 @@ namespace F89.Flight
                 body.linearVelocity = Vector3.zero;
             }
 
-            var snapshot = new LandSortieSnapshot
-            {
-                IsValid = true,
-                AircraftWorldPosition = transform.position,
-                AircraftWorldRotation = transform.rotation,
-                FuelNormalized = 1f,
-                ReturnSceneName = GameScenes.FlightTest
-            };
-
+            var snapshot = CaptureSortieSnapshot(gameObject);
             LandMissionHandoffState.BeginEnterFromFlight(snapshot);
             Time.timeScale = 1f;
             SceneManager.LoadScene(GameScenes.GroundAttack);
+        }
+
+        public static LandSortieSnapshot CaptureSortieSnapshot(GameObject player)
+        {
+            var snapshot = new LandSortieSnapshot
+            {
+                IsValid = true,
+                AircraftWorldPosition = player != null ? player.transform.position : Vector3.zero,
+                AircraftWorldRotation = player != null ? player.transform.rotation : Quaternion.identity,
+                ReturnSceneName = GameScenes.FlightTest
+            };
+
+            if (player == null)
+            {
+                snapshot.FuelNormalized = 1f;
+                return snapshot;
+            }
+
+            var aircraftController = player.GetComponent<AircraftController>();
+            if (aircraftController != null)
+            {
+                snapshot.LeftTankGallons = aircraftController.LeftTankGallons;
+                snapshot.RightTankGallons = aircraftController.RightTankGallons;
+                snapshot.AfterburnerFuelRemaining = aircraftController.AfterburnerFuelRemaining;
+                snapshot.FuelNormalized = aircraftController.TotalFuelCapacityGallons > 0f
+                    ? aircraftController.TotalFuelGallons / aircraftController.TotalFuelCapacityGallons
+                    : 1f;
+            }
+            else
+            {
+                snapshot.FuelNormalized = 1f;
+            }
+
+            var weapons = player.GetComponent<F89.Weapons.PlayerWeaponController>();
+            if (weapons != null && weapons.HasSortieInventory)
+            {
+                snapshot.HasStoresInventory = true;
+                snapshot.Aim9zRemaining = weapons.Aim9zRemaining;
+                snapshot.Agm88jRemaining = weapons.Agm88jRemaining;
+                snapshot.Gbu12Remaining = weapons.Gbu12Remaining;
+                snapshot.Agm114Remaining = weapons.Agm114Remaining;
+                snapshot.GauRoundsRemaining = weapons.Gau27aGun != null
+                    ? weapons.Gau27aGun.RoundsRemaining
+                    : 0;
+            }
+
+            var flares = player.GetComponent<F89.Weapons.FlareCountermeasureController>();
+            if (flares != null)
+            {
+                snapshot.FlaresRemaining = flares.FlaresRemaining;
+            }
+
+            return snapshot;
         }
 
         private void UpdateTakeoffVisual()
@@ -252,6 +297,7 @@ namespace F89.Flight
             }
 
             activeInstance = null;
+            LandMissionHandoffState.ConfirmReturnApplied();
         }
     }
 }

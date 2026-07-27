@@ -357,7 +357,7 @@ namespace F89.UI
 
         private static void EnsureStyles()
         {
-            var scale = Mathf.Clamp(Screen.width / 1920f, 0.72f, 1.35f);
+            var scale = Mathf.Clamp(UiFitCanvas.Scale, 0.72f, 1.35f);
             if (plaqueLabelStyle != null)
             {
                 if (dossierStatLabelStyle != null)

@@ -11,10 +11,11 @@ namespace F89.UI
             Keymap = 1
         }
 
-        private const float ButtonWidth = 280f;
-        private const float ButtonHeight = 48f;
-        private const float ButtonSpacing = 14f;
-        private const float KeymapRowHeight = 40f;
+        private const float ButtonWidthDesign = 280f;
+        private const float ButtonHeightDesign = 44f;
+        private const float ButtonSpacingDesign = 10f;
+        private const float KeymapRowHeightDesign = 40f;
+        private const int RootButtonFontSize = 22;
 
         private static GUIStyle titleStyle;
         private static GUIStyle rowLabelStyle;
@@ -22,7 +23,11 @@ namespace F89.UI
         private static GUIStyle promptStyle;
         private static Vector2 keymapScrollPosition;
 
-        public static View Draw(View view, System.Action onExitSettings)
+        public static View Draw(
+            View view,
+            System.Action onExitSettings,
+            System.Action onMainMenu = null,
+            System.Action onExitGame = null)
         {
             EnsureStyles();
             DrawDarkBackground();
@@ -37,41 +42,113 @@ namespace F89.UI
                 return DrawKeymapMenu() ? View.Root : View.Keymap;
             }
 
-            return DrawRootMenu(onExitSettings);
+            return DrawRootMenu(onExitSettings, onMainMenu, onExitGame);
         }
 
         private static void DrawDarkBackground()
         {
-            GUI.color = new Color(0.04f, 0.05f, 0.07f, 0.96f);
+            UiFitCanvas.Begin(16f / 9f);
+            GUI.color = Color.black;
             GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = new Color(0.04f, 0.05f, 0.07f, 0.96f);
+            GUI.DrawTexture(UiFitCanvas.Rect, Texture2D.whiteTexture);
             GUI.color = Color.white;
         }
 
-        private static View DrawRootMenu(System.Action onExitSettings)
+        private static View DrawRootMenu(
+            System.Action onExitSettings,
+            System.Action onMainMenu,
+            System.Action onExitGame)
         {
             DrawTitle("SETTINGS");
 
-            var buttonX = (Screen.width - ButtonWidth) * 0.5f;
-            var buttonY = Screen.height * 0.34f;
+            var buttonWidth = UiFitCanvas.Px(ButtonWidthDesign);
+            var buttonHeight = UiFitCanvas.Px(ButtonHeightDesign);
+            var buttonSpacing = UiFitCanvas.Px(ButtonSpacingDesign);
+            var buttonX = UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - buttonWidth) * 0.5f;
+            var backRect = GetBackButtonRect();
+
+            const int buttonCount = 7;
+            var stackHeight = buttonCount * buttonHeight + (buttonCount - 1) * buttonSpacing;
+            // Center the action stack on the page; Back stays pinned at the bottom.
+            var buttonY = UiFitCanvas.Rect.y + (UiFitCanvas.Rect.height - stackHeight) * 0.5f;
 
             if (StartPageMenuStyles.DrawMenuButton(
-                    new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight),
-                    "KEYMAP",
-                    fontSize: 24))
+                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
+                    "MAIN MENU",
+                    fontSize: RootButtonFontSize))
             {
-                return View.Keymap;
+                if (onMainMenu != null)
+                {
+                    onMainMenu.Invoke();
+                }
+                else
+                {
+                    onExitSettings?.Invoke();
+                }
             }
 
-            buttonY += ButtonHeight + ButtonSpacing;
+            buttonY += buttonHeight + buttonSpacing;
             if (StartPageMenuStyles.DrawMenuButton(
-                    new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight),
+                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
+                    GameSettings.SoundLabel.ToUpperInvariant(),
+                    fontSize: RootButtonFontSize))
+            {
+                GameSettings.ToggleSound();
+            }
+
+            buttonY += buttonHeight + buttonSpacing;
+            if (StartPageMenuStyles.DrawMenuButton(
+                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
+                    GameSettings.MusicLabel.ToUpperInvariant(),
+                    fontSize: RootButtonFontSize))
+            {
+                GameSettings.ToggleMusic();
+            }
+
+            buttonY += buttonHeight + buttonSpacing;
+            if (StartPageMenuStyles.DrawMenuButton(
+                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
+                    GameSettings.MissileSoundsLabel.ToUpperInvariant(),
+                    fontSize: RootButtonFontSize))
+            {
+                GameSettings.ToggleMissileSounds();
+            }
+
+            buttonY += buttonHeight + buttonSpacing;
+            if (StartPageMenuStyles.DrawMenuButton(
+                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
                     GameSettings.DisplayLabel.ToUpperInvariant(),
-                    fontSize: 24))
+                    fontSize: RootButtonFontSize))
             {
                 GameSettings.ToggleFullscreen();
             }
 
-            var backRect = GetBackButtonRect();
+            buttonY += buttonHeight + buttonSpacing;
+            if (StartPageMenuStyles.DrawMenuButton(
+                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
+                    "KEYMAP",
+                    fontSize: RootButtonFontSize))
+            {
+                return View.Keymap;
+            }
+
+            buttonY += buttonHeight + buttonSpacing;
+            if (StartPageMenuStyles.DrawMenuButton(
+                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
+                    "EXIT GAME",
+                    fontSize: RootButtonFontSize))
+            {
+                if (onExitGame != null)
+                {
+                    onExitGame.Invoke();
+                }
+                else
+                {
+                    QuitApplication();
+                }
+            }
+
             if (StartPageMenuStyles.DrawMenuButton(backRect, "BACK", fontSize: 28))
             {
                 onExitSettings?.Invoke();
@@ -84,20 +161,24 @@ namespace F89.UI
         {
             DrawTitle("KEYMAP");
 
+            var buttonWidth = UiFitCanvas.Px(ButtonWidthDesign);
+            var buttonHeight = UiFitCanvas.Px(ButtonHeightDesign);
+            var buttonSpacing = UiFitCanvas.Px(ButtonSpacingDesign);
+            var rowHeight = UiFitCanvas.Px(KeymapRowHeightDesign);
             var backRect = GetBackButtonRect();
             var defaultsRect = new Rect(
                 backRect.x,
-                backRect.y - ButtonSpacing - ButtonHeight,
+                backRect.y - buttonSpacing - buttonHeight,
                 backRect.width,
                 backRect.height);
 
-            var listTop = Screen.height * 0.14f;
+            var listTop = UiFitCanvas.NormY(0.14f);
             var listRect = new Rect(
-                Screen.width * 0.18f,
+                UiFitCanvas.NormX(0.18f),
                 listTop,
-                Screen.width * 0.64f,
-                defaultsRect.y - listTop - ButtonSpacing);
-            var contentHeight = GameKeyBindingCatalog.Bindings.Length * KeymapRowHeight;
+                UiFitCanvas.Rect.width * 0.64f,
+                defaultsRect.y - listTop - buttonSpacing);
+            var contentHeight = GameKeyBindingCatalog.Bindings.Length * rowHeight;
             var viewRect = new Rect(0f, 0f, listRect.width - 18f, contentHeight);
 
             GUI.BeginGroup(listRect);
@@ -109,7 +190,7 @@ namespace F89.UI
             for (var i = 0; i < GameKeyBindingCatalog.Bindings.Length; i++)
             {
                 var binding = GameKeyBindingCatalog.Bindings[i];
-                var rowRect = new Rect(0f, i * KeymapRowHeight, viewRect.width, KeymapRowHeight - 6f);
+                var rowRect = new Rect(0f, i * rowHeight, viewRect.width, rowHeight - 6f);
                 DrawKeymapRow(rowRect, binding);
             }
 
@@ -119,7 +200,7 @@ namespace F89.UI
             if (GameKeyBindings.IsListening)
             {
                 GUI.Label(
-                    new Rect(listRect.x, defaultsRect.y - 30f, listRect.width, 24f),
+                    new Rect(listRect.x, defaultsRect.y - UiFitCanvas.Px(30f), listRect.width, UiFitCanvas.Px(24f)),
                     "Press a key or mouse button. Escape cancels.",
                     promptStyle);
             }
@@ -166,16 +247,30 @@ namespace F89.UI
         private static void DrawTitle(string title)
         {
             titleStyle.normal.textColor = new Color(0.78f, 0.86f, 0.95f);
-            GUI.Label(new Rect(0f, Screen.height * 0.06f, Screen.width, 48f), title, titleStyle);
+            GUI.Label(
+                new Rect(UiFitCanvas.Rect.x, UiFitCanvas.NormY(0.04f), UiFitCanvas.Rect.width, UiFitCanvas.Px(44f)),
+                title,
+                titleStyle);
         }
 
         private static Rect GetBackButtonRect()
         {
+            var buttonWidth = UiFitCanvas.Px(ButtonWidthDesign);
+            var buttonHeight = UiFitCanvas.Px(ButtonHeightDesign);
             return new Rect(
-                (Screen.width - ButtonWidth) * 0.5f,
-                Screen.height - ButtonHeight - Screen.height * 0.05f,
-                ButtonWidth,
-                ButtonHeight);
+                UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - buttonWidth) * 0.5f,
+                UiFitCanvas.Rect.yMax - buttonHeight - UiFitCanvas.Px(40f),
+                buttonWidth,
+                buttonHeight);
+        }
+
+        private static void QuitApplication()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         private static void EnsureStyles()

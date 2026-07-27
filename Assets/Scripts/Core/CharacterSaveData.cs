@@ -18,6 +18,12 @@ namespace F89.Core
         public string VehicleKillSummary = string.Empty;
         public string TroopKillSummary = string.Empty;
         public string[] EarnedRibbonIds = Array.Empty<string>();
+        /// <summary>Max Hit Points for ground combat.</summary>
+        public int MaxHitPoints = 100;
+        /// <summary>Relative ground Move rating (3–15).</summary>
+        public int Move = 3;
+        /// <summary>Inherent Damage Resistance (characters start at 0; gear adds later).</summary>
+        public int DamageResistance;
         public CharacterLoadoutSaveData Loadout = new CharacterLoadoutSaveData();
         public CharacterVaultSaveData Vault = new CharacterVaultSaveData();
         /// <summary>Per-type R&amp;D success chance percent (0–30). Each researched item of that type adds 0.5.</summary>
@@ -25,7 +31,7 @@ namespace F89.Core
         public float ResearchVestChancePercent;
         public float ResearchWeaponChancePercent;
         public float ResearchBootsChancePercent;
-        /// <summary>Tech level being researched / accepted per R&amp;D slot: Helmet, Vest, Weapon, Boots (1–10).</summary>
+        /// <summary>Tech level unlocked for Basic Loadout / R&amp;D floor per slot: Helmet, Vest, Weapon, Boots (1–10). Starts at 1.</summary>
         public int ResearchHelmetTechLevel = 1;
         public int ResearchVestTechLevel = 1;
         public int ResearchWeaponTechLevel = 1;

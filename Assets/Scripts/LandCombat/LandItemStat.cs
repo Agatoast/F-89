@@ -7,6 +7,10 @@ namespace F89.LandCombat
     public enum LandItemStat
     {
         Damage = 0,
-        RateOfFire = 1
+        Range = 1,
+        /// <summary>Internal fire cadence; not a displayed Basic Loadout weapon stat.</summary>
+        RateOfFire = 2,
+        DamageResistance = 3,
+        Move = 4
     }
 }

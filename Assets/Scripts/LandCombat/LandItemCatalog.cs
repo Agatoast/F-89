@@ -61,5 +61,61 @@ namespace F89.LandCombat
             summary = LandItemStatFormatter.FormatWeaponSummary(weapon);
             return true;
         }
+
+        public bool TryGetGearSummary(LandGearInstance item, out string summary)
+        {
+            summary = string.Empty;
+            if (!LandLoadoutSlots.IsValidItem(item) || !TryGetGear(item.DefinitionId, out var gear))
+            {
+                return false;
+            }
+
+            summary = LandItemStatFormatter.FormatGearSummary(gear);
+            return !string.IsNullOrEmpty(summary);
+        }
+
+        /// <summary>
+        /// Resolves DR / Move for equipped gear. Falls back to US/UR catalogs when SOs fail to load.
+        /// </summary>
+        public bool TryGetGearCombatStats(
+            LandGearInstance item,
+            out LandEquipmentSlot slot,
+            out int damageResistance,
+            out int move)
+        {
+            slot = LandEquipmentSlot.Core;
+            damageResistance = 0;
+            move = 0;
+            if (!LandLoadoutSlots.IsValidItem(item))
+            {
+                return false;
+            }
+
+            if (TryGetGear(item.DefinitionId, out var gear))
+            {
+                slot = gear.Slot;
+                damageResistance = Mathf.Max(0, gear.DamageResistance);
+                move = gear.Move;
+                return true;
+            }
+
+            if (LandUsGearCatalog.TryGetByDefinitionId(item.DefinitionId, out var usGear))
+            {
+                slot = usGear.Slot;
+                damageResistance = Mathf.Max(0, usGear.DamageResistance);
+                move = usGear.Move;
+                return true;
+            }
+
+            if (LandUrGearCatalog.TryGetByDefinitionId(item.DefinitionId, out var urGear))
+            {
+                slot = urGear.Slot;
+                damageResistance = Mathf.Max(0, urGear.DamageResistance);
+                move = urGear.Move;
+                return true;
+            }
+
+            return false;
+        }
     }
 }

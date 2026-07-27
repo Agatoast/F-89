@@ -40,10 +40,15 @@ namespace F89.UI
         private static bool pendingResearchConfirm;
         private static bool pendingResearchTechTooLow;
         private static bool pendingResearchWrongCategory;
+        private static bool pendingBasicLoadoutSlotOccupied;
         private static DragSourceKind pendingResearchSource;
         private static LandEquipmentSlot pendingResearchEquipmentSlot;
         private static int pendingResearchIndex;
         private static int pendingResearchSlotIndex = -1;
+
+        private static bool pendingDeleteConfirm;
+        private static DragSourceKind pendingDeleteSource;
+        private static int pendingDeleteIndex = -1;
 
         private static readonly (LandEquipmentSlot slot, string label)[] EquipmentSlots =
         {
@@ -53,12 +58,12 @@ namespace F89.UI
             (LandEquipmentSlot.Boots, "Boots")
         };
 
-        private static readonly (LandEquipmentSlot slot, string definitionId)[] BasicTrayItems =
+        private static readonly (LandEquipmentSlot slot, string fallbackDefinitionId)[] BasicTraySlots =
         {
-            (LandEquipmentSlot.Helmet, "TestHelmet"),
-            (LandEquipmentSlot.Core, "ScrapCore"),
-            (LandEquipmentSlot.Weapon, "Blaster"),
-            (LandEquipmentSlot.Boots, "Boots")
+            (LandEquipmentSlot.Helmet, LandUsGearCatalog.BasicHelmetId),
+            (LandEquipmentSlot.Core, LandUsGearCatalog.BasicVestId),
+            (LandEquipmentSlot.Weapon, LandUsWeaponCatalog.BasicLoadoutDefinitionId),
+            (LandEquipmentSlot.Boots, LandUsGearCatalog.BasicBootsId)
         };
 
         public static void DrawFootlocker(Rect gridRect, bool topAlign = false)
@@ -217,11 +222,11 @@ namespace F89.UI
 
         public static void DrawBasicLoadoutBoxes(System.Func<int, Rect> getSlotRect)
         {
-            for (var i = 0; i < BasicTrayItems.Length; i++)
+            for (var i = 0; i < BasicTraySlots.Length; i++)
             {
                 var cell = getSlotRect != null
                     ? getSlotRect(i)
-                    : CharacterPageLayout.GetEquipmentSlotRect(i, BasicTrayItems.Length);
+                    : CharacterPageLayout.GetEquipmentSlotRect(i, BasicTraySlots.Length);
                 var hide = isDragging && dragMoved && dragSource == DragSourceKind.BasicTray && dragIndex == i;
                 if (hide)
                 {
@@ -229,7 +234,9 @@ namespace F89.UI
                 }
                 else
                 {
-                    DrawTechTile(cell, GetBasicTrayItem(i), selected: false);
+                    var item = GetBasicTrayItem(i);
+                    DrawTechTile(cell, item, selected: false);
+                    LandItemTooltipUi.RegisterHover(cell, item);
                 }
             }
         }
@@ -293,8 +300,33 @@ namespace F89.UI
                 return;
             }
 
-            if (pendingResearchConfirm || pendingResearchTechTooLow || pendingResearchWrongCategory)
+            if (pendingResearchConfirm
+                || pendingResearchTechTooLow
+                || pendingResearchWrongCategory
+                || pendingBasicLoadoutSlotOccupied
+                || pendingDeleteConfirm)
             {
+                return;
+            }
+
+            if (currentEvent.type == EventType.MouseDown && currentEvent.button == 1)
+            {
+                if (isDragging)
+                {
+                    ResetDragState();
+                    currentEvent.Use();
+                    return;
+                }
+
+                if (TryPromptDeleteAtMousePosition(
+                        inventoryGridRect,
+                        footlockerGridRect,
+                        footlockerTopAlign,
+                        currentEvent.mousePosition))
+                {
+                    currentEvent.Use();
+                }
+
                 return;
             }
 
@@ -349,15 +381,19 @@ namespace F89.UI
             }
         }
 
+        public static bool IsDraggingGear => isDragging;
         public static bool IsResearchConfirmPending => pendingResearchConfirm;
+        public static bool IsDeleteConfirmPending => pendingDeleteConfirm;
         public static bool IsResearchTechTooLowPending => pendingResearchTechTooLow;
         public static bool IsResearchWrongCategoryPending => pendingResearchWrongCategory;
+        public static bool IsBasicLoadoutSlotOccupiedPending => pendingBasicLoadoutSlotOccupied;
 
         public static void CancelResearchConfirm()
         {
             pendingResearchConfirm = false;
             pendingResearchTechTooLow = false;
             pendingResearchWrongCategory = false;
+            pendingBasicLoadoutSlotOccupied = false;
             pendingResearchSource = DragSourceKind.None;
             pendingResearchIndex = -1;
             pendingResearchSlotIndex = -1;
@@ -371,6 +407,36 @@ namespace F89.UI
         public static void AcknowledgeResearchWrongCategory()
         {
             CancelResearchConfirm();
+        }
+
+        public static void AcknowledgeBasicLoadoutSlotOccupied()
+        {
+            pendingBasicLoadoutSlotOccupied = false;
+        }
+
+        public static bool ConfirmDeleteItem()
+        {
+            if (!pendingDeleteConfirm)
+            {
+                return false;
+            }
+
+            if (!TryDeletePendingItem())
+            {
+                CancelDeleteConfirm();
+                return false;
+            }
+
+            CancelDeleteConfirm();
+            CharacterGearSession.PersistActive();
+            return true;
+        }
+
+        public static void CancelDeleteConfirm()
+        {
+            pendingDeleteConfirm = false;
+            pendingDeleteSource = DragSourceKind.None;
+            pendingDeleteIndex = -1;
         }
 
         public static bool ConfirmResearchDestroy()
@@ -454,12 +520,31 @@ namespace F89.UI
 
         private static LandGearInstance GetBasicTrayItem(int index)
         {
-            index = Mathf.Clamp(index, 0, BasicTrayItems.Length - 1);
-            var entry = BasicTrayItems[index];
+            index = Mathf.Clamp(index, 0, BasicTraySlots.Length - 1);
+            var entry = BasicTraySlots[index];
+            var definitionId = entry.fallbackDefinitionId;
+            var save = CharacterGearSession.ActiveSave;
+            var unlockedId = LandResearchBreakthroughService.GetBasicLoadoutDefinitionId(save, entry.slot);
+            if (!string.IsNullOrEmpty(unlockedId))
+            {
+                definitionId = unlockedId;
+            }
+
+            var rarity = LandItemRarity.White;
+            var catalog = CharacterGearSession.Catalog;
+            if (catalog != null && catalog.TryGetWeapon(definitionId, out var weapon))
+            {
+                rarity = weapon.Rarity;
+            }
+            else if (catalog != null && catalog.TryGetGear(definitionId, out var gear))
+            {
+                rarity = gear.Rarity;
+            }
+
             return new LandGearInstance
             {
-                DefinitionId = entry.definitionId,
-                Rarity = LandItemRarity.White
+                DefinitionId = definitionId,
+                Rarity = rarity
             };
         }
 
@@ -486,7 +571,7 @@ namespace F89.UI
 
         private static bool TryBeginBasicTrayDrag(System.Func<int, Rect> getBasicRect, Vector2 mousePosition)
         {
-            for (var i = 0; i < BasicTrayItems.Length; i++)
+            for (var i = 0; i < BasicTraySlots.Length; i++)
             {
                 var cell = getBasicRect(i);
                 if (!cell.Contains(mousePosition))
@@ -626,7 +711,16 @@ namespace F89.UI
                 || TryDropOnInventory(inventoryGridRect, mousePosition)
                 || TryDropOnVault(footlockerGridRect, footlockerTopAlign, mousePosition))
             {
-                CharacterGearSession.PersistActive();
+                // Dialog-only outcomes (e.g. Basic Loadout into occupied slot) must not persist.
+                if (!pendingBasicLoadoutSlotOccupied
+                    && !pendingResearchConfirm
+                    && !pendingResearchTechTooLow
+                    && !pendingResearchWrongCategory
+                    && !pendingDeleteConfirm)
+                {
+                    CharacterGearSession.PersistActive();
+                }
+
                 return true;
             }
 
@@ -689,6 +783,100 @@ namespace F89.UI
             return true;
         }
 
+        private static bool TryPromptDeleteAtMousePosition(
+            Rect inventoryGridRect,
+            Rect footlockerGridRect,
+            bool footlockerTopAlign,
+            Vector2 mousePosition)
+        {
+            var loadout = CharacterGearSession.ActiveLoadout;
+            if (loadout != null)
+            {
+                LandInventoryRules.EnsureInventoryCapacity(loadout);
+                var accessible = LandInventoryRules.GetAccessibleSlotCount(loadout.DuffleBag);
+                for (var i = 0; i < accessible && i < LandGameConstants.PackSlotCount; i++)
+                {
+                    if (!TryGetInventoryCellRect(inventoryGridRect, i, out var cell) || !cell.Contains(mousePosition))
+                    {
+                        continue;
+                    }
+
+                    if (!LandLoadoutSlots.IsValidItem(loadout.Inventory[i]))
+                    {
+                        return false;
+                    }
+
+                    pendingDeleteConfirm = true;
+                    pendingDeleteSource = DragSourceKind.Inventory;
+                    pendingDeleteIndex = i;
+                    return true;
+                }
+            }
+
+            var vault = CharacterGearSession.ActiveVault;
+            if (vault != null)
+            {
+                LandVaultStorageService.EnsureVaultSize(vault);
+                var slotCount = LandVaultStorageService.GetVaultSlotCount(vault);
+                for (var i = 0; i < slotCount; i++)
+                {
+                    if (!TryGetFootlockerCellRect(footlockerGridRect, i, footlockerTopAlign, out var cell)
+                        || !cell.Contains(mousePosition))
+                    {
+                        continue;
+                    }
+
+                    var item = LandGearSaveMapper.ToRuntimeInstance(vault.Items[i]);
+                    if (!LandLoadoutSlots.IsValidItem(item))
+                    {
+                        return false;
+                    }
+
+                    pendingDeleteConfirm = true;
+                    pendingDeleteSource = DragSourceKind.Vault;
+                    pendingDeleteIndex = i;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryDeletePendingItem()
+        {
+            var loadout = CharacterGearSession.ActiveLoadout;
+            var vault = CharacterGearSession.ActiveVault;
+            switch (pendingDeleteSource)
+            {
+                case DragSourceKind.Inventory:
+                    if (loadout == null
+                        || pendingDeleteIndex < 0
+                        || pendingDeleteIndex >= loadout.Inventory.Count
+                        || !LandLoadoutSlots.IsValidItem(loadout.Inventory[pendingDeleteIndex]))
+                    {
+                        return false;
+                    }
+
+                    loadout.Inventory[pendingDeleteIndex] = null;
+                    return true;
+
+                case DragSourceKind.Vault:
+                    if (vault == null
+                        || !LandVaultStorageService.IsVaultIndexValid(vault, pendingDeleteIndex)
+                        || !LandLoadoutSlots.IsValidItem(
+                            LandGearSaveMapper.ToRuntimeInstance(vault.Items[pendingDeleteIndex])))
+                    {
+                        return false;
+                    }
+
+                    vault.Items[pendingDeleteIndex] = null;
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
         private static bool TryDestroyPendingResearchItem()
         {
             var loadout = CharacterGearSession.ActiveLoadout;
@@ -735,50 +923,78 @@ namespace F89.UI
 
         private static bool TryDropOnEquipment(System.Func<int, Rect> getEquipmentRect, Vector2 mousePosition)
         {
+            if (!IsPointerOverEquipmentBoxes(getEquipmentRect, mousePosition))
+            {
+                return false;
+            }
+
+            var loadout = CharacterGearSession.ActiveLoadout;
+            var catalog = CharacterGearSession.Catalog;
+            var vault = CharacterGearSession.ActiveVault;
+            if (loadout == null || catalog == null)
+            {
+                return false;
+            }
+
+            // Always route to the item's correct equipment box, regardless of which box was hovered.
+            if (!LandLoadoutEquipService.TryResolveItemSlot(dragItem, catalog, out var correctSlot))
+            {
+                return false;
+            }
+
+            switch (dragSource)
+            {
+                case DragSourceKind.BasicTray:
+                {
+                    var occupied = LandLoadoutSlots.IsValidItem(LandLoadoutSlots.GetEquipped(loadout, correctSlot));
+                    if (occupied)
+                    {
+                        pendingBasicLoadoutSlotOccupied = true;
+                        return true;
+                    }
+
+                    return LandLoadoutEquipService.TryEquipItemCopy(
+                               loadout, dragItem, correctSlot, catalog, vault)
+                           == LandEquipResult.Success;
+                }
+
+                case DragSourceKind.Equipment:
+                    if (dragEquipmentSlot == correctSlot)
+                    {
+                        return false;
+                    }
+
+                    return LandLoadoutEquipService.TrySwapPaperdollSlots(
+                               loadout, dragEquipmentSlot, correctSlot, catalog)
+                           == LandEquipResult.Success;
+
+                case DragSourceKind.Inventory:
+                    // Previous equipped item returns to the inventory cell this item came from.
+                    return LandLoadoutEquipService.TryEquipFromInventory(
+                               loadout, new LandInventoryAddress(dragIndex), correctSlot, catalog)
+                           == LandEquipResult.Success;
+
+                case DragSourceKind.Vault:
+                    // Previous equipped item returns to the vault cell this item came from.
+                    return LandVaultStorageService.TryMoveOrSwapEquipmentWithVault(
+                               loadout, correctSlot, vault, dragIndex, catalog)
+                           == LandEquipResult.Success;
+            }
+
+            return false;
+        }
+
+        private static bool IsPointerOverEquipmentBoxes(System.Func<int, Rect> getEquipmentRect, Vector2 mousePosition)
+        {
             for (var i = 0; i < EquipmentSlots.Length; i++)
             {
                 var cell = getEquipmentRect != null
                     ? getEquipmentRect(i)
                     : CharacterPageLayout.GetEquipmentSlotRect(i, EquipmentSlots.Length);
-                if (!cell.Contains(mousePosition))
+                if (cell.Contains(mousePosition))
                 {
-                    continue;
+                    return true;
                 }
-
-                var targetSlot = EquipmentSlots[i].slot;
-                var loadout = CharacterGearSession.ActiveLoadout;
-                var catalog = CharacterGearSession.Catalog;
-                var vault = CharacterGearSession.ActiveVault;
-
-                switch (dragSource)
-                {
-                    case DragSourceKind.BasicTray:
-                        return LandLoadoutEquipService.TryEquipItemCopy(
-                                   loadout, dragItem, targetSlot, catalog, vault)
-                               == LandEquipResult.Success;
-
-                    case DragSourceKind.Equipment:
-                        if (dragEquipmentSlot == targetSlot)
-                        {
-                            return false;
-                        }
-
-                        return LandLoadoutEquipService.TrySwapPaperdollSlots(
-                                   loadout, dragEquipmentSlot, targetSlot, catalog)
-                               == LandEquipResult.Success;
-
-                    case DragSourceKind.Inventory:
-                        return LandLoadoutEquipService.TryEquipFromInventory(
-                                   loadout, new LandInventoryAddress(dragIndex), targetSlot, catalog)
-                               == LandEquipResult.Success;
-
-                    case DragSourceKind.Vault:
-                        return LandVaultStorageService.TryMoveOrSwapEquipmentWithVault(
-                                   loadout, targetSlot, vault, dragIndex, catalog)
-                               == LandEquipResult.Success;
-                }
-
-                return false;
             }
 
             return false;
@@ -910,6 +1126,7 @@ namespace F89.UI
                 if (LandLoadoutSlots.IsValidItem(item))
                 {
                     DrawItemLabel(cell, item, GridItemNameFontSize);
+                    LandItemTooltipUi.RegisterHover(cell, item);
                 }
             }
 
@@ -930,6 +1147,10 @@ namespace F89.UI
                 ? null
                 : LandLoadoutSlots.GetEquipped(CharacterGearSession.ActiveLoadout, slot);
             DrawTechTile(cell, item, selectedEquipmentSlot == slot);
+            if (LandLoadoutSlots.IsValidItem(item))
+            {
+                LandItemTooltipUi.RegisterHover(cell, item);
+            }
 
             if (isDragging)
             {
@@ -950,7 +1171,21 @@ namespace F89.UI
                 var border = Color.Lerp(fill, Color.black, 0.28f);
                 border.a = 0.95f;
                 DrawFilledBox(cell, fill, border, selected ? 3f : 1.5f);
-                DrawTechLevelBadge(cell, item);
+                if (LandItemTileOverlay.HasCategoryOverlay(item, CharacterGearSession.Catalog))
+                {
+                    LandItemTileOverlay.Draw(
+                        cell,
+                        item,
+                        CharacterGearSession.Catalog,
+                        FontSizeForTile(cell, 0.2f, 8, 14),
+                        LandItemRarityColors.GetOverlayColor(item.Rarity),
+                        scaleFonts: false);
+                }
+                else
+                {
+                    DrawTechLevelBadge(cell, item);
+                }
+
                 return;
             }
 
@@ -968,7 +1203,7 @@ namespace F89.UI
             var ink = level <= 0
                 ? Color.black
                 : LandItemRarityColors.GetTechLevelNumberColor(item.Rarity);
-            var fontSize = CharacterPageStyles.ScaleSlotFont(10);
+            var fontSize = FontSizeForTile(cell, 0.22f, 8, 14);
             var style = HudStyleFactory.CreateLabel(
                 fontSize,
                 FontStyle.Bold,
@@ -994,6 +1229,7 @@ namespace F89.UI
                 if (LandLoadoutSlots.IsValidItem(item))
                 {
                     DrawItemLabel(cell, item, GridItemNameFontSize);
+                    LandItemTooltipUi.RegisterHover(cell, item);
                 }
             }
 
@@ -1010,25 +1246,31 @@ namespace F89.UI
 
         private static void DrawItemLabel(Rect cell, LandGearInstance item, int baseNameFontSize, string nameOverride = null)
         {
-            var catalog = CharacterGearSession.Catalog;
-            var nameFontSize = CharacterPageStyles.ScaleSlotFont(baseNameFontSize);
-            var statFontSize = CharacterPageStyles.ScaleSlotFont(Mathf.Max(7, baseNameFontSize - 2));
-            var nameStyle = HudStyleFactory.CreateLabel(nameFontSize, FontStyle.Bold, TextAnchor.UpperCenter, Color.white, wordWrap: true);
-            var statStyle = HudStyleFactory.CreateLabel(
-                statFontSize,
-                FontStyle.Normal,
-                TextAnchor.LowerCenter,
-                new Color(0.88f, 0.92f, 1f),
-                wordWrap: true);
-            var nameRect = new Rect(cell.x, cell.y + 2f, cell.width, cell.height * 0.55f);
-            var statRect = new Rect(cell.x, cell.y + cell.height * 0.45f, cell.width, cell.height * 0.5f);
-
-            GUI.Label(nameRect, nameOverride ?? catalog.GetDisplayName(item), nameStyle);
-            if (catalog.TryGetWeaponSummary(item, out var summary))
+            var fontSize = FontSizeForTile(cell, 0.18f, 7, 14);
+            if (nameOverride != null && !LandItemTileOverlay.HasCategoryOverlay(item, CharacterGearSession.Catalog))
             {
-                GUI.Label(statRect, summary, statStyle);
+                var nameStyle = HudStyleFactory.CreateLabel(
+                    fontSize,
+                    FontStyle.Bold,
+                    TextAnchor.MiddleCenter,
+                    Color.white,
+                    wordWrap: true);
+                GUI.Label(cell, nameOverride, nameStyle);
+                return;
             }
+
+            LandItemTileOverlay.Draw(
+                cell,
+                item,
+                CharacterGearSession.Catalog,
+                fontSize,
+                Color.white,
+                scaleFonts: false,
+                paintRarityFill: true);
         }
+
+        private static int FontSizeForTile(Rect cell, float heightRatio, int minSize, int maxSize) =>
+            Mathf.Clamp(Mathf.RoundToInt(cell.height * heightRatio), minSize, maxSize);
 
         private static void HandleInventoryClick(int index)
         {

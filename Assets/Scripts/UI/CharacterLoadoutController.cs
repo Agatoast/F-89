@@ -46,6 +46,7 @@ namespace F89.UI
 
         private void OnGUI()
         {
+            LandItemTooltipUi.BeginFrame();
             CharacterGearSession.Bind(CharacterSessionState.ActiveSave);
             DrawPageBackground();
 
@@ -71,8 +72,11 @@ namespace F89.UI
             CharacterPageGearUi.DrawEquipmentSlots(CharacterLoadoutLayout.GetEquipmentSlotRect);
             CharacterPageGearUi.DrawInventory(CharacterLoadoutLayout.GetInventoryGridRect());
             DrawPaperdoll();
+            LandPaperdollDrUi.DrawOnPaperdoll(CharacterLoadoutLayout.GetPaperdollRect(), offsetX: -2f);
             CharacterPageGearUi.DrawFootlocker(CharacterLoadoutLayout.GetFootlockerGridRect(), topAlign: true);
             CharacterPageGearUi.DrawDragOverlay();
+            DrawBasicLoadoutSlotOccupiedDialog();
+            DrawGearDeleteConfirmDialog();
 
             DrawActionButtons();
             if (showBailOutConfirm && CharacterLoadoutNavState.EnteredFromMissionBrief)
@@ -86,6 +90,39 @@ namespace F89.UI
                 {
                     showBailOutConfirm = false;
                 }
+            }
+
+            LandItemTooltipUi.Draw(LandItemTooltipUi.Placement.AboveCursor);
+        }
+
+        private static void DrawBasicLoadoutSlotOccupiedDialog()
+        {
+            if (!CharacterPageGearUi.IsBasicLoadoutSlotOccupiedPending)
+            {
+                return;
+            }
+
+            if (BasicLoadoutSlotOccupiedDialog.Draw(true) == BasicLoadoutSlotOccupiedDialog.Result.Acknowledged)
+            {
+                CharacterPageGearUi.AcknowledgeBasicLoadoutSlotOccupied();
+            }
+        }
+
+        private static void DrawGearDeleteConfirmDialog()
+        {
+            if (!CharacterPageGearUi.IsDeleteConfirmPending)
+            {
+                return;
+            }
+
+            var result = GearDeleteConfirmDialog.Draw(true);
+            if (result == GearDeleteConfirmDialog.Result.Confirmed)
+            {
+                CharacterPageGearUi.ConfirmDeleteItem();
+            }
+            else if (result == GearDeleteConfirmDialog.Result.Cancelled)
+            {
+                CharacterPageGearUi.CancelDeleteConfirm();
             }
         }
 
@@ -131,30 +168,41 @@ namespace F89.UI
 
         private void DrawActionButtons()
         {
-            const float gap = 16f;
-            var totalWidth = ButtonWidth * 2f + gap;
-            var startX = Screen.width - totalWidth - Margin;
-            var y = Screen.height - ButtonHeight - Margin;
-
-            var bailRect = new Rect(startX, y, ButtonWidth, ButtonHeight);
-            var aircraftRect = new Rect(startX + ButtonWidth + gap, y, ButtonWidth, ButtonHeight);
+            var buttonWidth = UiFitCanvas.Px(ButtonWidth);
+            var buttonHeight = UiFitCanvas.Px(ButtonHeight);
+            var margin = UiFitCanvas.Px(Margin);
+            var gap = UiFitCanvas.Px(16f);
+            var y = UiFitCanvas.Rect.yMax - buttonHeight - margin;
 
             if (CharacterLoadoutNavState.EnteredFromMissionBrief)
             {
+                var totalWidth = buttonWidth * 2f + gap;
+                var startX = UiFitCanvas.Rect.xMax - totalWidth - margin;
+                var bailRect = new Rect(startX, y, buttonWidth, buttonHeight);
+                var aircraftRect = new Rect(startX + buttonWidth + gap, y, buttonWidth, buttonHeight);
+
                 if (StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15))
                 {
                     showBailOutConfirm = true;
                 }
-            }
-            else if (StartPageMenuStyles.DrawMenuButton(bailRect, "CHARACTER PAGE", fontSize: 15))
-            {
-                ReturnToCharacterPage();
+
+                if (StartPageMenuStyles.DrawMenuButton(aircraftRect, "AIRCRAFT LOADOUT", fontSize: 15)
+                    && !showBailOutConfirm)
+                {
+                    ProceedToAircraftLoadout();
+                }
+
+                return;
             }
 
-            if (StartPageMenuStyles.DrawMenuButton(aircraftRect, "AIRCRAFT LOADOUT", fontSize: 15)
-                && !showBailOutConfirm)
+            var characterPageRect = new Rect(
+                UiFitCanvas.Rect.xMax - buttonWidth - margin,
+                y,
+                buttonWidth,
+                buttonHeight);
+            if (StartPageMenuStyles.DrawMenuButton(characterPageRect, "CHARACTER PAGE", fontSize: 15))
             {
-                ProceedToAircraftLoadout();
+                ReturnToCharacterPage();
             }
         }
 
@@ -193,6 +241,7 @@ namespace F89.UI
                 return;
             }
 
+            UiFitCanvas.Begin(16f / 9f);
             GUI.color = new Color(0.08f, 0.08f, 0.1f, 1f);
             GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = Color.white;

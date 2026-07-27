@@ -1,4 +1,5 @@
 using F89.Core;
+using F89.Weapons;
 using UnityEngine;
 
 namespace F89.Flight
@@ -46,6 +47,8 @@ namespace F89.Flight
                 body.angularVelocity = Vector3.zero;
             }
 
+            RestoreAircraftState(player, snapshot);
+
             var landing = player.GetComponent<AircraftLandingController>();
             if (landing == null)
             {
@@ -55,10 +58,12 @@ namespace F89.Flight
             landing.PrepareForGroundReturn();
             landing.BeginTakeoff();
 
-            LandMissionHandoffState.ConfirmReturnApplied();
+            // Keep carrier spawn suppressed until takeoff finishes (ConfirmReturnApplied).
             EnsureApplier(player);
 
-            Debug.Log($"[LandCombat] Restored flight at landing spot {snapshot.AircraftWorldPosition}.");
+            Debug.Log(
+                $"[LandCombat] Restored flight at landing spot {snapshot.AircraftWorldPosition} "
+                + $"(fuel {snapshot.FuelNormalized:P0}).");
             return true;
         }
 
@@ -66,6 +71,32 @@ namespace F89.Flight
         {
             return LandMissionHandoffState.ShouldSuppressCarrierRespawn
                 || LandMissionHandoffState.HasPendingGroundReturn;
+        }
+
+        private static void RestoreAircraftState(GameObject player, LandSortieSnapshot snapshot)
+        {
+            var aircraft = player.GetComponent<AircraftController>();
+            if (aircraft != null)
+            {
+                aircraft.ApplyFuelState(
+                    snapshot.LeftTankGallons,
+                    snapshot.RightTankGallons,
+                    snapshot.AfterburnerFuelRemaining);
+            }
+
+            if (snapshot.HasStoresInventory)
+            {
+                var weapons = player.GetComponent<PlayerWeaponController>();
+                weapons?.ApplySortieLoadout(
+                    snapshot.Aim9zRemaining,
+                    snapshot.Agm88jRemaining,
+                    snapshot.Gbu12Remaining,
+                    snapshot.Agm114Remaining,
+                    snapshot.GauRoundsRemaining);
+            }
+
+            var flares = player.GetComponent<FlareCountermeasureController>();
+            flares?.SetFlaresRemaining(snapshot.FlaresRemaining);
         }
 
         private static void EnsureApplier(GameObject player)

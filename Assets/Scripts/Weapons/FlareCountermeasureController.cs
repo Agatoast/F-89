@@ -37,6 +37,11 @@ namespace F89.Weapons
             flaresRemaining = FlaresCapacity;
         }
 
+        public void SetFlaresRemaining(int remaining)
+        {
+            flaresRemaining = Mathf.Clamp(remaining, 0, Mathf.Max(0, FlaresCapacity));
+        }
+
         private void Update()
         {
             if (aircraft == null || inputSource == null)

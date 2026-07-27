@@ -16,7 +16,7 @@ Shader "F89/LandCombatGround"
         _IceBlue ("Blue Ice", Color) = (0.72, 0.82, 0.92, 1)
         _RockTint ("Rock Outcrop", Color) = (0.58, 0.56, 0.54, 1)
         _LandNoiseScale ("Terrain Noise Scale", Float) = 0.11
-        _SatelliteBlend ("Satellite Imagery Blend", Range(0, 1)) = 1
+        _SatelliteBlend ("Satellite Imagery Blend", Range(0, 1)) = 0
     }
 
     SubShader
@@ -109,44 +109,9 @@ Shader "F89/LandCombatGround"
                 return value;
             }
 
-            float2 WorldToMaskUv(float2 worldXY)
-            {
-                float mileScale = max(_WorldUnitsPerMile, 0.0001);
-                float2 miles = _ArenaCenterMiles.xy + worldXY / mileScale;
-                float aspect = max(_MapAspectWidthOverHeight, 0.0001);
-                float mapHeightMiles = _MapSizeMiles / aspect;
-                float halfWidth = _MapSizeMiles * 0.5;
-                float halfHeight = mapHeightMiles * 0.5;
-                float u = (miles.x + halfWidth) / _MapSizeMiles;
-                float mileV = (miles.y + halfHeight) / mapHeightMiles;
-                return float2(u, 1.0 - mileV);
-            }
-
-            float ArenaEdgeFade(float2 worldXY)
-            {
-                float2 edge = abs(worldXY) / max(_ArenaHalfSizeWorld, 0.0001);
-                float edgeMax = max(edge.x, edge.y);
-                return 1.0 - smoothstep(0.82, 1.02, edgeMax);
-            }
-
-            float3 SampleSatellite(float2 uv)
-            {
-                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
-                {
-                    return float3(1.0, 1.0, 1.0);
-                }
-
-                float4 sampleColor = SAMPLE_TEXTURE2D(_LandMask, sampler_LandMask, uv);
-                if (sampleColor.a < 0.5)
-                {
-                    return float3(1.0, 1.0, 1.0);
-                }
-
-                return sampleColor.rgb;
-            }
-
             float3 SampleSnowTerrain(float2 worldXY)
             {
+                // Infinite procedural Antarctica ice field — continuous in world space.
                 float scale = max(_LandNoiseScale, 0.0001);
                 float2 p = worldXY * scale;
 
@@ -157,22 +122,19 @@ Shader "F89/LandCombatGround"
                 float windPack = ValueNoise(float2(p.x * 1.8, p.y * 0.22) + float2(33.0, 7.0));
                 float rock = Fbm(p * 0.65 + float2(200.0, 50.0));
                 float blueIce = smoothstep(0.58, 0.74, Fbm(p * 1.4 + float2(-40.0, 120.0)));
+                float dune = Fbm(p * 0.28 + float2(8.0, -19.0));
+                float frost = ValueNoise(p * 11.0 + float2(4.0, 9.0));
 
                 float3 snow = lerp(_IceMid.rgb, _IceBright.rgb, drift);
-                snow = lerp(snow, _IceShadow.rgb, saturate(1.0 - detail) * 0.62);
-                snow = lerp(snow, _IceCrack.rgb, smoothstep(0.50, 0.68, crevice) * 0.38);
-                snow = lerp(snow, _IceBright.rgb, sastrugi * 0.18);
-                snow = lerp(snow, _IceShadow.rgb, (1.0 - windPack) * 0.16);
-                snow = lerp(snow, _IceBlue.rgb, blueIce * 0.28);
-                snow = lerp(snow, _RockTint.rgb, smoothstep(0.64, 0.76, rock) * 0.22);
-
-                float2 uv = WorldToMaskUv(worldXY);
-                float3 satellite = SampleSatellite(uv);
-                float3 color = lerp(snow, satellite, _SatelliteBlend);
-
-                float edgeFade = ArenaEdgeFade(worldXY);
-                color = lerp(_IceShadow.rgb, color, edgeFade);
-                return color;
+                snow = lerp(snow, _IceShadow.rgb, saturate(1.0 - detail) * 0.55);
+                snow = lerp(snow, _IceCrack.rgb, smoothstep(0.50, 0.68, crevice) * 0.34);
+                snow = lerp(snow, _IceBright.rgb, sastrugi * 0.20);
+                snow = lerp(snow, _IceShadow.rgb, (1.0 - windPack) * 0.18);
+                snow = lerp(snow, _IceBlue.rgb, blueIce * 0.32);
+                snow = lerp(snow, _RockTint.rgb, smoothstep(0.64, 0.76, rock) * 0.20);
+                snow = lerp(snow, _IceMid.rgb, dune * 0.12);
+                snow = lerp(snow, _IceBright.rgb, frost * 0.08);
+                return snow;
             }
 
             half4 frag(Varyings input) : SV_Target
@@ -196,21 +158,13 @@ Shader "F89/LandCombatGround"
             #pragma fragment frag
             #include "UnityCG.cginc"
 
-            sampler2D _LandMask;
-            float4 _LandMask_ST;
-            float4 _ArenaCenterMiles;
-            float _MapSizeMiles;
-            float _MapAspectWidthOverHeight;
-            float _WorldUnitsPerMile;
-            float _ArenaHalfSizeWorld;
+            float _LandNoiseScale;
             fixed4 _IceBright;
             fixed4 _IceMid;
             fixed4 _IceShadow;
             fixed4 _IceCrack;
             fixed4 _IceBlue;
             fixed4 _RockTint;
-            float _LandNoiseScale;
-            float _SatelliteBlend;
 
             struct appdata
             {
@@ -261,42 +215,6 @@ Shader "F89/LandCombatGround"
                 return value;
             }
 
-            float2 WorldToMaskUv(float2 worldXY)
-            {
-                float mileScale = max(_WorldUnitsPerMile, 0.0001);
-                float2 miles = _ArenaCenterMiles.xy + worldXY / mileScale;
-                float aspect = max(_MapAspectWidthOverHeight, 0.0001);
-                float mapHeightMiles = _MapSizeMiles / aspect;
-                float halfWidth = _MapSizeMiles * 0.5;
-                float halfHeight = mapHeightMiles * 0.5;
-                float u = (miles.x + halfWidth) / _MapSizeMiles;
-                float mileV = (miles.y + halfHeight) / mapHeightMiles;
-                return float2(u, 1.0 - mileV);
-            }
-
-            float ArenaEdgeFade(float2 worldXY)
-            {
-                float2 edge = abs(worldXY) / max(_ArenaHalfSizeWorld, 0.0001);
-                float edgeMax = max(edge.x, edge.y);
-                return 1.0 - smoothstep(0.82, 1.02, edgeMax);
-            }
-
-            fixed3 SampleSatellite(float2 uv)
-            {
-                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
-                {
-                    return fixed3(1.0, 1.0, 1.0);
-                }
-
-                fixed4 sampleColor = tex2D(_LandMask, uv);
-                if (sampleColor.a < 0.5)
-                {
-                    return fixed3(1.0, 1.0, 1.0);
-                }
-
-                return sampleColor.rgb;
-            }
-
             fixed3 SampleSnowTerrain(float2 worldXY)
             {
                 float scale = max(_LandNoiseScale, 0.0001);
@@ -309,22 +227,19 @@ Shader "F89/LandCombatGround"
                 float windPack = ValueNoise(float2(p.x * 1.8, p.y * 0.22) + float2(33.0, 7.0));
                 float rock = Fbm(p * 0.65 + float2(200.0, 50.0));
                 float blueIce = smoothstep(0.58, 0.74, Fbm(p * 1.4 + float2(-40.0, 120.0)));
+                float dune = Fbm(p * 0.28 + float2(8.0, -19.0));
+                float frost = ValueNoise(p * 11.0 + float2(4.0, 9.0));
 
                 fixed3 snow = lerp(_IceMid.rgb, _IceBright.rgb, drift);
-                snow = lerp(snow, _IceShadow.rgb, saturate(1.0 - detail) * 0.62);
-                snow = lerp(snow, _IceCrack.rgb, smoothstep(0.50, 0.68, crevice) * 0.38);
-                snow = lerp(snow, _IceBright.rgb, sastrugi * 0.18);
-                snow = lerp(snow, _IceShadow.rgb, (1.0 - windPack) * 0.16);
-                snow = lerp(snow, _IceBlue.rgb, blueIce * 0.28);
-                snow = lerp(snow, _RockTint.rgb, smoothstep(0.64, 0.76, rock) * 0.22);
-
-                float2 uv = WorldToMaskUv(worldXY);
-                fixed3 satellite = SampleSatellite(uv);
-                fixed3 color = lerp(snow, satellite, _SatelliteBlend);
-
-                float edgeFade = ArenaEdgeFade(worldXY);
-                color = lerp(_IceShadow.rgb, color, edgeFade);
-                return color;
+                snow = lerp(snow, _IceShadow.rgb, saturate(1.0 - detail) * 0.55);
+                snow = lerp(snow, _IceCrack.rgb, smoothstep(0.50, 0.68, crevice) * 0.34);
+                snow = lerp(snow, _IceBright.rgb, sastrugi * 0.20);
+                snow = lerp(snow, _IceShadow.rgb, (1.0 - windPack) * 0.18);
+                snow = lerp(snow, _IceBlue.rgb, blueIce * 0.32);
+                snow = lerp(snow, _RockTint.rgb, smoothstep(0.64, 0.76, rock) * 0.20);
+                snow = lerp(snow, _IceMid.rgb, dune * 0.12);
+                snow = lerp(snow, _IceBright.rgb, frost * 0.08);
+                return snow;
             }
 
             fixed4 frag(v2f i) : SV_Target

@@ -1,3 +1,5 @@
+using F89.Core;
+using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -8,7 +10,7 @@ namespace F89.UI
         private const string BackgroundResourcePath = "StartPage/main_menu";
         private const string SaveAntarcticaLogoResourcePath = "CharacterPage/save_antarctica_logo";
 
-        private static readonly string[] ButtonLabels = { "PLAY", "STORY", "RULES", "SETTINGS", "CREDITS" };
+        private static readonly string[] ButtonLabels = { "PLAY", "STORY", "SETTINGS", "CREDITS" };
 
         private Texture2D backgroundTexture;
         private Texture2D saveAntarcticaLogoTexture;
@@ -28,6 +30,7 @@ namespace F89.UI
             StartPageMenuStyles.DrawFullscreenBackground(backgroundTexture);
             StartPageMenuStyles.DrawSaveAntarcticaLogo(saveAntarcticaLogoTexture);
             DrawButtons();
+            DrawTempFightReichButton();
         }
 
         private static void DrawButtons()
@@ -44,6 +47,76 @@ namespace F89.UI
             }
         }
 
+        /// <summary>Temporary land-combat jump; remove when land entry is fully wired.</summary>
+        private static void DrawTempFightReichButton()
+        {
+            var width = UiFitCanvas.Px(220f);
+            var height = UiFitCanvas.Px(44f);
+            var gap = UiFitCanvas.Px(10f);
+            var x = UiFitCanvas.Rect.xMax - width - UiFitCanvas.Px(18f);
+            var y = UiFitCanvas.Rect.y + UiFitCanvas.Px(18f);
+
+            var fightRect = new Rect(x, y, width, height);
+            if (StartPageMenuStyles.DrawMenuButton(fightRect, "FIGHT REICH", fontSize: 22))
+            {
+                EnterLandCombatDirect();
+            }
+
+            var bossRect = new Rect(x, y + height + gap, width, height);
+            if (StartPageMenuStyles.DrawMenuButton(bossRect, "BOSS 1", fontSize: 22))
+            {
+                Time.timeScale = 1f;
+                SceneManager.LoadScene(GameScenes.Boss1);
+            }
+        }
+
+        private static void EnterLandCombatDirect()
+        {
+            Time.timeScale = 1f;
+            EnsureActiveSaveForDevJump();
+            CharacterGearSession.Bind(CharacterSessionState.ActiveSave, forceReload: true);
+            LandDevWeaponFill.FillInventoryAndFootlockerOnce(CharacterSessionState.ActiveSave);
+
+            var snapshot = new LandSortieSnapshot
+            {
+                IsValid = true,
+                AircraftWorldPosition = Vector3.zero,
+                AircraftWorldRotation = Quaternion.identity,
+                FuelNormalized = 1f,
+                ReturnSceneName = GameScenes.StartPage
+            };
+
+            LandMissionHandoffState.BeginEnterFromFlight(snapshot);
+            SceneManager.LoadScene(GameScenes.GroundAttack);
+        }
+
+        private static void EnsureActiveSaveForDevJump()
+        {
+            if (CharacterSessionState.ActiveSave != null)
+            {
+                return;
+            }
+
+            var lastId = CharacterSaveRepository.GetLastSelectedSaveId();
+            var save = CharacterSaveRepository.FindById(lastId);
+            if (save == null)
+            {
+                var saves = CharacterSaveRepository.Saves;
+                if (saves != null && saves.Count > 0)
+                {
+                    save = saves[0];
+                }
+            }
+
+            if (save == null)
+            {
+                save = CharacterSaveRepository.CreateSave("Dev Pilot");
+            }
+
+            CharacterSessionState.ActiveSave = save;
+            CharacterSaveRepository.SetLastSelectedSaveId(save.Id);
+        }
+
         private static void HandleButton(string label)
         {
             Time.timeScale = 1f;
@@ -51,19 +124,16 @@ namespace F89.UI
             switch (label)
             {
                 case "PLAY":
-                    SceneManager.LoadScene(F89.Core.GameScenes.SelectionPage);
+                    SceneManager.LoadScene(GameScenes.SelectionPage);
                     break;
                 case "STORY":
                     OpenSubpage(StoryPageContent.Title, StoryPageContent.Body);
-                    break;
-                case "RULES":
-                    OpenSubpage("RULES", "Rules and briefing — coming soon.");
                     break;
                 case "SETTINGS":
                     MenuNavigationState.Mode = MenuNavigationState.SubpageMode.Settings;
                     MenuNavigationState.SubpageTitle = "SETTINGS";
                     MenuNavigationState.SubpageMessage = string.Empty;
-                    SceneManager.LoadScene(F89.Core.GameScenes.MenuSubpage);
+                    SceneManager.LoadScene(GameScenes.MenuSubpage);
                     break;
                 case "CREDITS":
                     OpenSubpage("CREDITS", "Credits — coming soon.");

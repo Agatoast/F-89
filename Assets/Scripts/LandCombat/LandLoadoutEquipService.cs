@@ -27,10 +27,8 @@ namespace F89.LandCombat
                 return LandEquipResult.InvalidItem;
             }
 
-            if (!LandGearEquipRules.CanEquip(itemSlot, paperdollSlot))
-            {
-                return LandEquipResult.WrongSlot;
-            }
+            // Always place in the item's correct equipment slot; previous item returns to the inventory cell.
+            paperdollSlot = itemSlot;
 
             var previous = LandLoadoutSlots.GetEquipped(loadout, paperdollSlot);
             LandLoadoutSlots.SetEquipped(loadout, paperdollSlot, CloneItem(incoming));
@@ -67,24 +65,46 @@ namespace F89.LandCombat
                 return false;
             }
 
-            if (catalog.TryGetWeapon(item.DefinitionId, out _))
+            if (catalog != null && catalog.TryGetWeapon(item.DefinitionId, out _))
             {
                 itemSlot = LandEquipmentSlot.Weapon;
                 return true;
             }
 
-            if (!catalog.TryGetGear(item.DefinitionId, out var gear))
+            if (catalog != null && catalog.TryGetGear(item.DefinitionId, out var gear))
             {
-                return false;
+                itemSlot = gear.Slot;
+                return true;
             }
 
-            itemSlot = gear.Slot;
-            return true;
+            // Fallback when ScriptableObjects fail to load (dev assets / import issues).
+            if (LandUsWeaponCatalog.TryGetByDefinitionId(item.DefinitionId, out _)
+                || LandUrWeaponCatalog.TryGetByDefinitionId(item.DefinitionId, out _))
+            {
+                itemSlot = LandEquipmentSlot.Weapon;
+                return true;
+            }
+
+            if (LandUsGearCatalog.TryGetByDefinitionId(item.DefinitionId, out var usGear))
+            {
+                itemSlot = usGear.Slot;
+                return true;
+            }
+
+            if (LandUrGearCatalog.TryGetByDefinitionId(item.DefinitionId, out var urGear))
+            {
+                itemSlot = urGear.Slot;
+                return true;
+            }
+
+            return false;
         }
 
         public static bool TryAddToFirstEmptyInventory(LandRunLoadout loadout, LandGearInstance item)
         {
-            if (loadout == null || !LandLoadoutSlots.IsValidItem(item))
+            if (loadout == null
+                || !LandLoadoutSlots.IsValidItem(item)
+                || LandConsumableIds.IsConsumable(item))
             {
                 return false;
             }
@@ -111,6 +131,11 @@ namespace F89.LandCombat
             CharacterVaultSaveData vault = null)
         {
             if (loadout == null || catalog == null || !LandLoadoutSlots.IsValidItem(source))
+            {
+                return LandEquipResult.InvalidItem;
+            }
+
+            if (LandConsumableIds.IsConsumable(source))
             {
                 return LandEquipResult.InvalidItem;
             }

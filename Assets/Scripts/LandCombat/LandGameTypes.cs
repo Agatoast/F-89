@@ -55,6 +55,21 @@ namespace F89.LandCombat
         InvalidItem,
         WrongSlot,
         InventoryEmpty,
-        VaultFull
+        VaultFull,
+        SlotOccupied
+    }
+
+    /// <summary>
+    /// Outcome after reaching 0 HP (unconscious). Rolled once: 50% Death, 49% POW, 1% Escape.
+    /// Pending UI: DeathScreen, POWScreen, EscapedScreen.
+    /// FrozenToDeath: FrozenDeath then DeathScreen.
+    /// </summary>
+    public enum LandDownedOutcome
+    {
+        None = 0,
+        Death = 1,
+        PrisonerOfWar = 2,
+        Escaped = 3,
+        FrozenToDeath = 4
     }
 }

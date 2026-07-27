@@ -156,9 +156,14 @@ namespace F89.Flight
 
         private void Start()
         {
+            // Prefer restoring a ground-return landing site over carrier launch.
+            if (FlightGroundReturnService.TryApplyPendingReturn(gameObject))
+            {
+                return;
+            }
+
             if (FlightGroundReturnService.ShouldSkipCarrierSpawn())
             {
-                FlightGroundReturnService.TryApplyPendingReturn(gameObject);
                 return;
             }
 
@@ -287,6 +292,17 @@ namespace F89.Flight
             {
                 leftTankGallons = worldMap.fuelGallonsPerTank;
                 rightTankGallons = worldMap.fuelGallonsPerTank;
+            }
+        }
+
+        public void ApplyFuelState(float leftGallons, float rightGallons, float afterburnerRemaining)
+        {
+            leftTankGallons = Mathf.Max(0f, leftGallons);
+            rightTankGallons = Mathf.Max(0f, rightGallons);
+            afterburnerFuelRemaining = Mathf.Max(0f, afterburnerRemaining);
+            if (profile != null)
+            {
+                afterburnerFuelRemaining = Mathf.Min(afterburnerFuelRemaining, profile.afterburnerFuelCapacity);
             }
         }
 

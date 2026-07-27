@@ -47,6 +47,11 @@ namespace F89.Controls
             }
 
             firePressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.Fire);
+            if (GameKeyBindings.WasPressed(GameKeyBindingIds.AutoFireToggle))
+            {
+                AutoFireState.Toggle();
+            }
+
             selectAim9zPressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAim9z);
             selectAgm88jPressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.SelectAgm88j);
             selectGbu12Pressed |= GameKeyBindings.WasPressed(GameKeyBindingIds.SelectGbu12);
@@ -110,7 +115,7 @@ namespace F89.Controls
                 aimScreenPosition = Input.mousePosition,
                 hasAimScreenPosition = true,
                 firePressed = firePressed,
-                fireHeld = GameKeyBindings.IsHeld(GameKeyBindingIds.Fire),
+                fireHeld = GameKeyBindings.IsHeld(GameKeyBindingIds.Fire) || AutoFireState.Enabled,
                 selectAim9zPressed = selectAim9zPressed,
                 selectAgm88jPressed = selectAgm88jPressed,
                 selectGbu12Pressed = selectGbu12Pressed,

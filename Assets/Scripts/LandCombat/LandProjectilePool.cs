@@ -29,7 +29,9 @@ namespace F89.LandCombat
             float damage,
             float lifetime,
             Color color,
-            float scale)
+            float scale,
+            LandProjectileTeam team = LandProjectileTeam.Player,
+            Vector2 inheritedVelocity = default)
         {
             if (pool == null)
             {
@@ -40,7 +42,16 @@ namespace F89.LandCombat
             {
                 if (!pool[i].IsActive)
                 {
-                    pool[i].Fire(position, direction, speed, damage, lifetime, color, scale);
+                    pool[i].Fire(
+                        position,
+                        direction,
+                        speed,
+                        damage,
+                        lifetime,
+                        color,
+                        scale,
+                        team,
+                        inheritedVelocity);
                     return pool[i];
                 }
             }
