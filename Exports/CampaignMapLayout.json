@@ -25,14 +25,6 @@
             "GridCellZ": 1740
         },
         {
-            "Id": "185227b313af47a69661e6bde814d94b",
-            "Label": "Outpost 13",
-            "XMiles": -850.110107421875,
-            "ZMiles": -312.5052490234375,
-            "GridCellX": 650,
-            "GridCellZ": 1539
-        },
-        {
             "Id": "8525766dc79845bd8db53e5f1d244048",
             "Label": "Outpost 13 SE",
             "XMiles": -818.9793090820313,
@@ -47,30 +39,6 @@
             "ZMiles": -386.7402038574219,
             "GridCellX": 976,
             "GridCellZ": 1613
-        },
-        {
-            "Id": "f0f0bf52ace243f288c931635a374df7",
-            "Label": "Outpost 43",
-            "XMiles": -577.116943359375,
-            "ZMiles": -219.1128692626953,
-            "GridCellX": 923,
-            "GridCellZ": 1446
-        },
-        {
-            "Id": "f41722716b4e444a8f914c705a2a29d7",
-            "Label": "Outpost 05",
-            "XMiles": -443.0151062011719,
-            "ZMiles": 544.788818359375,
-            "GridCellX": 1057,
-            "GridCellZ": 682
-        },
-        {
-            "Id": "4bd86805af2048edbee25ebc5ea93e70",
-            "Label": "Outpost 18",
-            "XMiles": -557.9595336914063,
-            "ZMiles": 480.132568359375,
-            "GridCellX": 943,
-            "GridCellZ": 746
         },
         {
             "Id": "a1b158ef3ab7434095306e0e4b3c551f",
@@ -169,14 +137,6 @@
             "GridCellZ": 1046
         },
         {
-            "Id": "55d04173da3646ae9c597092ed2d38f8",
-            "Label": "Outpost 46",
-            "XMiles": -323.10247802734377,
-            "ZMiles": -407.52752685546877,
-            "GridCellX": 1177,
-            "GridCellZ": 1634
-        },
-        {
             "Id": "a46aa7961b414ec1903cba67960c41ba",
             "Label": "Outpost 24",
             "XMiles": 122.12848663330078,
@@ -247,6 +207,86 @@
             "ZMiles": -774.677734375,
             "GridCellX": 1208,
             "GridCellZ": 2001
+        },
+        {
+            "Id": "89f021e0c0524ffd919eef04bf317147",
+            "Label": "Rothera Research",
+            "XMiles": -498.0926513671875,
+            "ZMiles": -130.50985717773438,
+            "GridCellX": 1002,
+            "GridCellZ": 1357
+        },
+        {
+            "Id": "48f2636afe7f4fbf9af6d3a22452a820",
+            "Label": "Outpost 43",
+            "XMiles": -596.2743530273438,
+            "ZMiles": -271.7957458496094,
+            "GridCellX": 904,
+            "GridCellZ": 1498
+        },
+        {
+            "Id": "3845580831a14d64b9d185159080ad12",
+            "Label": "Palmer Station",
+            "XMiles": -577.116943359375,
+            "ZMiles": 10.776042938232422,
+            "GridCellX": 923,
+            "GridCellZ": 1216
+        },
+        {
+            "Id": "fa29afbe2d214af2af159c666a519cf6",
+            "Label": "Marambio Base",
+            "XMiles": -474.1458740234375,
+            "ZMiles": 101.77374267578125,
+            "GridCellX": 1026,
+            "GridCellZ": 1125
+        },
+        {
+            "Id": "a900d8e745144e95ba57cb2c978f752b",
+            "Label": "Outpost 18",
+            "XMiles": -591.4850463867188,
+            "ZMiles": 259.8223571777344,
+            "GridCellX": 909,
+            "GridCellZ": 967
+        },
+        {
+            "Id": "103f33ef496346cab0588ce82c782969",
+            "Label": "Outpost 05",
+            "XMiles": -538.8021240234375,
+            "ZMiles": 468.1592102050781,
+            "GridCellX": 962,
+            "GridCellZ": 758
+        },
+        {
+            "Id": "3f464fc97f264b358097db7a3871368f",
+            "Label": "Outpost 13",
+            "XMiles": -888.4249267578125,
+            "ZMiles": -358.00408935546877,
+            "GridCellX": 612,
+            "GridCellZ": 1585
+        },
+        {
+            "Id": "5e82639ef0da495db9ff8f3328829385",
+            "Label": "Outpost 44",
+            "XMiles": 4.26560640335083,
+            "ZMiles": -300.6053161621094,
+            "GridCellX": 1505,
+            "GridCellZ": 1527
+        },
+        {
+            "Id": "5c0dd2e4c5ce47fa848f164c86dfbf50",
+            "Label": "Outpost 46",
+            "XMiles": -225.82447814941407,
+            "ZMiles": -370.692626953125,
+            "GridCellX": 1275,
+            "GridCellZ": 1597
+        },
+        {
+            "Id": "68400e43d58842779ca954d39904ed56",
+            "Label": "Outpost 22",
+            "XMiles": 217.6539306640625,
+            "ZMiles": -386.81036376953127,
+            "GridCellX": 1718,
+            "GridCellZ": 1613
         }
     ],
     "HiddenBaseNames": [
@@ -280,6 +320,11 @@
         "Outpost 14",
         "Outpost 19",
         "Outpost 37",
-        "Outpost 06"
+        "Outpost 06",
+        "Palmer Station",
+        "Rothera Research",
+        "Marambio Base",
+        "Outpost 44",
+        "Outpost 22"
     ]
 }
