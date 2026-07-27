@@ -1,0 +1,285 @@
+{
+    "Markers": [
+        {
+            "Id": "84c73248e5a94b5680e24866a4512bed",
+            "Label": "Amundsen-Scott",
+            "XMiles": 141.285888671875,
+            "ZMiles": -147.2725830078125,
+            "GridCellX": 1642,
+            "GridCellZ": 1374
+        },
+        {
+            "Id": "0d6cd6508e844b8db8646e8374e37012",
+            "Label": "Outpost South",
+            "XMiles": -1091.972412109375,
+            "ZMiles": -573.5249633789063,
+            "GridCellX": 409,
+            "GridCellZ": 1800
+        },
+        {
+            "Id": "9547391650d443e18fb8dc4f5f5ce759",
+            "Label": "Outpost 01",
+            "XMiles": -991.39599609375,
+            "ZMiles": -513.6580200195313,
+            "GridCellX": 509,
+            "GridCellZ": 1740
+        },
+        {
+            "Id": "185227b313af47a69661e6bde814d94b",
+            "Label": "Outpost 13",
+            "XMiles": -850.110107421875,
+            "ZMiles": -312.5052490234375,
+            "GridCellX": 650,
+            "GridCellZ": 1539
+        },
+        {
+            "Id": "8525766dc79845bd8db53e5f1d244048",
+            "Label": "Outpost 13 SE",
+            "XMiles": -818.9793090820313,
+            "ZMiles": -257.4277038574219,
+            "GridCellX": 682,
+            "GridCellZ": 1484
+        },
+        {
+            "Id": "f4e5674cb9cb417cbbe68a1f1424c881",
+            "Label": "Outpost 21",
+            "XMiles": -524.43408203125,
+            "ZMiles": -386.7402038574219,
+            "GridCellX": 976,
+            "GridCellZ": 1613
+        },
+        {
+            "Id": "f0f0bf52ace243f288c931635a374df7",
+            "Label": "Outpost 43",
+            "XMiles": -577.116943359375,
+            "ZMiles": -219.1128692626953,
+            "GridCellX": 923,
+            "GridCellZ": 1446
+        },
+        {
+            "Id": "f41722716b4e444a8f914c705a2a29d7",
+            "Label": "Outpost 05",
+            "XMiles": -443.0151062011719,
+            "ZMiles": 544.788818359375,
+            "GridCellX": 1057,
+            "GridCellZ": 682
+        },
+        {
+            "Id": "4bd86805af2048edbee25ebc5ea93e70",
+            "Label": "Outpost 18",
+            "XMiles": -557.9595336914063,
+            "ZMiles": 480.132568359375,
+            "GridCellX": 943,
+            "GridCellZ": 746
+        },
+        {
+            "Id": "a1b158ef3ab7434095306e0e4b3c551f",
+            "Label": "Outpost 33",
+            "XMiles": -275.38775634765627,
+            "ZMiles": 444.2124328613281,
+            "GridCellX": 1225,
+            "GridCellZ": 782
+        },
+        {
+            "Id": "6f25d1c774b14cff9087fecc78533d24",
+            "Label": "Concordia Station",
+            "XMiles": -27.433364868164064,
+            "ZMiles": -74.29883575439453,
+            "GridCellX": 1473,
+            "GridCellZ": 1301
+        },
+        {
+            "Id": "cd241c9f25f0411a8b83b25927117003",
+            "Label": "Outpost 41",
+            "XMiles": -86.8724594116211,
+            "ZMiles": 67.44044494628906,
+            "GridCellX": 1414,
+            "GridCellZ": 1159
+        },
+        {
+            "Id": "5fd46e5b4fce44fab473ad23e48eed6c",
+            "Label": "Outpost 10",
+            "XMiles": -11.973381042480469,
+            "ZMiles": 439.423095703125,
+            "GridCellX": 1489,
+            "GridCellZ": 787
+        },
+        {
+            "Id": "4fcb7bbf28e44e1bb9a43e41bd82e030",
+            "Label": "Vostok Station",
+            "XMiles": 288.05084228515627,
+            "ZMiles": -5.71534538269043,
+            "GridCellX": 1789,
+            "GridCellZ": 1232
+        },
+        {
+            "Id": "1eaa835d14854885a0e254df4e27bfb3",
+            "Label": "Outpost 29",
+            "XMiles": 100.58927917480469,
+            "ZMiles": 193.1768798828125,
+            "GridCellX": 1601,
+            "GridCellZ": 1033
+        },
+        {
+            "Id": "00522072ae0e4644a9330dfa9c6db008",
+            "Label": "Outpost 31",
+            "XMiles": 261.01971435546877,
+            "ZMiles": 592.682373046875,
+            "GridCellX": 1762,
+            "GridCellZ": 634
+        },
+        {
+            "Id": "c5506baab501400393a58cf560a91f2b",
+            "Label": "Outpost 2",
+            "XMiles": 289.7558288574219,
+            "ZMiles": 801.0191650390625,
+            "GridCellX": 1790,
+            "GridCellZ": 426
+        },
+        {
+            "Id": "45a687ff23a04887b35ad757bbe11c91",
+            "Label": "Outpost 50",
+            "XMiles": 696.8507690429688,
+            "ZMiles": 499.28997802734377,
+            "GridCellX": 2197,
+            "GridCellZ": 727
+        },
+        {
+            "Id": "ca58b4abce324e11b604b4878cd194c8",
+            "Label": "Outpost 23",
+            "XMiles": 706.4295043945313,
+            "ZMiles": 659.7332763671875,
+            "GridCellX": 2207,
+            "GridCellZ": 567
+        },
+        {
+            "Id": "7e76cdb160f5460e8135b797df5cc59b",
+            "Label": "Outpost 07",
+            "XMiles": 972.238525390625,
+            "ZMiles": 489.7112731933594,
+            "GridCellX": 2473,
+            "GridCellZ": 737
+        },
+        {
+            "Id": "21f8ee8fd8da44268ffaf514506d315e",
+            "Label": "Outpost 27",
+            "XMiles": -328.0706481933594,
+            "ZMiles": 180.7980499267578,
+            "GridCellX": 1172,
+            "GridCellZ": 1046
+        },
+        {
+            "Id": "55d04173da3646ae9c597092ed2d38f8",
+            "Label": "Outpost 46",
+            "XMiles": -323.10247802734377,
+            "ZMiles": -407.52752685546877,
+            "GridCellX": 1177,
+            "GridCellZ": 1634
+        },
+        {
+            "Id": "a46aa7961b414ec1903cba67960c41ba",
+            "Label": "Outpost 24",
+            "XMiles": 122.12848663330078,
+            "ZMiles": -884.8328857421875,
+            "GridCellX": 1623,
+            "GridCellZ": 2111
+        },
+        {
+            "Id": "721774ecbc8345c6891e27bad7c13ae8",
+            "Label": "Outpost 17",
+            "XMiles": -129.31251525878907,
+            "ZMiles": -987.803955078125,
+            "GridCellX": 1371,
+            "GridCellZ": 2214
+        },
+        {
+            "Id": "c8b56b2714b64e5aa08e5f88e2b32c62",
+            "Label": "Outpost 28",
+            "XMiles": 347.2280578613281,
+            "ZMiles": -767.4937133789063,
+            "GridCellX": 1848,
+            "GridCellZ": 1994
+        },
+        {
+            "Id": "ac53b093959240f9a8eb7aa2b86d0d88",
+            "Label": "Outpost 14",
+            "XMiles": 524.43408203125,
+            "ZMiles": -911.17431640625,
+            "GridCellX": 2025,
+            "GridCellZ": 2138
+        },
+        {
+            "Id": "a4ca32e521804692a1b4694e70b37436",
+            "Label": "Outpost 19",
+            "XMiles": -11.973381042480469,
+            "ZMiles": -518.4473876953125,
+            "GridCellX": 1489,
+            "GridCellZ": 1745
+        },
+        {
+            "Id": "0bd2b189d806479eba3eeaaf7fb0cb85",
+            "Label": "Outpost 35",
+            "XMiles": -340.04400634765627,
+            "ZMiles": -595.0770263671875,
+            "GridCellX": 1160,
+            "GridCellZ": 1822
+        },
+        {
+            "Id": "878ee2ece53b49d49a9f9582d601ff7f",
+            "Label": "Outpost 09",
+            "XMiles": 221.6927947998047,
+            "ZMiles": -682.3660888671875,
+            "GridCellX": 1722,
+            "GridCellZ": 1909
+        },
+        {
+            "Id": "c03afa17ff8f4b4bb0e354f12ca94d7d",
+            "Label": "Outpost 37",
+            "XMiles": -38.3148193359375,
+            "ZMiles": -745.941650390625,
+            "GridCellX": 1462,
+            "GridCellZ": 1973
+        },
+        {
+            "Id": "bee15aca3d4e49c396bf31edbb8c2f06",
+            "Label": "Outpost 06",
+            "XMiles": -292.1505126953125,
+            "ZMiles": -774.677734375,
+            "GridCellX": 1208,
+            "GridCellZ": 2001
+        }
+    ],
+    "HiddenBaseNames": [
+        "Amundsen-Scott South Pole",
+        "Outpost South",
+        "Outpost 01",
+        "Outpost 13",
+        "Outpost 13 SE",
+        "Outpost 46",
+        "Outpost 21",
+        "Outpost 43",
+        "Outpost 05",
+        "Outpost 18",
+        "Outpost 27",
+        "Outpost 33",
+        "Concordia Station",
+        "Outpost 41",
+        "Outpost 10",
+        "Vostok Station",
+        "Outpost 29",
+        "Outpost 02",
+        "Outpost 31",
+        "Outpost 50",
+        "Outpost 23",
+        "Outpost 07",
+        "Outpost 35",
+        "Outpost 09",
+        "Outpost 24",
+        "Outpost 17",
+        "Outpost 28",
+        "Outpost 14",
+        "Outpost 19",
+        "Outpost 37",
+        "Outpost 06"
+    ]
+}
