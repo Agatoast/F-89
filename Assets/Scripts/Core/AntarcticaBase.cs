@@ -115,8 +115,14 @@ namespace F89.Core
 
         private void ApplyDestroyedState()
         {
-            if (!isDestroyed || siteKind != BaseSiteKind.Land)
+            if (siteKind != BaseSiteKind.Land)
             {
+                return;
+            }
+
+            if (!isDestroyed)
+            {
+                RestoreIntactOutpostVisuals();
                 return;
             }
 
@@ -144,6 +150,27 @@ namespace F89.Core
             }
 
             EnsureDestroyedGroundMarker();
+        }
+
+        private void RestoreIntactOutpostVisuals()
+        {
+            var marker = transform.Find("DestroyedOutpostMarker");
+            if (marker != null)
+            {
+                Destroy(marker.gameObject);
+            }
+
+            var renderers = GetComponentsInChildren<Renderer>(true);
+            foreach (var renderer in renderers)
+            {
+                renderer.enabled = true;
+            }
+
+            var colliders = GetComponentsInChildren<Collider>(true);
+            foreach (var collider in colliders)
+            {
+                collider.enabled = true;
+            }
         }
 
         private void EnsureDestroyedGroundMarker()

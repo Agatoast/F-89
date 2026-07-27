@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using F89.Core;
 using F89.Flight;
+using F89.LandCombat;
 using F89.Weapons;
 using UnityEngine;
 
@@ -64,6 +65,11 @@ namespace F89.Testing
             var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
             var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
             var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap, profile);
+
+            if (LandCombatTestCheats.ResetDestroyedOutpostsOnDevEntry)
+            {
+                AntarcticaOutpostState.ResetAllDestroyedOutposts();
+            }
 
             var existing = GameObject.Find(RootName);
             var mapSizeMiles = worldMap != null ? worldMap.antarcticaSizeMiles : 3000f;
@@ -178,6 +184,11 @@ namespace F89.Testing
         }
 
         private static void SyncAllLandBaseWorldState(float worldUnitsPerMile)
+        {
+            RefreshAllOutpostWorldState(worldUnitsPerMile);
+        }
+
+        public static void RefreshAllOutpostWorldState(float worldUnitsPerMile)
         {
             var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
             foreach (var baseSite in bases)

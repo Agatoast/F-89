@@ -59,6 +59,13 @@ namespace F89.UI
         private Vector2 baseNamePopupGui;
         private AntarcticaBase selectedMapBase;
         private AntarcticaBase hoveredMapBase;
+        private string selectedCampaignMarkerId;
+        private string hoveredCampaignMarkerId;
+        private bool campaignLabelPromptOpen;
+        private Vector2 campaignLabelPromptMiles;
+        private string campaignLabelPromptText = string.Empty;
+        private bool campaignLabelPromptFocus;
+        private string campaignReplaceBaseName = string.Empty;
         private AntarcticaBase[] cachedMapBases;
         private int cachedMapBasesFrame = -1;
         private readonly List<Rect> placedMapLabelRects = new List<Rect>();
@@ -455,7 +462,11 @@ namespace F89.UI
 
             if (Input.GetKeyDown(KeyCode.M))
             {
-                if (IsAutopilotSelectMode)
+                if (IsOpen && campaignLabelPromptOpen)
+                {
+                    // Label dialog handles M in OnGUI (dismiss or type into the field).
+                }
+                else if (IsAutopilotSelectMode)
                 {
                     // Selection mode uses P to cancel; ignore M.
                 }
@@ -492,16 +503,26 @@ namespace F89.UI
                 var mouse = GetGuiMousePosition();
                 if (mapRect.Contains(mouse))
                 {
-                    TryPickBaseAtGuiPoint(mapRect, mouse, out hoveredMapBase);
+                    if (TryPickCampaignMarkerAtGuiPoint(mapRect, mouse, out hoveredCampaignMarkerId))
+                    {
+                        hoveredMapBase = null;
+                    }
+                    else
+                    {
+                        hoveredCampaignMarkerId = null;
+                        TryPickBaseAtGuiPoint(mapRect, mouse, out hoveredMapBase);
+                    }
                 }
                 else
                 {
                     hoveredMapBase = null;
+                    hoveredCampaignMarkerId = null;
                 }
             }
             else
             {
                 hoveredMapBase = null;
+                hoveredCampaignMarkerId = null;
             }
 
             var scroll = Input.mouseScrollDelta.y;
@@ -546,6 +567,10 @@ namespace F89.UI
                 baseNamePopup = string.Empty;
                 selectedMapBase = null;
                 hoveredMapBase = null;
+                selectedCampaignMarkerId = null;
+                hoveredCampaignMarkerId = null;
+                campaignLabelPromptOpen = false;
+                campaignReplaceBaseName = string.Empty;
                 ClearMapPointerState();
                 RestoreWaypointHudBearing();
             }
@@ -571,11 +596,19 @@ namespace F89.UI
 
             var mapRect = GetMapRect();
             var geoRect = GetGeoMapRect(mapRect);
-            HandleCoordinatePickInput(geoRect);
-            HandleMapPointerInput(geoRect);
+            if (!campaignLabelPromptOpen)
+            {
+                HandleCampaignLayoutInput(geoRect);
+                HandleMapPointerInput(geoRect);
+            }
 
             if (Event.current.type != EventType.Repaint)
             {
+                if (campaignLabelPromptOpen)
+                {
+                    DrawCampaignLabelPrompt();
+                }
+
                 return;
             }
 
@@ -583,8 +616,13 @@ namespace F89.UI
             DrawBackdrop();
             DrawMapContents(geoRect);
             DrawMapPlayerLayer(geoRect);
+            DrawCampaignMarkerLayer(geoRect);
             DrawBaseNamePopup();
             DrawHeader();
+            if (campaignLabelPromptOpen)
+            {
+                DrawCampaignLabelPrompt();
+            }
         }
 
         private void DrawBackdrop()
@@ -609,6 +647,16 @@ namespace F89.UI
             GUI.color = hudColor;
 
             GUI.Label(new Rect(mapPanel.x, 0f, mapPanel.width, HeaderHeight), "ANTARCTICA MAP", headerStyle);
+
+            var hintStyle = HudStyleFactory.CreateLabel(
+                11,
+                FontStyle.Normal,
+                TextAnchor.UpperCenter,
+                new Color(FlightHudColorPalette.Current.r, FlightHudColorPalette.Current.g, FlightHudColorPalette.Current.b, 0.75f));
+            GUI.Label(
+                new Rect(mapPanel.x, HeaderHeight - 2f, mapPanel.width, 14f),
+                "SHIFT+CLICK: PLACE MARKER  |  SHIFT+CLICK RED: REPLACE  |  CTRL+SHIFT+R: RESET OUTPOSTS  |  DELETE: REMOVE",
+                hintStyle);
             GUI.color = Color.white;
         }
 
@@ -619,14 +667,9 @@ namespace F89.UI
                 return;
             }
 
-            var hudColor = FlightHudColorPalette.Current;
-
             DrawSatelliteImagery(mapRect);
-
-            if (GetVisibleWidthMiles() <= 600f)
-            {
-                DrawGrid(mapRect, hudColor);
-            }
+            DrawHundredMileGrid(mapRect);
+            DrawMapOriginMarker(mapRect);
 
             DrawBaseMarkers(mapRect);
             ClearPlacedMapLabels();
@@ -648,6 +691,19 @@ namespace F89.UI
 
             DrawPlayerMarker(mapRect);
             DrawAutopilotPlaneLabel(mapRect);
+        }
+
+        private void DrawCampaignMarkerLayer(Rect mapRect)
+        {
+            if (Event.current != null && Event.current.type != EventType.Repaint)
+            {
+                return;
+            }
+
+            DrawCampaignMarkers(mapRect);
+            DrawCampaignMarkerLabels(mapRect);
+            DrawCampaignSelectionLabels(mapRect);
+            GUI.color = Color.white;
         }
 
         private void DrawAutopilotPlaneLabel(Rect mapRect)
@@ -976,23 +1032,21 @@ namespace F89.UI
             return oceanUnderlayTexture;
         }
 
-        private void DrawGrid(Rect mapRect, Color color)
+        private void DrawHundredMileGrid(Rect mapRect)
         {
-            var visibleHalfMiles = GetVisibleHalfMiles();
-            var spacingMiles = ChooseGridSpacingMiles(visibleHalfMiles);
-            var centerMiles = GetViewCenterMiles();
+            const float spacingMiles = CampaignMapCoordinates.HundredMileGridSpacing;
+            var gridColor = new Color(HostileBaseColor.r, HostileBaseColor.g, HostileBaseColor.b, 0.5f);
             var antarcticaHalfWidthMiles = worldMap.antarcticaSizeMiles * 0.5f;
             var antarcticaHalfHeightMiles = antarcticaHalfWidthMiles / AntarcticaLandMask.GetMapWidthOverHeight();
 
-            var minMilesX = Mathf.Max(-antarcticaHalfWidthMiles, centerMiles.x - visibleHalfMiles);
-            var maxMilesX = Mathf.Min(antarcticaHalfWidthMiles, centerMiles.x + visibleHalfMiles);
-            var minMilesY = Mathf.Max(-antarcticaHalfHeightMiles, centerMiles.y - visibleHalfMiles);
-            var maxMilesY = Mathf.Min(antarcticaHalfHeightMiles, centerMiles.y + visibleHalfMiles);
+            var minMilesX = -antarcticaHalfWidthMiles;
+            var maxMilesX = antarcticaHalfWidthMiles;
+            var minMilesY = -antarcticaHalfHeightMiles;
+            var maxMilesY = antarcticaHalfHeightMiles;
 
             var startX = Mathf.Floor(minMilesX / spacingMiles) * spacingMiles;
             var startY = Mathf.Floor(minMilesY / spacingMiles) * spacingMiles;
 
-            var gridColor = new Color(color.r, color.g, color.b, 0.35f);
             for (var x = startX; x <= maxMilesX + 0.001f; x += spacingMiles)
             {
                 DrawGuiLine(
@@ -1014,8 +1068,23 @@ namespace F89.UI
             }
         }
 
+        private void DrawMapOriginMarker(Rect mapRect)
+        {
+            var originGui = WorldMilesToGui(mapRect, Vector2.zero);
+            if (!mapRect.Contains(originGui))
+            {
+                return;
+            }
+
+            var dotSize = Mathf.Clamp(GetVisibleWidthMiles() * 0.014f, 6f, 14f);
+            var boxSize = dotSize * 1.35f;
+            DrawMapFrame(originGui, boxSize);
+            DrawMapDot(originGui, dotSize * 0.55f, new Color(0.95f, 0.95f, 0.95f, 0.85f));
+        }
+
         private static readonly Color FriendlyBaseColor = new Color(0.12f, 0.42f, 0.92f);
         private static readonly Color HostileBaseColor = new Color(0.9f, 0.18f, 0.12f);
+        private static readonly Color CampaignMarkerColor = new Color(0.08f, 0.82f, 1f);
         private static readonly Color CarrierMarkerColor = new Color(0.78f, 0.78f, 0.78f);
         private static readonly Color CarrierLabelColor = new Color(0.95f, 0.85f, 0.1f);
         private const float CarrierMarkerScale = 1f;
@@ -1028,6 +1097,12 @@ namespace F89.UI
             foreach (var baseSite in bases)
             {
                 if (baseSite == null || !baseSite.IsActive)
+                {
+                    continue;
+                }
+
+                if (baseSite.SiteKind == BaseSiteKind.Land
+                    && CampaignMapLayoutState.IsBaseHidden(baseSite.BaseName))
                 {
                     continue;
                 }
@@ -1107,7 +1182,8 @@ namespace F89.UI
                 if (baseSite == null
                     || !baseSite.IsActive
                     || baseSite.IsDestroyed
-                    || baseSite.SiteKind == BaseSiteKind.Carrier)
+                    || baseSite.SiteKind == BaseSiteKind.Carrier
+                    || CampaignMapLayoutState.IsBaseHidden(baseSite.BaseName))
                 {
                     continue;
                 }
@@ -1724,7 +1800,7 @@ namespace F89.UI
                 return;
             }
 
-            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) || currentEvent.shift)
             {
                 return;
             }
@@ -1817,9 +1893,17 @@ namespace F89.UI
                         HandleAutopilotDestinationClick(mapRect, releaseGui);
                         currentEvent.Use();
                     }
+                    else if (TryPickCampaignMarkerAtGuiPoint(mapRect, releaseGui, out var pickedMarkerId))
+                    {
+                        selectedCampaignMarkerId = pickedMarkerId;
+                        selectedMapBase = null;
+                        ClearMapRoute();
+                        currentEvent.Use();
+                    }
                     else if (TryPickBaseAtGuiPoint(mapRect, releaseGui, out var pickedBase))
                     {
                         selectedMapBase = pickedBase;
+                        selectedCampaignMarkerId = null;
                         ClearMapRoute();
                         SyncHudBearingToCurrentTarget();
                         currentEvent.Use();
@@ -1827,6 +1911,7 @@ namespace F89.UI
                     else if (!IsAutopilotFlightMode)
                     {
                         selectedMapBase = null;
+                        selectedCampaignMarkerId = null;
                         PlaceMapWaypoint(mapRect, releaseGui);
                         currentEvent.Use();
                     }
@@ -1854,6 +1939,7 @@ namespace F89.UI
             }
 
             selectedMapBase = null;
+            selectedCampaignMarkerId = null;
             IsAutopilotFlightMode = false;
             IsAutopilotSelectMode = false;
             ClearMapRoute();
@@ -2022,7 +2108,7 @@ namespace F89.UI
             baseRangeLabelStyle.normal.textColor = Color.black;
         }
 
-        private void HandleCoordinatePickInput(Rect mapRect)
+        private void HandleCampaignLayoutInput(Rect mapRect)
         {
             if (IsAutopilotSelectMode || IsAutopilotFlightMode)
             {
@@ -2030,30 +2116,410 @@ namespace F89.UI
             }
 
             var currentEvent = Event.current;
-            if (currentEvent == null
-                || currentEvent.type != EventType.MouseDown
-                || currentEvent.button != 0)
+            if (currentEvent == null)
             {
                 return;
             }
 
-            if (!Input.GetKey(KeyCode.LeftShift) && !Input.GetKey(KeyCode.RightShift))
+            if (currentEvent.type == EventType.KeyDown
+                && currentEvent.keyCode == KeyCode.R
+                && currentEvent.control
+                && currentEvent.shift)
             {
+                ResetDestroyedOutpostsFromMap();
+                currentEvent.Use();
+                return;
+            }
+
+            if (currentEvent.type == EventType.KeyDown && currentEvent.keyCode == KeyCode.Delete)
+            {
+                if (!string.IsNullOrEmpty(selectedCampaignMarkerId))
+                {
+                    CampaignMapLayoutState.RemoveMarker(selectedCampaignMarkerId);
+                    selectedCampaignMarkerId = null;
+                    currentEvent.Use();
+                    return;
+                }
+
+                if (selectedMapBase != null
+                    && selectedMapBase.SiteKind == BaseSiteKind.Land
+                    && !selectedMapBase.IsDestroyed)
+                {
+                    CampaignMapLayoutState.HideBase(selectedMapBase.BaseName);
+                    selectedMapBase = null;
+                    currentEvent.Use();
+                }
+
                 return;
             }
 
             var mouse = GetMapGuiMouse(currentEvent);
-            if (!mapRect.Contains(mouse))
+
+            if (currentEvent.type == EventType.MouseDown
+                && currentEvent.button == 0
+                && currentEvent.shift
+                && mapRect.Contains(mouse))
+            {
+                BeginCampaignMarkerPlacement(mapRect, mouse);
+                currentEvent.Use();
+            }
+        }
+
+        private void BeginCampaignMarkerPlacement(Rect mapRect, Vector2 mouseGui)
+        {
+            campaignReplaceBaseName = string.Empty;
+            if (TryPickReplaceableLandBaseAtGuiPoint(mapRect, mouseGui, out var replaceBase))
+            {
+                campaignLabelPromptMiles = replaceBase.PositionMiles;
+                campaignLabelPromptText = replaceBase.BaseName;
+                campaignReplaceBaseName = replaceBase.BaseName;
+            }
+            else
+            {
+                campaignLabelPromptMiles = GuiToWorldMiles(mapRect, mouseGui);
+                campaignLabelPromptText = $"Mission {CampaignMapLayoutState.Markers.Count + 1:00}";
+            }
+
+            campaignLabelPromptOpen = true;
+            campaignLabelPromptFocus = true;
+        }
+
+        private void ConfirmCampaignMarkerPlacement()
+        {
+            var marker = CampaignMapLayoutState.AddMarker(campaignLabelPromptMiles, campaignLabelPromptText);
+            selectedCampaignMarkerId = marker.Id;
+            selectedMapBase = null;
+
+            if (!string.IsNullOrWhiteSpace(campaignReplaceBaseName))
+            {
+                CampaignMapLayoutState.HideBase(campaignReplaceBaseName);
+            }
+            else
+            {
+                HideReplaceableLandBaseNearMiles(campaignLabelPromptMiles);
+            }
+
+            campaignReplaceBaseName = string.Empty;
+            campaignLabelPromptOpen = false;
+        }
+
+        private void HideReplaceableLandBaseNearMiles(Vector2 miles)
+        {
+            const float replaceRadiusMiles = 35f;
+            var bestDistance = replaceRadiusMiles;
+            string bestBaseName = null;
+
+            foreach (var candidate in GetMapBases())
+            {
+                if (candidate == null
+                    || !candidate.IsActive
+                    || candidate.IsDestroyed
+                    || candidate.SiteKind != BaseSiteKind.Land
+                    || CampaignMapLayoutState.IsBaseHidden(candidate.BaseName))
+                {
+                    continue;
+                }
+
+                var distance = Vector2.Distance(miles, candidate.PositionMiles);
+                if (distance > bestDistance)
+                {
+                    continue;
+                }
+
+                bestDistance = distance;
+                bestBaseName = candidate.BaseName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(bestBaseName))
+            {
+                CampaignMapLayoutState.HideBase(bestBaseName);
+            }
+        }
+
+        private bool TryPickReplaceableLandBaseAtGuiPoint(
+            Rect mapRect,
+            Vector2 guiPoint,
+            out AntarcticaBase baseSite)
+        {
+            baseSite = null;
+            if (!TryPickBaseAtGuiPoint(mapRect, guiPoint, out baseSite))
+            {
+                return false;
+            }
+
+            if (baseSite.SiteKind != BaseSiteKind.Land
+                || baseSite.IsDestroyed
+                || CampaignMapLayoutState.IsBaseHidden(baseSite.BaseName))
+            {
+                baseSite = null;
+                return false;
+            }
+
+            return true;
+        }
+
+        private void ResetDestroyedOutpostsFromMap()
+        {
+            AntarcticaOutpostState.ResetAllDestroyedOutposts();
+            if (worldMap != null && aircraft?.Profile != null)
+            {
+                var worldUnitsPerMile = worldMap.GetWorldUnitsPerMile(aircraft.Profile.ticSizeWorldUnits);
+                F89.Testing.AntarcticaBaseSpawner.RefreshAllOutpostWorldState(worldUnitsPerMile);
+            }
+        }
+
+        private void DrawCampaignLabelPrompt()
+        {
+            if (!campaignLabelPromptOpen)
             {
                 return;
             }
 
-            var miles = GuiToWorldMiles(mapRect, mouse);
-            Debug.Log(
-                $"F-89: Picked map coordinate ({miles.x:0}, {miles.y:0}) — " +
-                $"origin center (0, 0), x+ right, mile y+ toward map bottom (visual south). " +
-                $"CarrierPositionMiles = new Vector2({miles.x:0}f, {miles.y:0}f);");
-            currentEvent.Use();
+            var currentEvent = Event.current;
+            EnsureStyles();
+
+            GUI.color = new Color(0f, 0f, 0f, 0.55f);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            const float panelWidth = 380f;
+            const float panelHeight = 150f;
+            var panelRect = new Rect(
+                (Screen.width - panelWidth) * 0.5f,
+                (Screen.height - panelHeight) * 0.5f,
+                panelWidth,
+                panelHeight);
+
+            GUI.color = new Color(0.04f, 0.06f, 0.08f, 0.96f);
+            GUI.DrawTexture(panelRect, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var titleStyle = HudStyleFactory.CreateLabel(
+                16,
+                FontStyle.Bold,
+                TextAnchor.UpperCenter,
+                FlightHudColorPalette.Current);
+
+            GUI.Label(
+                new Rect(panelRect.x, panelRect.y + 12f, panelRect.width, 22f),
+                string.IsNullOrEmpty(campaignReplaceBaseName) ? "MISSION MARKER LABEL" : "REPLACE OUTPOST",
+                titleStyle);
+
+            var coordStyle = HudStyleFactory.CreateLabel(
+                12,
+                FontStyle.Normal,
+                TextAnchor.UpperCenter,
+                new Color(FlightHudColorPalette.Current.r, FlightHudColorPalette.Current.g, FlightHudColorPalette.Current.b, 0.85f));
+            CampaignMapCoordinates.TryMilesToGridCell(campaignLabelPromptMiles, out var previewCell);
+            GUI.Label(
+                new Rect(panelRect.x + 16f, panelRect.y + 30f, panelRect.width - 32f, 16f),
+                CampaignMapCoordinates.FormatCoordinateSummary(campaignLabelPromptMiles, previewCell),
+                coordStyle);
+
+            var fieldRect = new Rect(panelRect.x + 24f, panelRect.y + 52f, panelRect.width - 48f, 28f);
+            GUI.color = new Color(0f, 0f, 0f, 0.45f);
+            GUI.DrawTexture(fieldRect, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            GUI.SetNextControlName("CampaignMarkerLabelField");
+            campaignLabelPromptText = GUI.TextField(
+                fieldRect,
+                campaignLabelPromptText ?? string.Empty,
+                64,
+                GUI.skin.textField);
+            if (campaignLabelPromptFocus)
+            {
+                GUI.FocusControl("CampaignMarkerLabelField");
+                campaignLabelPromptFocus = false;
+            }
+
+            var buttonWidth = 120f;
+            var buttonHeight = 28f;
+            var buttonY = panelRect.yMax - buttonHeight - 16f;
+            var cancelRect = new Rect(panelRect.x + 24f, buttonY, buttonWidth, buttonHeight);
+            var okRect = new Rect(panelRect.xMax - buttonWidth - 24f, buttonY, buttonWidth, buttonHeight);
+
+            if (StartPageMenuStyles.DrawMenuButton(cancelRect, "CANCEL", fontSize: 16))
+            {
+                campaignReplaceBaseName = string.Empty;
+                campaignLabelPromptOpen = false;
+            }
+
+            if (StartPageMenuStyles.DrawMenuButton(okRect, "OK", fontSize: 16))
+            {
+                ConfirmCampaignMarkerPlacement();
+            }
+
+            if (currentEvent.type == EventType.KeyDown)
+            {
+                if (currentEvent.keyCode == KeyCode.M
+                    && GUI.GetNameOfFocusedControl() != "CampaignMarkerLabelField")
+                {
+                    campaignReplaceBaseName = string.Empty;
+                    campaignLabelPromptOpen = false;
+                    currentEvent.Use();
+                }
+                else if (currentEvent.keyCode == KeyCode.Return || currentEvent.keyCode == KeyCode.KeypadEnter)
+                {
+                    ConfirmCampaignMarkerPlacement();
+                    currentEvent.Use();
+                }
+                else if (currentEvent.keyCode == KeyCode.Escape)
+                {
+                    campaignReplaceBaseName = string.Empty;
+                    campaignLabelPromptOpen = false;
+                    currentEvent.Use();
+                }
+            }
+        }
+
+        private void DrawCampaignMarkers(Rect mapRect)
+        {
+            var dotSize = Mathf.Clamp(GetVisibleWidthMiles() * 0.014f, 6f, 14f);
+            foreach (var marker in CampaignMapLayoutState.Markers)
+            {
+                if (marker == null)
+                {
+                    continue;
+                }
+
+                var guiPoint = WorldMilesToGui(mapRect, new Vector2(marker.XMiles, marker.ZMiles));
+                if (!mapRect.Contains(guiPoint))
+                {
+                    continue;
+                }
+
+                var isSelected = marker.Id == selectedCampaignMarkerId;
+                var isHovered = marker.Id == hoveredCampaignMarkerId;
+                var outlineSize = isSelected || isHovered ? dotSize + 4f : dotSize + 2f;
+                DrawMapOutlinedDot(guiPoint, outlineSize, CampaignMarkerColor, 2f);
+            }
+        }
+
+        private void DrawCampaignMarkerLabels(Rect mapRect)
+        {
+            if (Event.current != null && Event.current.type != EventType.Repaint)
+            {
+                return;
+            }
+
+            var dotSize = Mathf.Clamp(GetVisibleWidthMiles() * 0.014f, 6f, 14f);
+            EnsureBaseMapLabelStyle(dotSize);
+
+            foreach (var marker in CampaignMapLayoutState.Markers)
+            {
+                if (marker == null || string.IsNullOrWhiteSpace(marker.Label))
+                {
+                    continue;
+                }
+
+                var guiPoint = WorldMilesToGui(mapRect, new Vector2(marker.XMiles, marker.ZMiles));
+                if (!mapRect.Contains(guiPoint))
+                {
+                    continue;
+                }
+
+                var emphasize = marker.Id == selectedCampaignMarkerId || marker.Id == hoveredCampaignMarkerId;
+                var labelSize = baseMapLabelStyle.CalcSize(new GUIContent(marker.Label));
+                if (!TryPlaceMapLabelRect(mapRect, guiPoint, dotSize, labelSize, emphasize, out var labelRect))
+                {
+                    continue;
+                }
+
+                DrawBaseMapNameLabelAtRect(labelRect, marker.Label, emphasize);
+            }
+        }
+
+        private void DrawCampaignSelectionLabels(Rect mapRect)
+        {
+            if (Event.current != null && Event.current.type != EventType.Repaint)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(selectedCampaignMarkerId)
+                || !CampaignMapLayoutState.TryGetMarker(selectedCampaignMarkerId, out var marker))
+            {
+                return;
+            }
+
+            var dotSize = Mathf.Clamp(GetVisibleWidthMiles() * 0.014f, 6f, 14f);
+            EnsureBaseRangeLabelStyle(dotSize);
+            var guiPoint = WorldMilesToGui(mapRect, new Vector2(marker.XMiles, marker.ZMiles));
+            if (!mapRect.Contains(guiPoint))
+            {
+                return;
+            }
+
+            var text = CampaignMapCoordinates.FormatCoordinateSummary(
+                new Vector2(marker.XMiles, marker.ZMiles),
+                new Vector2Int(marker.GridCellX, marker.GridCellZ));
+            var style = baseRangeLabelStyle;
+            var size = style.CalcSize(new GUIContent(text));
+            if (TryPlaceMapLabelRect(
+                    mapRect,
+                    guiPoint,
+                    dotSize,
+                    size,
+                    emphasize: true,
+                    out var labelRect))
+            {
+                DrawMapLabelYellowText(labelRect, text, style);
+            }
+        }
+
+        private bool TryPickCampaignMarkerAtGuiPoint(Rect mapRect, Vector2 guiPoint, out string markerId)
+        {
+            markerId = null;
+            var dotSize = Mathf.Clamp(GetVisibleWidthMiles() * 0.014f, 6f, 14f);
+            var bestDistance = float.MaxValue;
+
+            foreach (var marker in CampaignMapLayoutState.Markers)
+            {
+                if (marker == null)
+                {
+                    continue;
+                }
+
+                var guiMarker = WorldMilesToGui(mapRect, new Vector2(marker.XMiles, marker.ZMiles));
+                var distance = Vector2.Distance(guiPoint, guiMarker);
+                var hitRadius = Mathf.Max(dotSize * 4f, 28f);
+                if (distance > hitRadius)
+                {
+                    if (!string.IsNullOrWhiteSpace(marker.Label))
+                    {
+                        EnsureBaseMapLabelStyle(dotSize);
+                        var labelHeight = baseMapLabelStyle.fontSize + 8f;
+                        var labelWidth = Mathf.Max(72f, marker.Label.Length * baseMapLabelStyle.fontSize * 0.58f);
+                        var labelRect = new Rect(
+                            guiMarker.x - labelWidth * 0.5f,
+                            guiMarker.y - dotSize * 0.5f - labelHeight - 6f,
+                            labelWidth,
+                            labelHeight + dotSize + 8f);
+                        if (labelRect.Contains(guiPoint))
+                        {
+                            distance = 0f;
+                        }
+                        else
+                        {
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+
+                if (distance >= bestDistance)
+                {
+                    continue;
+                }
+
+                bestDistance = distance;
+                markerId = marker.Id;
+            }
+
+            return markerId != null;
         }
 
         private void RemoveMapRouteWaypointAt(int routeIndex)
@@ -2170,6 +2636,12 @@ namespace F89.UI
             foreach (var candidate in GetMapBases())
             {
                 if (candidate == null || !candidate.IsActive || candidate.IsDestroyed)
+                {
+                    continue;
+                }
+
+                if (candidate.SiteKind == BaseSiteKind.Land
+                    && CampaignMapLayoutState.IsBaseHidden(candidate.BaseName))
                 {
                     continue;
                 }
@@ -2318,9 +2790,11 @@ namespace F89.UI
 
         private MapGeoProjection GetMapGeoProjection()
         {
+            GetVisibleHalfExtents(out var halfXMiles, out var halfYMiles);
             return new MapGeoProjection(
                 GetViewCenterMiles(),
-                GetVisibleHalfMiles(),
+                halfXMiles,
+                halfYMiles,
                 worldMap.antarcticaSizeMiles);
         }
 
@@ -2338,11 +2812,11 @@ namespace F89.UI
         {
             var antarcticaHalfWidthMiles = worldMap.antarcticaSizeMiles * 0.5f;
             var antarcticaHalfHeightMiles = antarcticaHalfWidthMiles / AntarcticaLandMask.GetMapWidthOverHeight();
-            var visibleHalfMiles = GetVisibleHalfMiles();
+            GetVisibleHalfExtents(out var visibleHalfXMiles, out var visibleHalfYMiles);
 
             // Full-theater zoom shows the entire map. Keep pan at origin so imagery stays aligned.
-            if (visibleHalfMiles >= antarcticaHalfWidthMiles
-                && visibleHalfMiles >= antarcticaHalfHeightMiles)
+            if (visibleHalfXMiles >= antarcticaHalfWidthMiles
+                && visibleHalfYMiles >= antarcticaHalfHeightMiles)
             {
                 if (zoomLevel <= 0.001f)
                 {
@@ -2352,8 +2826,8 @@ namespace F89.UI
                 return;
             }
 
-            var panLimitX = Mathf.Max(0f, antarcticaHalfWidthMiles - visibleHalfMiles);
-            var panLimitY = Mathf.Max(0f, antarcticaHalfHeightMiles - visibleHalfMiles);
+            var panLimitX = Mathf.Max(0f, antarcticaHalfWidthMiles - visibleHalfXMiles);
+            var panLimitY = Mathf.Max(0f, antarcticaHalfHeightMiles - visibleHalfYMiles);
             panOffsetMiles = new Vector2(
                 Mathf.Clamp(panOffsetMiles.x, -panLimitX, panLimitX),
                 Mathf.Clamp(panOffsetMiles.y, -panLimitY, panLimitY));
@@ -2402,18 +2876,29 @@ namespace F89.UI
                 height);
         }
 
-        private float GetVisibleHalfMiles()
+        private void GetVisibleHalfExtents(out float halfXMiles, out float halfYMiles)
         {
-            var antarcticaHalfMiles = worldMap.antarcticaSizeMiles * 0.5f;
+            var mapAspect = AntarcticaLandMask.GetMapWidthOverHeight();
+            var antarcticaHalfWidthMiles = worldMap.antarcticaSizeMiles * 0.5f;
+            var antarcticaHalfHeightMiles = antarcticaHalfWidthMiles / mapAspect;
             if (zoomLevel <= 0.001f)
             {
-                // Exact map half-extent keeps satellite UVs in [0, 1] at full zoom.
-                return antarcticaHalfMiles;
+                // Match native map mile extents so one map mile spans equally in X and Y on screen.
+                halfXMiles = antarcticaHalfWidthMiles;
+                halfYMiles = antarcticaHalfHeightMiles;
+                return;
             }
 
-            var fullViewHalf = antarcticaHalfMiles * FullViewOceanPadding;
-            var minHalfMiles = MinVisibleWidthMiles * 0.5f;
-            return Mathf.Lerp(fullViewHalf, minHalfMiles, zoomLevel);
+            var fullViewHalfXMiles = antarcticaHalfWidthMiles * FullViewOceanPadding;
+            var minHalfXMiles = MinVisibleWidthMiles * 0.5f;
+            halfXMiles = Mathf.Lerp(fullViewHalfXMiles, minHalfXMiles, zoomLevel);
+            halfYMiles = halfXMiles / mapAspect;
+        }
+
+        private float GetVisibleHalfMiles()
+        {
+            GetVisibleHalfExtents(out var halfXMiles, out _);
+            return halfXMiles;
         }
 
         private float GetVisibleWidthMiles()
@@ -2448,19 +2933,21 @@ namespace F89.UI
             public readonly float MileVMax;
             public readonly float MapWidthMiles;
             public readonly float MapHeightMiles;
-            public readonly float VisibleHalfMiles;
+            public readonly float VisibleHalfMilesX;
+            public readonly float VisibleHalfMilesY;
 
-            public MapGeoProjection(Vector2 centerMiles, float visibleHalfMiles, float mapWidthMiles)
+            public MapGeoProjection(Vector2 centerMiles, float visibleHalfMilesX, float visibleHalfMilesY, float mapWidthMiles)
             {
-                VisibleHalfMiles = visibleHalfMiles;
+                VisibleHalfMilesX = visibleHalfMilesX;
+                VisibleHalfMilesY = visibleHalfMilesY;
                 MapWidthMiles = mapWidthMiles;
                 MapHeightMiles = AntarcticaLandMask.GetMapHeightMiles(mapWidthMiles);
                 var halfWidthMiles = mapWidthMiles * 0.5f;
                 var halfHeightMiles = MapHeightMiles * 0.5f;
-                UMin = (centerMiles.x - visibleHalfMiles + halfWidthMiles) / MapWidthMiles;
-                UMax = (centerMiles.x + visibleHalfMiles + halfWidthMiles) / MapWidthMiles;
-                MileVMin = (centerMiles.y - visibleHalfMiles + halfHeightMiles) / MapHeightMiles;
-                MileVMax = (centerMiles.y + visibleHalfMiles + halfHeightMiles) / MapHeightMiles;
+                UMin = (centerMiles.x - visibleHalfMilesX + halfWidthMiles) / MapWidthMiles;
+                UMax = (centerMiles.x + visibleHalfMilesX + halfWidthMiles) / MapWidthMiles;
+                MileVMin = (centerMiles.y - visibleHalfMilesY + halfHeightMiles) / MapHeightMiles;
+                MileVMax = (centerMiles.y + visibleHalfMilesY + halfHeightMiles) / MapHeightMiles;
             }
 
             public Rect GetSatelliteTextureCoords()
@@ -2488,12 +2975,13 @@ namespace F89.UI
 
             public Vector2 ComputePanForAnchorAtGui(Rect mapRect, Vector2 anchorMiles, Vector2 guiPoint)
             {
-                var visibleWidthMiles = VisibleHalfMiles * 2f;
+                var visibleWidthMiles = VisibleHalfMilesX * 2f;
+                var visibleHeightMiles = VisibleHalfMilesY * 2f;
                 var fu = (guiPoint.x - mapRect.xMin) / mapRect.width;
                 var fy = (guiPoint.y - mapRect.yMin) / mapRect.height;
                 return new Vector2(
-                    anchorMiles.x + VisibleHalfMiles - fu * visibleWidthMiles,
-                    anchorMiles.y + VisibleHalfMiles - fy * visibleWidthMiles);
+                    anchorMiles.x + VisibleHalfMilesX - fu * visibleWidthMiles,
+                    anchorMiles.y + VisibleHalfMilesY - fy * visibleHeightMiles);
             }
 
             private void WorldMilesToFractions(Vector2 worldMiles, out float fu, out float fy)
@@ -2543,21 +3031,6 @@ namespace F89.UI
             }
 
             return worldMap.GridSpacingTics * aircraft.Profile.ticSizeWorldUnits / worldMap.milesPerGrid;
-        }
-
-        private static float ChooseGridSpacingMiles(float visibleHalfMiles)
-        {
-            var visibleWidth = visibleHalfMiles * 2f;
-            var candidates = new[] { 1f, 2f, 5f, 10f, 25f, 50f, 100f, 250f, 500f };
-            foreach (var spacing in candidates)
-            {
-                if (visibleWidth / spacing <= 24f)
-                {
-                    return spacing;
-                }
-            }
-
-            return 500f;
         }
 
         private Texture2D GetSatelliteTexture()

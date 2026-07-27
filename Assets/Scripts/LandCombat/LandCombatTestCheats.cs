@@ -7,5 +7,6 @@ namespace F89.LandCombat
         public const bool PlayerInvulnerable = false;
         // FINAL BUILD: set false so boss and guard progress remains permanent.
         public const bool ResetAllBossProgressOnDevEntry = true;
+        public const bool ResetDestroyedOutpostsOnDevEntry = true;
     }
 }
