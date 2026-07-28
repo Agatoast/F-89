@@ -18,7 +18,7 @@ namespace F89.Testing
         private const int CarrierCount = 1;
         private const int ExpectedBaseCount = CatalogBaseCount + LandBaseCount - ExcludedLandBaseCount
             + FixedCarrierRelativeBaseCount + FixedAnchorRelativeBaseCount + CarrierCount;
-        private const int BasesLayoutVersion = 45;
+        private const int BasesLayoutVersion = 53;
         private const float FixedRelativeBaseOffsetMiles = 200f;
         private const float AnchorRelativeBaseSnapSearchMiles = 45f;
         private const float SolidIceSnapSearchMiles = AntarcticaLandMask.BasePlacementSnapSearchMiles;
@@ -82,18 +82,15 @@ namespace F89.Testing
                     AntarcticaWorldLocations.SetCarrierPositionMiles(lockedCarrierMiles);
                     EnsureCarrierAtLockedPosition(worldUnitsPerMile, lockedCarrierMiles);
                     EnsureAllCarrierVisuals(worldUnitsPerMile);
+                    EnsureCarrierSpawned(existing.transform, mapSizeMiles, worldUnitsPerMile);
+                    ApplyLockedCampaignLayout(existing.transform, worldUnitsPerMile);
                     SyncAllLandBaseWorldState(worldUnitsPerMile);
                     LogCarrierReadyState();
+                    LogOutpostSiteIdSystem();
                     return;
                 }
 
                 Object.DestroyImmediate(existing);
-            }
-
-            var catalog = Resources.Load<AntarcticaBaseCatalog>("F89_AntarcticaBaseCatalog");
-            if (catalog == null || catalog.bases == null || catalog.bases.Length == 0)
-            {
-                catalog = CreateRuntimeDefaults();
             }
 
             var mission = AntarcticaMissionConfig.LoadOrDefault();
@@ -102,50 +99,121 @@ namespace F89.Testing
             var layoutMarker = root.AddComponent<AntarcticaBasesRootMarker>();
             layoutMarker.layoutVersion = BasesLayoutVersion;
 
-            var landBasePositions = new List<Vector2>();
-
-            foreach (var definition in catalog.bases)
-            {
-                if (!definition.startsActive)
-                {
-                    continue;
-                }
-
-                var resolvedMiles = ResolveLandBasePosition(definition.positionMiles, mapSizeMiles);
-                landBasePositions.Add(resolvedMiles);
-                SpawnBase(root.transform, ResolveDefinitionPosition(definition, resolvedMiles), worldUnitsPerMile);
-            }
-
-            foreach (var definition in AntarcticaBaseLandFactory.GenerateLandBases(
-                         mapSizeMiles,
-                         landBasePositions,
-                         LandBaseCount))
-            {
-                if (ExcludedOutpostNames.Contains(definition.baseName))
-                {
-                    continue;
-                }
-
-                var resolvedMiles = ResolveLandBasePosition(definition.positionMiles, mapSizeMiles);
-                landBasePositions.Add(resolvedMiles);
-                SpawnBase(
-                    root.transform,
-                    ResolveDefinitionPosition(definition, resolvedMiles),
-                    worldUnitsPerMile);
-            }
-
             var carrierSeedMiles = AntarcticaWorldLocations.DefaultCarrierPositionMiles;
             var carrierPositionMiles = ResolveCarrierPositionMiles(carrierSeedMiles, mapSizeMiles);
             AntarcticaWorldLocations.SetCarrierPositionMiles(carrierPositionMiles);
             layoutMarker.carrierPositionMiles = carrierPositionMiles;
 
             SpawnCarrier(root.transform, mission, carrierPositionMiles, worldUnitsPerMile);
-            SpawnCarrierSouthBase(root.transform, carrierPositionMiles, mapSizeMiles, worldUnitsPerMile);
-            SpawnAnchorRelativeBases(root.transform, mapSizeMiles, worldUnitsPerMile);
+            SpawnCampaignLayoutOutposts(root.transform, worldUnitsPerMile);
             MarkMissionObjective(root.transform, mission.firstObjectiveBaseName);
             EnsureCarrierAtLockedPosition(worldUnitsPerMile, carrierPositionMiles);
             SyncAllLandBaseWorldState(worldUnitsPerMile);
             LogCarrierReadyState();
+            LogOutpostSiteIdSystem();
+        }
+
+        private static void SpawnCampaignLayoutOutposts(Transform parent, float worldUnitsPerMile)
+        {
+            CampaignMapLayoutState.EnsureLoaded();
+            foreach (var site in CampaignMapLayoutState.Markers)
+            {
+                if (site == null || string.IsNullOrWhiteSpace(site.Label))
+                {
+                    continue;
+                }
+
+                SpawnBase(
+                    parent,
+                    Entry(site.Label, CampaignMapLayoutState.GetLockedMiles(site), BaseControl.Hostile),
+                    worldUnitsPerMile);
+            }
+        }
+
+        private static void EnsureCarrierSpawned(Transform root, float mapSizeMiles, float worldUnitsPerMile)
+        {
+            if (FindCarrierBase() != null)
+            {
+                return;
+            }
+
+            var marker = root.GetComponent<AntarcticaBasesRootMarker>();
+            var mission = AntarcticaMissionConfig.LoadOrDefault();
+            var carrierMiles = ResolveLockedCarrierMiles(marker);
+            if (carrierMiles == Vector2.zero)
+            {
+                carrierMiles = ResolveCarrierPositionMiles(
+                    AntarcticaWorldLocations.DefaultCarrierPositionMiles,
+                    mapSizeMiles);
+            }
+
+            AntarcticaWorldLocations.SetCarrierPositionMiles(carrierMiles);
+            if (marker != null)
+            {
+                marker.carrierPositionMiles = carrierMiles;
+            }
+
+            SpawnCarrier(root, mission, carrierMiles, worldUnitsPerMile);
+        }
+
+        private static void ApplyLockedCampaignLayout(Transform parent, float worldUnitsPerMile)
+        {
+            CampaignMapLayoutState.EnsureLoaded();
+            var layoutNames = new HashSet<string>();
+            foreach (var site in CampaignMapLayoutState.Markers)
+            {
+                if (site == null || string.IsNullOrWhiteSpace(site.Label))
+                {
+                    continue;
+                }
+
+                layoutNames.Add(site.Label);
+            }
+
+            var bases = parent.GetComponentsInChildren<AntarcticaBase>(true);
+            foreach (var baseSite in bases)
+            {
+                if (baseSite == null || baseSite.SiteKind == BaseSiteKind.Carrier)
+                {
+                    continue;
+                }
+
+                var siteName = CampaignMapLayoutState.NormalizeSiteName(baseSite.BaseName);
+                if (!layoutNames.Contains(siteName)
+                    || !CampaignMapLayoutState.TryGetSite(siteName, out var site))
+                {
+                    Object.Destroy(baseSite.gameObject);
+                    continue;
+                }
+
+                baseSite.SetBaseName(siteName);
+                baseSite.SetSiteCode(site.SiteCode);
+                baseSite.SetPositionMiles(CampaignMapLayoutState.GetLockedMiles(site), worldUnitsPerMile);
+            }
+
+            var existingNames = new HashSet<string>();
+            foreach (var baseSite in parent.GetComponentsInChildren<AntarcticaBase>(true))
+            {
+                if (baseSite == null || baseSite.SiteKind == BaseSiteKind.Carrier)
+                {
+                    continue;
+                }
+
+                existingNames.Add(CampaignMapLayoutState.NormalizeSiteName(baseSite.BaseName));
+            }
+
+            foreach (var site in CampaignMapLayoutState.Markers)
+            {
+                if (site == null || string.IsNullOrWhiteSpace(site.Label) || existingNames.Contains(site.Label))
+                {
+                    continue;
+                }
+
+                SpawnBase(
+                    parent,
+                    Entry(site.Label, CampaignMapLayoutState.GetLockedMiles(site), BaseControl.Hostile),
+                    worldUnitsPerMile);
+            }
         }
 
         private static void LogCarrierReadyState()
@@ -159,6 +227,20 @@ namespace F89.Testing
 
             Debug.Log(
                 $"F-89: Carrier ready at ({carrier.PositionMiles.x:0}, {carrier.PositionMiles.y:0}) MI.");
+        }
+
+        private static void LogOutpostSiteIdSystem()
+        {
+            CampaignMapLayoutState.EnsureLoaded();
+            var count = CampaignMapLayoutState.Markers.Count;
+            if (CampaignMapLayoutState.TryGetSiteByCode("OP-SOUTH", out var south))
+            {
+                Debug.Log(
+                    $"F-89: Outpost IDs active ({count} sites). Example: {OutpostSiteIds.FormatIdentity(south)}");
+                return;
+            }
+
+            Debug.Log($"F-89: Outpost IDs active ({count} sites). Map labels show SiteCode (OP-01, STN-PALMER, …).");
         }
 
         private static bool ShouldReuseExistingBases(GameObject root)
@@ -229,6 +311,8 @@ namespace F89.Testing
             var body = playerTransform.GetComponent<Rigidbody>();
             if (body != null)
             {
+                body.position = spawnPosition;
+                body.rotation = spawnRotation;
                 body.linearVelocity = Vector3.zero;
                 body.angularVelocity = Vector3.zero;
             }
@@ -245,16 +329,53 @@ namespace F89.Testing
             worldPosition = Vector3.zero;
             worldRotation = Quaternion.identity;
 
-            var carrier = FindCarrierBase();
-            if (carrier == null)
+            var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap, profile);
+            if (worldUnitsPerMile <= 0f)
+            {
+                Debug.LogWarning("F-89: Invalid world scale — player spawn left at current position.");
+                return false;
+            }
+
+            if (!TryGetCarrierSpawnMiles(out var carrierMiles))
             {
                 Debug.LogWarning("F-89: Carrier base not found — player spawn left at current position.");
                 return false;
             }
 
-            worldPosition = carrier.transform.position;
-            worldRotation = ResolveSpawnRotation(carrier.transform.position);
+            // Keep CV transform aligned with its mile source of truth, then spawn the plane
+            // on that exact point so both share the same tactical-map grid square.
+            var carrier = FindCarrierBase();
+            if (carrier != null)
+            {
+                carrier.SetPositionMiles(carrierMiles, worldUnitsPerMile);
+                AntarcticaWorldLocations.SetCarrierPositionMiles(carrierMiles);
+            }
+
+            worldPosition = MilesToWorld(carrierMiles, worldUnitsPerMile);
+            worldRotation = ResolveSpawnRotation(worldPosition);
             return true;
+        }
+
+        private static bool TryGetCarrierSpawnMiles(out Vector2 carrierMiles)
+        {
+            var carrier = FindCarrierBase();
+            if (carrier != null)
+            {
+                carrierMiles = carrier.PositionMiles;
+                if (carrierMiles.sqrMagnitude > 0.0001f)
+                {
+                    return true;
+                }
+            }
+
+            carrierMiles = AntarcticaWorldLocations.CarrierPositionMiles;
+            if (carrierMiles.sqrMagnitude > 0.0001f)
+            {
+                return true;
+            }
+
+            carrierMiles = AntarcticaWorldLocations.DefaultCarrierPositionMiles;
+            return carrierMiles.sqrMagnitude > 0.0001f;
         }
 
         public static Vector2 GetLockedCarrierPositionMiles()
@@ -308,18 +429,17 @@ namespace F89.Testing
 
         private static Vector2 ResolveLockedCarrierMiles(AntarcticaBasesRootMarker marker)
         {
-            if (marker != null && marker.carrierPositionMiles != Vector2.zero)
+            var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+            var mapSizeMiles = worldMap != null ? worldMap.antarcticaSizeMiles : 3000f;
+            var resolvedMiles = ResolveCarrierPositionMiles(
+                AntarcticaWorldLocations.DefaultCarrierPositionMiles,
+                mapSizeMiles);
+            if (marker != null)
             {
-                return marker.carrierPositionMiles;
+                marker.carrierPositionMiles = resolvedMiles;
             }
 
-            var carrier = FindCarrierBase();
-            if (carrier != null)
-            {
-                return carrier.PositionMiles;
-            }
-
-            return AntarcticaWorldLocations.CarrierPositionMiles;
+            return resolvedMiles;
         }
 
         public static AntarcticaBase FindPrimaryMissionObjective()
@@ -636,7 +756,18 @@ namespace F89.Testing
             var baseObject = new GameObject(definition.baseName);
             baseObject.transform.SetParent(parent, false);
             var baseSite = baseObject.AddComponent<Outpost>();
-            baseSite.Configure(definition.baseName, definition.control, definition.positionMiles, worldUnitsPerMile, true);
+            var siteCode = CampaignMapLayoutState.TryGetSite(definition.baseName, out var site)
+                ? site.SiteCode
+                : OutpostSiteIds.FromLabel(definition.baseName);
+            baseSite.Configure(
+                definition.baseName,
+                definition.control,
+                definition.positionMiles,
+                worldUnitsPerMile,
+                true,
+                BaseSiteKind.Land,
+                false,
+                siteCode);
             EnsureBaseLockableTarget(baseObject, definition.baseName, definition.control, BaseSiteKind.Land);
         }
 

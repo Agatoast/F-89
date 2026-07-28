@@ -140,11 +140,6 @@ namespace F89.LandCombat
             var bossNumber = LandBossAreaState.TryGetActiveArea(out var bossArea)
                 ? bossArea.BossNumber
                 : 0;
-            if (LandBossAreaState.HasActiveArea)
-            {
-                LandBossEncounter.MarkGuardsCleared(bossNumber);
-            }
-
             if (bossNumber != 0 && LandBossEncounter.IsDefeated(bossNumber))
             {
                 LandBunkerHandoffState.BeginEnter(layout);

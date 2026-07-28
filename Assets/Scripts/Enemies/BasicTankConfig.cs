@@ -14,9 +14,16 @@ namespace F89.Enemies
         public float acquisitionRangeMiles = 25f;
         public float launchRangeMiles = 20f;
         public int missileCapacity = 6;
-        public int missilesPerSalvo = 3;
-        public float salvoLaunchIntervalSeconds = 2f;
-        public float retreatSpeedMph = 20f;
+        public float postShotDelayMinSeconds = 1f;
+        public float postShotDelayMaxSeconds = 3f;
+        public float engagementStartStaggerMaxSeconds = 4f;
+
+        [Header("Movement")]
+        public float moveSpeedMph = 30f;
+        public float roamRadiusMiles = 1f;
+        public float roamRetargetMinSeconds = 0.8f;
+        public float roamRetargetMaxSeconds = 2.5f;
+        public float separationMiles = 0.45f;
 
         [Header("Missile")]
         public float missileSpeedMph = 1535f;
@@ -28,6 +35,6 @@ namespace F89.Enemies
         [Range(0f, 1f)] public float flareBurnoutReacquireChance = 0.1f;
 
         public float MissileSpeedMilesPerSecond => missileSpeedMph / 3600f;
-        public float RetreatSpeedMilesPerSecond => retreatSpeedMph / 3600f;
+        public float MoveSpeedMilesPerSecond => moveSpeedMph / 3600f;
     }
 }

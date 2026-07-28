@@ -6,12 +6,14 @@ namespace F89.UI
     {
         private static readonly Color[] Colors =
         {
+            HexToColor("000000"),
             HexToColor("00ee00"),
             HexToColor("008e00"),
             HexToColor("005f00"),
-            HexToColor("002f00"),
-            HexToColor("000000")
+            HexToColor("002f00")
         };
+
+        private static readonly Color MfdGreen = HexToColor("00ee00");
 
         private static int colorIndex;
 
@@ -20,7 +22,10 @@ namespace F89.UI
         public static Color Default => Colors[0];
 
         /// <summary>Fixed color for MFD panels. Ignores HUD palette cycling (`).</summary>
-        public static Color Mfd => Default;
+        public static Color Mfd => MfdGreen;
+
+        /// <summary>Fixed color for map waypoints and engaged autopilot routes.</summary>
+        public static Color Waypoint => MfdGreen;
 
         public static string CurrentHex => ColorUtility.ToHtmlStringRGB(Current);
 

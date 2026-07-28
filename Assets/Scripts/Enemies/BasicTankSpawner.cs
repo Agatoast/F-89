@@ -8,54 +8,91 @@ namespace F89.Enemies
     public static class BasicTankSpawner
     {
         public const string OutpostSouthBaseName = "Outpost South";
+        public const int OutpostSouthTankCount = 40;
+        private const float SpawnRadiusMiles = 1f;
+
+        public static void RemoveAllTanks()
+        {
+            var tanks = Object.FindObjectsByType<BasicTankController>(FindObjectsSortMode.None);
+            var removed = 0;
+            for (var i = 0; i < tanks.Length; i++)
+            {
+                if (tanks[i] == null)
+                {
+                    continue;
+                }
+
+                Object.Destroy(tanks[i].gameObject);
+                removed++;
+            }
+
+            if (removed > 0)
+            {
+                Debug.Log($"F-89: Removed {removed} Basic Tank(s) from the map.");
+            }
+        }
 
         public static void EnsureOutpostSouthTank(AircraftController player)
         {
-            if (player == null || player.Profile == null || player.WorldMap == null)
-            {
-                return;
-            }
+            // Tank platoon spawning is disabled until outpost targeting by SiteCode is locked in.
+            RemoveAllTanks();
+        }
 
-            var playerTarget = player.GetComponent<LockableTarget>();
-            if (playerTarget == null)
-            {
-                return;
-            }
+        public static string FormatTankLabel(int index)
+        {
+            return $"{BasicTankConfig.DefaultUnitName} {index:D2}";
+        }
 
-            var outpost = FindBaseByName(OutpostSouthBaseName);
+        private static BasicTankController FindTankByLabel(AntarcticaBase outpost, string label)
+        {
             if (outpost == null)
             {
-                Debug.LogWarning($"F-89: Could not spawn Basic Tank — {OutpostSouthBaseName} not found.");
-                return;
+                return null;
             }
 
-            if (outpost.IsDestroyed
-                || AntarcticaOutpostState.IsTargetDestroyed(
-                    OutpostSouthBaseName,
-                    BasicTankConfig.DefaultUnitName))
+            var tanks = outpost.GetComponentsInChildren<BasicTankController>(true);
+            for (var i = 0; i < tanks.Length; i++)
             {
-                return;
+                var tank = tanks[i];
+                if (tank != null && tank.UnitName == label)
+                {
+                    return tank;
+                }
             }
 
-            if (outpost.GetComponentInChildren<BasicTankController>() != null)
+            return null;
+        }
+
+        private static Vector3 ResolveSpawnWorldPosition(
+            Vector3 outpostWorld,
+            int index,
+            float worldUnitsPerMile,
+            WorldMapConfig worldMap)
+        {
+            outpostWorld.y = 0f;
+            var mapSizeMiles = worldMap != null ? worldMap.antarcticaSizeMiles : 3000f;
+
+            // Deterministic ring scatter so tanks don't stack on the outpost center.
+            var goldenAngle = 2.399963f;
+            var angle = index * goldenAngle;
+            var radiusMiles = Mathf.Lerp(0.1f, SpawnRadiusMiles, index / (float)OutpostSouthTankCount);
+            for (var attempt = 0; attempt < 8; attempt++)
             {
-                return;
+                var attemptAngle = angle + (attempt * 0.35f);
+                var attemptRadius = radiusMiles * (1f - (attempt * 0.08f));
+                var offset = new Vector3(
+                    Mathf.Cos(attemptAngle) * attemptRadius * worldUnitsPerMile,
+                    0f,
+                    Mathf.Sin(attemptAngle) * attemptRadius * worldUnitsPerMile);
+                var candidate = outpostWorld + offset;
+                var miles = WorldMapConfig.WorldToMileOffset(candidate, worldUnitsPerMile);
+                if (AntarcticaLandMask.IsDisplayLandMiles(miles, mapSizeMiles))
+                {
+                    return candidate;
+                }
             }
 
-            var worldUnitsPerMile = ResolveWorldUnitsPerMile(player.WorldMap, player.Profile);
-            var tankObject = new GameObject(BasicTankConfig.DefaultUnitName);
-            tankObject.transform.SetParent(outpost.transform, false);
-            tankObject.transform.position = outpost.transform.position;
-
-            var tank = tankObject.AddComponent<BasicTankController>();
-            tank.Configure(
-                LoadConfig(),
-                player.WorldMap,
-                player.Profile,
-                playerTarget,
-                worldUnitsPerMile);
-
-            Debug.Log($"F-89: {BasicTankConfig.DefaultUnitName} deployed at {OutpostSouthBaseName}.");
+            return outpostWorld;
         }
 
         private static BasicTankConfig LoadConfig()

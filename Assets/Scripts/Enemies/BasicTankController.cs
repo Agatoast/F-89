@@ -1,6 +1,8 @@
 using System.Collections;
+using System.Collections.Generic;
 using F89.Core;
 using F89.Flight;
+using F89.UI;
 using F89.Weapons;
 using UnityEngine;
 
@@ -8,21 +10,36 @@ namespace F89.Enemies
 {
     public class BasicTankController : MonoBehaviour
     {
+        private static readonly List<BasicTankController> ActiveTanks = new List<BasicTankController>(48);
+        private static int separationCacheFrame = -1;
+
         private BasicTankConfig config;
         private EnemySamMissileConfig missileConfig;
         private WorldMapConfig worldMap;
         private FlightProfile flightProfile;
         private LockableTarget playerTarget;
         private float worldUnitsPerMile;
+        private string unitLabel;
+        private Vector3 homeWorld;
 
         private int missilesRemaining;
-        private int activeSalvoMissiles;
+        private int activeMissiles;
         private bool hasWarnedAcquisition;
-        private bool isRetreating;
         private bool engagementStarted;
         private Coroutine engagementRoutine;
 
-        public string UnitName => config != null ? config.unitName : BasicTankConfig.DefaultUnitName;
+        private Vector3 roamPoint;
+        private float nextRoamRetargetTime;
+        private float roamLateralBias;
+        private float roamSpeedScale = 1f;
+
+        public string UnitName =>
+            !string.IsNullOrWhiteSpace(unitLabel)
+                ? unitLabel
+                : config != null
+                    ? config.unitName
+                    : BasicTankConfig.DefaultUnitName;
+
         public int MissilesRemaining => missilesRemaining;
 
         public void Configure(
@@ -30,7 +47,8 @@ namespace F89.Enemies
             WorldMapConfig mapConfig,
             FlightProfile profile,
             LockableTarget playerLockableTarget,
-            float unitsPerMile)
+            float unitsPerMile,
+            string uniqueLabel = null)
         {
             config = tankConfig != null
                 ? tankConfig
@@ -39,11 +57,15 @@ namespace F89.Enemies
             flightProfile = profile;
             playerTarget = playerLockableTarget;
             worldUnitsPerMile = unitsPerMile;
+            unitLabel = uniqueLabel;
             missilesRemaining = config.missileCapacity;
             missileConfig = BuildMissileConfig();
+            homeWorld = transform.position;
+            homeWorld.y = 0f;
 
             BasicTankVisual.AttachVisual(transform, flightProfile);
             EnsureLockableTarget();
+            PickRoamPoint(force: true);
         }
 
         private void EnsureLockableTarget()
@@ -86,8 +108,7 @@ namespace F89.Enemies
             if (config == null
                 || worldMap == null
                 || flightProfile == null
-                || playerTarget == null
-                || !playerTarget.IsAlive)
+                || GamePauseController.IsPaused)
             {
                 return;
             }
@@ -99,25 +120,173 @@ namespace F89.Enemies
                 return;
             }
 
-            var distanceMiles = GetDistanceToPlayerMiles();
-            UpdateAcquisitionWarning(distanceMiles);
+            UpdateRoamMovement();
 
-            if (missilesRemaining <= 0)
+            if (playerTarget == null || !playerTarget.IsAlive)
             {
                 return;
             }
 
-            if (!engagementStarted && distanceMiles <= config.launchRangeMiles)
+            var distanceMiles = GetDistanceToPlayerMiles();
+            UpdateAcquisitionWarning(distanceMiles);
+
+            if (missilesRemaining <= 0 || engagementStarted)
             {
-                engagementStarted = true;
-                isRetreating = true;
-                engagementRoutine = StartCoroutine(RunEngagementSequence());
+                return;
             }
 
-            if (isRetreating)
+            if (distanceMiles <= config.launchRangeMiles)
             {
-                RetreatFromPlayer();
+                engagementStarted = true;
+                engagementRoutine = StartCoroutine(RunEngagementSequence());
             }
+        }
+
+        private void UpdateRoamMovement()
+        {
+            if (Time.time >= nextRoamRetargetTime
+                || FlatDistanceSqr(transform.position, roamPoint) < 0.35f * 0.35f)
+            {
+                PickRoamPoint(force: false);
+            }
+
+            var position = transform.position;
+            position.y = 0f;
+            var toRoam = roamPoint - position;
+            toRoam.y = 0f;
+
+            Vector3 moveDir;
+            if (toRoam.sqrMagnitude < 0.04f)
+            {
+                var jitter = Random.insideUnitSphere;
+                jitter.y = 0f;
+                moveDir = jitter.sqrMagnitude > 0.0001f ? jitter.normalized : transform.forward;
+                moveDir *= 0.35f;
+            }
+            else
+            {
+                var forward = toRoam.normalized;
+                var lateral = new Vector3(-forward.z, 0f, forward.x) * roamLateralBias;
+                moveDir = (forward + lateral).normalized;
+            }
+
+            moveDir = ApplyTankSeparation(moveDir);
+            if (moveDir.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+
+            var ticSize = flightProfile.ticSizeWorldUnits;
+            var speedWorld = WorldMapConfig.MilesPerSecondToWorldUnits(
+                config.MoveSpeedMilesPerSecond * roamSpeedScale,
+                worldMap,
+                ticSize);
+            GroundUnitMovement.TryMoveOnLand(
+                transform,
+                moveDir.normalized * (speedWorld * Time.deltaTime),
+                worldMap,
+                worldUnitsPerMile);
+
+            var facing = moveDir;
+            facing.y = 0f;
+            if (facing.sqrMagnitude > 0.0001f)
+            {
+                transform.rotation = Quaternion.LookRotation(facing.normalized, Vector3.up);
+            }
+        }
+
+        private Vector3 ApplyTankSeparation(Vector3 desiredDir)
+        {
+            var separationWorld = config.separationMiles * worldUnitsPerMile;
+            if (separationWorld <= 0.01f)
+            {
+                return desiredDir;
+            }
+
+            RefreshActiveTankCache();
+            var separation = Vector3.zero;
+            var selfPosition = transform.position;
+            selfPosition.y = 0f;
+            for (var i = 0; i < ActiveTanks.Count; i++)
+            {
+                var other = ActiveTanks[i];
+                if (other == null || other == this)
+                {
+                    continue;
+                }
+
+                var otherTarget = other.GetComponent<LockableTarget>();
+                if (otherTarget != null && !otherTarget.IsAlive)
+                {
+                    continue;
+                }
+
+                var otherPos = other.transform.position;
+                otherPos.y = 0f;
+                var away = selfPosition - otherPos;
+                var distance = away.magnitude;
+                if (distance < 0.01f || distance >= separationWorld)
+                {
+                    continue;
+                }
+
+                var strength = 1f - (distance / separationWorld);
+                separation += away.normalized * strength;
+            }
+
+            if (separation.sqrMagnitude < 0.0001f)
+            {
+                return desiredDir;
+            }
+
+            return (desiredDir + separation * 1.4f).normalized;
+        }
+
+        private static void RefreshActiveTankCache()
+        {
+            if (separationCacheFrame == Time.frameCount)
+            {
+                return;
+            }
+
+            separationCacheFrame = Time.frameCount;
+            ActiveTanks.Clear();
+            var tanks = FindObjectsByType<BasicTankController>(FindObjectsSortMode.None);
+            for (var i = 0; i < tanks.Length; i++)
+            {
+                if (tanks[i] != null)
+                {
+                    ActiveTanks.Add(tanks[i]);
+                }
+            }
+        }
+
+        private void PickRoamPoint(bool force)
+        {
+            var angle = Random.Range(0f, Mathf.PI * 2f);
+            var roll = Random.value;
+            float radiusMiles;
+            if (roll < 0.35f)
+            {
+                radiusMiles = Random.Range(config.roamRadiusMiles * 0.15f, config.roamRadiusMiles * 0.45f);
+            }
+            else if (roll < 0.7f)
+            {
+                radiusMiles = Random.Range(config.roamRadiusMiles * 0.45f, config.roamRadiusMiles * 0.75f);
+            }
+            else
+            {
+                radiusMiles = Random.Range(config.roamRadiusMiles * 0.75f, config.roamRadiusMiles);
+            }
+
+            var offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle))
+                * (radiusMiles * worldUnitsPerMile);
+            roamPoint = homeWorld + offset;
+            roamLateralBias = Random.Range(-0.65f, 0.65f);
+            roamSpeedScale = Random.Range(0.65f, 1.15f);
+            nextRoamRetargetTime = Time.time + (force
+                ? Random.Range(0.15f, 0.45f)
+                : Random.Range(config.roamRetargetMinSeconds, config.roamRetargetMaxSeconds));
         }
 
         private void UpdateAcquisitionWarning(float distanceMiles)
@@ -150,43 +319,47 @@ namespace F89.Enemies
 
         private IEnumerator RunEngagementSequence()
         {
-            Debug.Log($"F-89: {UnitName} launching first salvo.");
-            yield return LaunchSalvo(config.missilesPerSalvo);
-            yield return WaitForSalvoResolution();
-
-            if (missilesRemaining <= 0 || playerTarget == null || !playerTarget.IsAlive)
+            // Stagger so the platoon does not open fire on the same frame.
+            var startDelay = Random.Range(0f, Mathf.Max(0f, config.engagementStartStaggerMaxSeconds));
+            if (startDelay > 0f)
             {
-                yield break;
+                yield return new WaitForSeconds(startDelay);
             }
 
-            if (GetDistanceToPlayerMiles() > config.acquisitionRangeMiles)
+            while (missilesRemaining > 0
+                   && playerTarget != null
+                   && playerTarget.IsAlive)
             {
-                Debug.Log($"F-89: {UnitName} lost track of aircraft before second salvo.");
-                yield break;
-            }
+                if (GetDistanceToPlayerMiles() > config.acquisitionRangeMiles)
+                {
+                    Debug.Log($"F-89: {UnitName} lost track of aircraft — holding fire.");
+                    engagementStarted = false;
+                    engagementRoutine = null;
+                    yield break;
+                }
 
-            Debug.Log($"F-89: {UnitName} reacquired aircraft — launching second salvo.");
-            yield return LaunchSalvo(config.missilesPerSalvo);
-        }
-
-        private IEnumerator LaunchSalvo(int salvoSize)
-        {
-            var launches = Mathf.Min(salvoSize, missilesRemaining);
-            for (var i = 0; i < launches; i++)
-            {
                 LaunchMissileAtPlayer();
                 missilesRemaining--;
+                yield return WaitForMissileResolution();
 
-                if (i < launches - 1)
+                if (missilesRemaining <= 0 || playerTarget == null || !playerTarget.IsAlive)
                 {
-                    yield return new WaitForSeconds(config.salvoLaunchIntervalSeconds);
+                    engagementRoutine = null;
+                    yield break;
                 }
+
+                var delay = Random.Range(
+                    Mathf.Min(config.postShotDelayMinSeconds, config.postShotDelayMaxSeconds),
+                    Mathf.Max(config.postShotDelayMinSeconds, config.postShotDelayMaxSeconds));
+                yield return new WaitForSeconds(delay);
             }
+
+            engagementRoutine = null;
         }
 
-        private IEnumerator WaitForSalvoResolution()
+        private IEnumerator WaitForMissileResolution()
         {
-            while (activeSalvoMissiles > 0)
+            while (activeMissiles > 0)
             {
                 yield return null;
             }
@@ -208,7 +381,7 @@ namespace F89.Enemies
                 toPlayer = Vector3.forward;
             }
 
-            activeSalvoMissiles++;
+            activeMissiles++;
             var seeker = MissileSeekerSettings.FromEnemySam(missileConfig, playerTarget);
             HomingMissile.Launch(
                 missileConfig,
@@ -222,41 +395,14 @@ namespace F89.Enemies
                 accuracyMultiplier: 1f,
                 launchVelocityWorld: Vector3.zero,
                 seekerSettings: seeker,
-                onFlightComplete: OnSalvoMissileComplete);
+                onFlightComplete: OnMissileFlightComplete);
 
             Debug.Log($"F-89: {UnitName} launched missile ({missilesRemaining} remaining).");
         }
 
-        private void OnSalvoMissileComplete()
+        private void OnMissileFlightComplete()
         {
-            activeSalvoMissiles = Mathf.Max(0, activeSalvoMissiles - 1);
-        }
-
-        private void RetreatFromPlayer()
-        {
-            if (playerTarget == null)
-            {
-                return;
-            }
-
-            var away = transform.position - playerTarget.transform.position;
-            away.y = 0f;
-            if (away.sqrMagnitude < 0.0001f)
-            {
-                away = -transform.forward;
-            }
-
-            away.Normalize();
-            var ticSize = flightProfile.ticSizeWorldUnits;
-            var speedWorld = WorldMapConfig.MilesPerSecondToWorldUnits(
-                config.RetreatSpeedMilesPerSecond,
-                worldMap,
-                ticSize);
-            GroundUnitMovement.TryMoveOnLand(
-                transform,
-                away * (speedWorld * Time.deltaTime),
-                worldMap,
-                worldUnitsPerMile);
+            activeMissiles = Mathf.Max(0, activeMissiles - 1);
         }
 
         private float GetDistanceToPlayerMiles()
@@ -267,6 +413,13 @@ namespace F89.Enemies
                 playerTarget.transform.position,
                 worldMap,
                 ticSize);
+        }
+
+        private static float FlatDistanceSqr(Vector3 a, Vector3 b)
+        {
+            var dx = a.x - b.x;
+            var dz = a.z - b.z;
+            return (dx * dx) + (dz * dz);
         }
 
         private void OnDestroy()

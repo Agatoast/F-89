@@ -3,8 +3,8 @@ using F89.Core;
 namespace F89.LandCombat
 {
     /// <summary>
-    /// Links boss missions to flight-map outposts. Bunkers stay hidden until the mission
-    /// is briefed, launched, and then persist at that outpost for the character.
+    /// Links boss missions to flight-map outposts. Surface guards appear once a mission
+    /// is briefed; the bunker and boss encounter unlock only after the sortie is launched.
     /// </summary>
     public static class LandBossMissionAssignment
     {
@@ -75,6 +75,29 @@ namespace F89.LandCombat
             return TryGetRevealedBossForOutpost(save, outpostName, out _);
         }
 
+        public static bool TryGetBossForOutpost(CharacterSaveData save, string outpostName, out int bossNumber)
+        {
+            bossNumber = 0;
+            if (save == null || string.IsNullOrWhiteSpace(outpostName))
+            {
+                return false;
+            }
+
+            CharacterSaveRepository.EnsureBossMissionInitialized(save);
+            for (var i = 0; i < BossMissionCount; i++)
+            {
+                if (!string.Equals(save.BossMissionOutpostNames[i], outpostName, System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                bossNumber = i + 1;
+                return true;
+            }
+
+            return false;
+        }
+
         public static bool TryGetRevealedBossForOutpost(CharacterSaveData save, string outpostName, out int bossNumber)
         {
             bossNumber = 0;
@@ -125,9 +148,9 @@ namespace F89.LandCombat
             }
 
             return
-                $"Proceed to {save.AssignedBossOutpostName}. After launch, the {area.BunkerCode} bunker "
-                + $"will appear at that outpost. Neutralize surface guards and eliminate the UR level "
-                + $"{LandBossEncounter.GetEnemyLevel(save.AssignedBossNumber)} boss force.";
+                $"Proceed to {save.AssignedBossOutpostName}. Surface guards are already deployed there; "
+                + $"after launch, the {area.BunkerCode} bunker will appear for the UR level "
+                + $"{LandBossEncounter.GetEnemyLevel(save.AssignedBossNumber)} boss fight.";
         }
 
         private static int GetNextUndefeatedBoss(CharacterSaveData save)

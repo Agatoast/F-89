@@ -11,7 +11,8 @@ namespace F89.Core
         public const string CarrierName = "USS Martin Van Buren";
 
         /// Fixed map seed for the carrier — resolved to visible ocean on the satellite map at spawn.
-        public static readonly Vector2 DefaultCarrierPositionMiles = new Vector2(-1223f, 670f);
+        /// Map display up/north is -Z miles (see AntarcticaMapOverlay map georef).
+        public static readonly Vector2 DefaultCarrierPositionMiles = new Vector2(-1023f, 570f);
 
         private static Vector2 runtimeCarrierPositionMiles = DefaultCarrierPositionMiles;
 

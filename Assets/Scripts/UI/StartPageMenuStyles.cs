@@ -186,32 +186,25 @@ namespace F89.UI
                 ? 0f
                 : subpageMessageStyle.CalcHeight(new GUIContent(prefix), textWidth);
 
-            var lineWidth = subpageMessageStyle.CalcSize(new GUIContent(StoryPageContent.FlagAnchorLine)).x;
             var lineHeight = Mathf.Max(
                 UiFitCanvas.Px(28f),
                 subpageMessageStyle.CalcHeight(new GUIContent("Ag"), textWidth));
-            var flagLeft = messageArea.x + Mathf.Min(lineWidth + 28f, textWidth * 0.52f);
 
-            // Sit beside the four short mission lines; 2x prior size, shifted right.
-            var flagHeight = lineHeight * 4.2f * 2f * 0.9f * 0.9f * 0.9f;
+            var flagHeight = lineHeight * 5f;
             var aspect = storyFlagTexture.width / (float)Mathf.Max(1, storyFlagTexture.height);
             var flagWidth = flagHeight * aspect;
 
-            var flagX = flagLeft + UiFitCanvas.Px(400f) + UiFitCanvas.Px(200f) + UiFitCanvas.Px(200f) + UiFitCanvas.Px(200f) + UiFitCanvas.Px(100f) + UiFitCanvas.Px(200f) + UiFitCanvas.Px(200f);
-            var flagY = messageArea.y + lineY - subpageScroll.y - UiFitCanvas.Px(80f) - UiFitCanvas.Px(50f) - UiFitCanvas.Px(20f) - UiFitCanvas.Px(10f) - UiFitCanvas.Px(10f);
-            var flagRect = new Rect(flagX, flagY, flagWidth, flagHeight);
+            var flagX = UiFitCanvas.Rect.xMax - UiFitCanvas.Px(300f) - flagWidth;
+            var flagY = messageArea.y + lineY - subpageScroll.y - UiFitCanvas.Px(58f);
 
-            if (flagRect.yMax < messageArea.y || flagRect.y > messageArea.yMax)
+            var flagRect = new Rect(flagX, flagY, flagWidth, flagHeight);
+            if (flagRect.width <= 0f || flagRect.height <= 0f)
             {
                 return;
             }
 
-            GUI.BeginClip(new Rect(messageArea.x, messageArea.y, messageArea.width, messageArea.height));
-            flagRect.x -= messageArea.x;
-            flagRect.y -= messageArea.y;
             GUI.color = Color.white;
             GUI.DrawTexture(flagRect, storyFlagTexture, ScaleMode.ScaleToFit, true);
-            GUI.EndClip();
         }
 
         public static Rect GetMenuButtonRect(int index, int totalButtons)

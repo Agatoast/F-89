@@ -2,7 +2,7 @@ using F89.Core;
 
 namespace F89.LandCombat
 {
-    /// <summary>Active outpost landing with bunker access gated by assigned boss missions.</summary>
+    /// <summary>Active outpost landing. Guards use mission assignment; bunker access waits for launch.</summary>
     public static class LandOutpostLandingState
     {
         public static string ActiveOutpostName { get; private set; } = string.Empty;
@@ -11,13 +11,13 @@ namespace F89.LandCombat
         public static void BeginFromSortie(LandSortieSnapshot snapshot)
         {
             ActiveOutpostName = string.Empty;
-            if (!snapshot.HasOutpostBunker || string.IsNullOrWhiteSpace(snapshot.OutpostName))
+            if (string.IsNullOrWhiteSpace(snapshot.OutpostName))
             {
                 return;
             }
 
             var save = CharacterSessionState.ActiveSave;
-            if (!LandBossMissionAssignment.TryGetRevealedBossForOutpost(save, snapshot.OutpostName, out var bossNumber))
+            if (!LandBossMissionAssignment.TryGetBossForOutpost(save, snapshot.OutpostName, out var bossNumber))
             {
                 return;
             }

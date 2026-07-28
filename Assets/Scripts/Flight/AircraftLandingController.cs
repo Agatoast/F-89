@@ -262,11 +262,12 @@ namespace F89.Flight
                 snapshot.FuelNormalized = aircraftController.TotalFuelCapacityGallons > 0f
                     ? aircraftController.TotalFuelGallons / aircraftController.TotalFuelCapacityGallons
                     : 1f;
-                snapshot.HasOutpostBunker = AntarcticaOutpostLandingResolver.TryResolveOutpost(
+                var atOutpost = AntarcticaOutpostLandingResolver.TryResolveOutpost(
                     snapshot.AircraftWorldPosition,
                     aircraftController.WorldMap,
                     aircraftController.Profile != null ? aircraftController.Profile.ticSizeWorldUnits : 1f,
-                    out snapshot.OutpostName)
+                    out snapshot.OutpostName);
+                snapshot.HasOutpostBunker = atOutpost
                     && LandBossMissionAssignment.IsBunkerRevealedAtOutpost(
                         CharacterSessionState.ActiveSave,
                         snapshot.OutpostName);

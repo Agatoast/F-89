@@ -5,7 +5,9 @@ namespace F89.UI
     public static class CarrierMarkerArt
     {
         private const string ResourcePath = "F89_UssMartinVanBurenCarrier";
-        private const float FallbackWidthOverHeight = 0.3f;
+        private const float FallbackWidthOverHeight = 0.35f;
+        private const float FallbackMinWidthPixels = 18f;
+        private static readonly Color FallbackFillColor = new Color(0.78f, 0.78f, 0.78f);
         private const float FlightViewHeightPixels = 88f;
 
         private static Texture2D carrierTexture;
@@ -35,7 +37,13 @@ namespace F89.UI
 
         public static float GetWidthForHeight(float heightPixels)
         {
-            return heightPixels * GetWidthOverHeight();
+            var width = heightPixels * GetWidthOverHeight();
+            if (!TryGetTexture(out _))
+            {
+                width = Mathf.Max(width, FallbackMinWidthPixels);
+            }
+
+            return width;
         }
 
         public static void GetMarkerRect(Vector2 guiCenter, float heightPixels, out Rect rect)
@@ -50,13 +58,29 @@ namespace F89.UI
 
         public static void DrawNorthUpMarker(Vector2 guiCenter, float heightPixels, float rotationDegrees = 0f)
         {
-            if (!TryGetTexture(out var texture))
+            if (TryGetTexture(out var texture))
             {
+                GetMarkerRect(guiCenter, heightPixels, out var rect);
+                DrawRotatedTexture(rect, texture, guiCenter, rotationDegrees);
                 return;
             }
 
+            DrawFallbackMarker(guiCenter, heightPixels);
+        }
+
+        private static void DrawFallbackMarker(Vector2 guiCenter, float heightPixels)
+        {
             GetMarkerRect(guiCenter, heightPixels, out var rect);
-            DrawRotatedTexture(rect, texture, guiCenter, rotationDegrees);
+            const float border = 2f;
+            var previous = GUI.color;
+            GUI.color = FallbackFillColor;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, border), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - border, rect.width, border), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, border, rect.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.xMax - border, rect.y, border, rect.height), Texture2D.whiteTexture);
+            GUI.color = previous;
         }
 
         private static void DrawRotatedTexture(Rect rect, Texture2D texture, Vector2 pivot, float rotationDegrees)

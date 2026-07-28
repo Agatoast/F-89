@@ -17,6 +17,7 @@ namespace F89.Core
     public class AntarcticaBase : MonoBehaviour
     {
         [SerializeField] private string baseName = "Base";
+        [SerializeField] private string siteCode = string.Empty;
         [SerializeField] private BaseControl control = BaseControl.Hostile;
         [SerializeField] private BaseSiteKind siteKind = BaseSiteKind.Land;
         [SerializeField] private bool isMissionObjective;
@@ -26,6 +27,9 @@ namespace F89.Core
         private float worldUnitsPerMile;
 
         public string BaseName => baseName;
+        /// <summary>Stable speakable ID (OP-01, OP-SOUTH, STN-PALMER, CV-MVB).</summary>
+        public string SiteCode =>
+            string.IsNullOrWhiteSpace(siteCode) ? OutpostSiteIds.FromLabel(baseName) : siteCode;
         public Vector2 PositionMiles => positionMiles;
         public BaseControl Control => control;
         public BaseSiteKind SiteKind => siteKind;
@@ -40,9 +44,13 @@ namespace F89.Core
             float worldUnitsPerMile,
             bool active = true,
             BaseSiteKind kind = BaseSiteKind.Land,
-            bool missionObjective = false)
+            bool missionObjective = false,
+            string code = null)
         {
             baseName = name;
+            siteCode = string.IsNullOrWhiteSpace(code)
+                ? OutpostSiteIds.FromLabel(name)
+                : code.Trim().ToUpperInvariant();
             control = baseControl;
             siteKind = kind;
             isMissionObjective = missionObjective;
@@ -51,6 +59,13 @@ namespace F89.Core
             positionMiles = miles;
             ApplyWorldPosition(worldUnitsPerMile);
             ApplyDestroyedState();
+        }
+
+        public void SetSiteCode(string code)
+        {
+            siteCode = string.IsNullOrWhiteSpace(code)
+                ? OutpostSiteIds.FromLabel(baseName)
+                : code.Trim().ToUpperInvariant();
         }
 
         public void SetPositionMiles(Vector2 miles, float worldUnitsPerMile)

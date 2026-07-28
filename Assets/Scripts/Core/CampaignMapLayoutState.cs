@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 
 namespace F89.Core
@@ -9,6 +8,8 @@ namespace F89.Core
     public sealed class CampaignMapMarkerRecord
     {
         public string Id = Guid.NewGuid().ToString("N");
+        /// <summary>Stable speakable ID (OP-01, OP-SOUTH, STN-PALMER). Derived from Label if empty.</summary>
+        public string SiteCode = string.Empty;
         public string Label = "Mission";
         public float XMiles;
         public float ZMiles;
@@ -20,202 +21,147 @@ namespace F89.Core
     public sealed class CampaignMapLayoutData
     {
         public CampaignMapMarkerRecord[] Markers = Array.Empty<CampaignMapMarkerRecord>();
-        public string[] HiddenBaseNames = Array.Empty<string>();
     }
 
-    /// <summary>Dev/campaign layout markers on the tactical map (blue squares).</summary>
+    /// <summary>
+    /// Read-only outpost positions from Resources/CampaignMapLayout.json.
+    /// </summary>
     public static class CampaignMapLayoutState
     {
-        private const string SaveFileName = "CampaignMapLayout.json";
+        private const string LockedResourcePath = "CampaignMapLayout";
 
-        private static readonly List<CampaignMapMarkerRecord> markers = new();
-        private static readonly List<string> hiddenBaseNames = new();
-        private static bool isLoaded;
+        private static readonly List<CampaignMapMarkerRecord> lockedMarkers = new();
+        private static readonly Dictionary<string, CampaignMapMarkerRecord> lockedMarkersByName =
+            new(StringComparer.Ordinal);
+        private static readonly Dictionary<string, CampaignMapMarkerRecord> lockedMarkersByCode =
+            new(StringComparer.OrdinalIgnoreCase);
+        private static bool lockedLoaded;
 
         public static IReadOnlyList<CampaignMapMarkerRecord> Markers
         {
             get
             {
-                EnsureLoaded();
-                return markers;
+                EnsureLockedLoaded();
+                return lockedMarkers;
             }
         }
-
-        public static string SavePath => Path.Combine(Application.persistentDataPath, SaveFileName);
 
         public static void EnsureLoaded()
         {
-            if (isLoaded)
-            {
-                return;
-            }
-
-            isLoaded = true;
-            markers.Clear();
-            hiddenBaseNames.Clear();
-
-            if (!File.Exists(SavePath))
-            {
-                return;
-            }
-
-            try
-            {
-                var loaded = JsonUtility.FromJson<CampaignMapLayoutData>(File.ReadAllText(SavePath));
-                if (loaded?.Markers != null)
-                {
-                    markers.AddRange(loaded.Markers);
-                }
-
-                if (loaded?.HiddenBaseNames != null)
-                {
-                    hiddenBaseNames.AddRange(loaded.HiddenBaseNames);
-                }
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning($"F-89: Failed to load campaign map layout — {exception.Message}");
-            }
-
-            RefreshMarkerGridCells();
+            EnsureLockedLoaded();
         }
 
-        private static void RefreshMarkerGridCells()
+        public static void EnsureLockedLoaded()
         {
-            for (var i = 0; i < markers.Count; i++)
+            if (lockedLoaded)
             {
-                var marker = markers[i];
-                if (marker == null)
+                return;
+            }
+
+            lockedLoaded = true;
+            lockedMarkers.Clear();
+            lockedMarkersByName.Clear();
+            lockedMarkersByCode.Clear();
+
+            var asset = Resources.Load<TextAsset>(LockedResourcePath);
+            if (asset == null)
+            {
+                Debug.LogError("F-89: Missing Resources/CampaignMapLayout.json.");
+                return;
+            }
+
+            var loaded = JsonUtility.FromJson<CampaignMapLayoutData>(asset.text);
+            if (loaded?.Markers == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < loaded.Markers.Length; i++)
+            {
+                var marker = loaded.Markers[i];
+                if (marker == null || string.IsNullOrWhiteSpace(marker.Label))
                 {
                     continue;
                 }
 
-                var miles = new Vector2(marker.XMiles, marker.ZMiles);
-                if (CampaignMapCoordinates.TryMilesToGridCell(miles, out var gridCell))
+                marker.Label = NormalizeSiteName(marker.Label);
+                if (string.IsNullOrWhiteSpace(marker.SiteCode))
                 {
-                    marker.GridCellX = gridCell.x;
-                    marker.GridCellZ = gridCell.y;
+                    marker.SiteCode = OutpostSiteIds.FromLabel(marker.Label);
                 }
+                else
+                {
+                    marker.SiteCode = marker.SiteCode.Trim().ToUpperInvariant();
+                }
+
+                lockedMarkers.Add(marker);
+                lockedMarkersByName[marker.Label] = marker;
+                lockedMarkersByCode[marker.SiteCode] = marker;
             }
         }
 
-        public static bool IsBaseHidden(string baseName)
+        public static bool TryGetSite(string siteNameOrCode, out CampaignMapMarkerRecord site)
         {
-            if (string.IsNullOrWhiteSpace(baseName))
+            site = null;
+            EnsureLockedLoaded();
+            if (string.IsNullOrWhiteSpace(siteNameOrCode))
             {
                 return false;
             }
 
-            EnsureLoaded();
-            for (var i = 0; i < hiddenBaseNames.Count; i++)
+            var key = siteNameOrCode.Trim();
+            if (lockedMarkersByCode.TryGetValue(key, out site))
             {
-                if (string.Equals(hiddenBaseNames[i], baseName, StringComparison.Ordinal))
-                {
-                    return true;
-                }
+                return true;
             }
 
-            return false;
+            return lockedMarkersByName.TryGetValue(NormalizeSiteName(key), out site);
         }
 
-        public static CampaignMapMarkerRecord AddMarker(Vector2 miles, string label)
+        public static bool TryGetSiteByCode(string siteCode, out CampaignMapMarkerRecord site)
         {
-            EnsureLoaded();
-            CampaignMapCoordinates.TryMilesToGridCell(miles, out var gridCell);
-            var marker = new CampaignMapMarkerRecord
+            site = null;
+            EnsureLockedLoaded();
+            if (string.IsNullOrWhiteSpace(siteCode))
             {
-                Label = string.IsNullOrWhiteSpace(label) ? $"Mission {markers.Count + 1:00}" : label.Trim(),
-                XMiles = miles.x,
-                ZMiles = miles.y,
-                GridCellX = gridCell.x,
-                GridCellZ = gridCell.y
-            };
-            markers.Add(marker);
-            Save();
-            Debug.Log(
-                $"F-89 Campaign: Added marker '{marker.Label}' at {CampaignMapCoordinates.FormatCoordinateSummary(miles, gridCell)}. Saved to {SavePath}");
-            return marker;
+                return false;
+            }
+
+            return lockedMarkersByCode.TryGetValue(siteCode.Trim(), out site);
         }
 
-        public static Vector3 GetMarkerWorldPosition(CampaignMapMarkerRecord marker)
+        public static Vector2 GetLockedMiles(CampaignMapMarkerRecord site)
         {
-            if (marker == null)
+            return site == null ? Vector2.zero : new Vector2(site.XMiles, site.ZMiles);
+        }
+
+        public static Vector3 GetSiteWorldPosition(CampaignMapMarkerRecord site)
+        {
+            if (site == null)
             {
                 return Vector3.zero;
             }
 
-            return CampaignMapCoordinates.MilesToWorld(new Vector2(marker.XMiles, marker.ZMiles));
+            return CampaignMapCoordinates.MilesToWorld(new Vector2(site.XMiles, site.ZMiles));
         }
 
-        public static bool RemoveMarker(string markerId)
+        public static string NormalizeSiteName(string siteName)
         {
-            EnsureLoaded();
-            if (string.IsNullOrEmpty(markerId))
+            if (string.IsNullOrWhiteSpace(siteName))
             {
-                return false;
+                return string.Empty;
             }
 
-            var removed = markers.RemoveAll(marker => marker != null && marker.Id == markerId);
-            if (removed <= 0)
+            var trimmed = siteName.Trim();
+            if (!trimmed.StartsWith("Outpost ", StringComparison.Ordinal))
             {
-                return false;
+                return trimmed;
             }
 
-            Save();
-            return true;
-        }
-
-        public static bool HideBase(string baseName)
-        {
-            if (string.IsNullOrWhiteSpace(baseName) || IsBaseHidden(baseName))
-            {
-                return false;
-            }
-
-            EnsureLoaded();
-            hiddenBaseNames.Add(baseName.Trim());
-            Save();
-            Debug.Log($"F-89 Campaign: Hidden base '{baseName}'. Saved to {SavePath}");
-            return true;
-        }
-
-        public static bool TryGetMarker(string markerId, out CampaignMapMarkerRecord marker)
-        {
-            marker = null;
-            EnsureLoaded();
-            if (string.IsNullOrEmpty(markerId))
-            {
-                return false;
-            }
-
-            for (var i = 0; i < markers.Count; i++)
-            {
-                var candidate = markers[i];
-                if (candidate != null && candidate.Id == markerId)
-                {
-                    marker = candidate;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static void Save()
-        {
-            try
-            {
-                var payload = new CampaignMapLayoutData
-                {
-                    Markers = markers.ToArray(),
-                    HiddenBaseNames = hiddenBaseNames.ToArray()
-                };
-                File.WriteAllText(SavePath, JsonUtility.ToJson(payload, true));
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning($"F-89: Failed to save campaign map layout — {exception.Message}");
-            }
+            var suffix = trimmed.Substring("Outpost ".Length).Trim();
+            return int.TryParse(suffix, out var number)
+                ? $"Outpost {number:00}"
+                : trimmed;
         }
     }
 }

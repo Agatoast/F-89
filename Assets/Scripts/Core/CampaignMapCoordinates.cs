@@ -8,15 +8,6 @@ namespace F89.Core
     /// </summary>
     public static class CampaignMapCoordinates
     {
-        public const float HundredMileGridSpacing = 100f;
-
-        public static Vector2 SnapToHundredMileGrid(Vector2 miles)
-        {
-            return new Vector2(
-                Mathf.Round(miles.x / HundredMileGridSpacing) * HundredMileGridSpacing,
-                Mathf.Round(miles.y / HundredMileGridSpacing) * HundredMileGridSpacing);
-        }
-
         public static bool TryMilesToGridCell(Vector2 miles, out Vector2Int gridCell)
         {
             gridCell = Vector2Int.zero;

@@ -56,24 +56,8 @@ namespace F89.LandCombat
 
         public static bool IsGuardCleared(int bossNumber)
         {
-            bossNumber = ClampBossNumber(bossNumber);
-            var save = CharacterSessionState.ActiveSave;
-            return save != null
-                ? (save.BossGuardClearedMask & (1 << (bossNumber - 1))) != 0
-                : false;
-        }
-
-        public static void MarkGuardsCleared(int bossNumber)
-        {
-            bossNumber = ClampBossNumber(bossNumber);
-            var save = CharacterSessionState.ActiveSave;
-            if (save == null)
-            {
-                return;
-            }
-
-            save.BossGuardClearedMask |= 1 << (bossNumber - 1);
-            CharacterSaveRepository.WriteBossProgress(save);
+            // Surface guards respawn on every landing until the boss is defeated.
+            return IsDefeated(bossNumber);
         }
 
         public static int GetEnemyCount(int bossNumber) =>

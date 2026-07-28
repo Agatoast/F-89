@@ -1,3 +1,4 @@
+using F89.Core;
 using UnityEngine;
 
 namespace F89.LandCombat
@@ -44,7 +45,12 @@ namespace F89.LandCombat
             BindTerrainFollow();
             if (LandBossAreaState.TryGetActiveArea(out var bossArea))
             {
-                SpawnBossArea(planePosition, bossArea);
+                var save = CharacterSessionState.ActiveSave;
+                var spawnBunker = LandOutpostLandingState.HasActiveOutpost
+                    && LandBossMissionAssignment.IsBunkerRevealedAtOutpost(
+                        save,
+                        LandOutpostLandingState.ActiveOutpostName);
+                SpawnBossArea(planePosition, bossArea, spawnBunker);
             }
             else if (LandOutpostLandingState.HasActiveOutpost)
             {
@@ -253,7 +259,10 @@ namespace F89.LandCombat
             Debug.Log($"F-89 Land: Landed at {outpostName}; bunker access available, no surface enemies spawned.");
         }
 
-        private static void SpawnBossArea(Vector3 planeWorldPosition, LandBossAreaCatalog.Definition area)
+        private static void SpawnBossArea(
+            Vector3 planeWorldPosition,
+            LandBossAreaCatalog.Definition area,
+            bool spawnBunker)
         {
             var bearing = area.BearingDegrees * Mathf.Deg2Rad;
             var bearingDir = new Vector2(Mathf.Cos(bearing), Mathf.Sin(bearing));
@@ -276,15 +285,20 @@ namespace F89.LandCombat
                 enemy.Initialize(spawn, area.GuardLevel, faceTarget);
             }
 
-            var bunkerRange = (LandGameConstants.BunkerEntranceMinRangeLandUnits
-                               + LandGameConstants.BunkerEntranceMaxRangeLandUnits) * 0.5f;
-            var bunkerPos = plane + bearingDir * LandUnits.ToWorld(bunkerRange);
-            var bunker = LandBunkerEntrance.Spawn(bunkerPos);
-            bunker.name = area.BunkerCode;
+            if (spawnBunker)
+            {
+                var bunkerRange = (LandGameConstants.BunkerEntranceMinRangeLandUnits
+                                   + LandGameConstants.BunkerEntranceMaxRangeLandUnits) * 0.5f;
+                var bunkerPos = plane + bearingDir * LandUnits.ToWorld(bunkerRange);
+                var bunker = LandBunkerEntrance.Spawn(bunkerPos);
+                bunker.name = area.BunkerCode;
+            }
 
             Debug.Log(
-                $"F-89 Land: {area.SurfaceCode} ready — {(spawnGuards ? area.GuardCount : 0)} UR level {area.GuardLevel} guards; "
-                + $"{area.BunkerCode} at {bunkerRange:0.0} range.");
+                $"F-89 Land: {area.SurfaceCode} ready — {(spawnGuards ? area.GuardCount : 0)} UR level {area.GuardLevel} guards"
+                + (spawnBunker
+                    ? $"; {area.BunkerCode} bunker available."
+                    : "; bunker locked until mission launch."));
         }
     }
 }

@@ -120,6 +120,7 @@ namespace F89.Testing
             var restoredFromGround = FlightGroundReturnService.TryApplyPendingReturn(player);
             if (!restoredFromGround && !FlightGroundReturnService.ShouldSkipCarrierSpawn())
             {
+                AntarcticaBaseSpawner.TryMovePlayerToCarrier(player.transform);
                 ApplyMissionLaunchIfNeeded(player.GetComponent<AircraftController>());
             }
 
@@ -271,11 +272,11 @@ namespace F89.Testing
             player.transform.position = Vector3.zero;
             player.transform.rotation = Quaternion.identity;
 
-            if (FlightGroundReturnService.TryGetPendingReturnSpawn(out var returnPosition, out var returnRotation))
-            {
-                player.transform.SetPositionAndRotation(returnPosition, returnRotation);
-            }
-            else if (AntarcticaBaseSpawner.TryGetPlayerSpawn(worldMap, profile, out var spawnPosition, out var spawnRotation))
+            var spawnPosition = Vector3.zero;
+            var spawnRotation = Quaternion.identity;
+            var hasSpawn = FlightGroundReturnService.TryGetPendingReturnSpawn(out spawnPosition, out spawnRotation)
+                || AntarcticaBaseSpawner.TryGetPlayerSpawn(worldMap, profile, out spawnPosition, out spawnRotation);
+            if (hasSpawn)
             {
                 player.transform.SetPositionAndRotation(spawnPosition, spawnRotation);
             }
@@ -286,6 +287,13 @@ namespace F89.Testing
                 | RigidbodyConstraints.FreezeRotationX
                 | RigidbodyConstraints.FreezeRotationZ;
             body.interpolation = RigidbodyInterpolation.Interpolate;
+            if (hasSpawn)
+            {
+                body.position = spawnPosition;
+                body.rotation = spawnRotation;
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
 
             var input = player.AddComponent<PlayerAircraftInput>();
             var controller = player.AddComponent<AircraftController>();
@@ -475,8 +483,7 @@ namespace F89.Testing
                     || !baseSite.IsActive
                     || baseSite.IsDestroyed
                     || baseSite.Control != BaseControl.Hostile
-                    || baseSite.SiteKind != BaseSiteKind.Land
-                    || baseSite.BaseName == BasicTankSpawner.OutpostSouthBaseName)
+                    || baseSite.SiteKind != BaseSiteKind.Land)
                 {
                     continue;
                 }

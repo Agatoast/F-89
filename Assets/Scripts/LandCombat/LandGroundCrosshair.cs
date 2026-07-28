@@ -60,7 +60,7 @@ namespace F89.LandCombat
 
             var clear = new Color32(0, 0, 0, 0);
             var black = new Color32(0, 0, 0, 255);
-            var hudGreen = (Color32)FlightHudColorPalette.Default;
+            var hudGreen = (Color32)FlightHudColorPalette.Mfd;
             hudGreen.a = 255;
 
             var pixels = new Color32[size * size];
