@@ -1,0 +1,20 @@
+---
+description: All clickable UI buttons must use StartPageMenuStyles.DrawMenuButton
+alwaysApply: true
+---
+
+# UI Button Convention
+
+All clickable buttons in F-89 (menus, dialogs, HUD, confirmations) must use:
+
+```csharp
+StartPageMenuStyles.DrawMenuButton(rect, "LABEL", fontSize: 16);
+```
+
+## Rules
+
+- Do **not** invent custom button chrome (wire boxes + black text labels) for actions.
+- Prefer **UPPERCASE** labels (`YES`, `NO`, `OK`, `BACK`, `DELETE`) to match existing menus.
+- Dialog/HUD buttons: `fontSize: 14`–`16`. Full-screen menu buttons can omit `fontSize` (default scaled size).
+- Disabled buttons: draw `StartPageMenuStyles.DrawMenuButtonChrome(rect, panelAlpha: 0.45f)` plus a muted label — do not use a clickable `DrawMenuButton`.
+- Portrait/image tiles and other non-button hit targets may still use bare `GUI.Button` with `GUIStyle.none`.
