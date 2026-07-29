@@ -240,8 +240,8 @@ namespace F89.UI
         {
             DrawNameBar(save);
             DrawRibbonsPanel(save);
-            DrawKillFolder(CharacterPageLayout.GetVehicleKillsRect());
-            DrawKillFolder(CharacterPageLayout.GetTroopKillsRect());
+            DrawKillFolder(CharacterPageLayout.GetVehicleKillsRect(), save, troopsFolder: false);
+            DrawKillFolder(CharacterPageLayout.GetTroopKillsRect(), save, troopsFolder: true);
         }
 
         private static void DrawKillFolderLabel(Rect rect, string label)
@@ -299,7 +299,7 @@ namespace F89.UI
                 onesColumnX);
         }
 
-        private void DrawKillFolder(Rect rect)
+        private void DrawKillFolder(Rect rect, CharacterSaveData save, bool troopsFolder)
         {
             if (topSecretFolderTexture == null)
             {
@@ -307,52 +307,7 @@ namespace F89.UI
             }
 
             GUI.DrawTexture(rect, topSecretFolderTexture, ScaleMode.ScaleToFit, true);
-            DrawKillFolderSlotGrid(rect);
-        }
-
-        private static GUIStyle killFolderPlaceholderStyle;
-
-        private static void DrawKillFolderSlotGrid(Rect folderRect)
-        {
-            EnsureKillFolderPlaceholderStyle();
-
-            for (var i = 0; i < CharacterPageLayout.KillFolderSlotCount; i++)
-            {
-                var slotRect = CharacterPageLayout.GetKillFolderSlotRect(folderRect, i);
-                GUI.color = new Color(0.12f, 0.12f, 0.12f, 0.92f);
-                GUI.DrawTexture(slotRect, Texture2D.whiteTexture);
-
-                DrawKillFolderSlotBorder(slotRect, 1f, new Color(0.95f, 0.95f, 0.95f, 0.95f));
-
-                GUI.color = Color.white;
-                GUI.Label(slotRect, (i + 1).ToString(), killFolderPlaceholderStyle);
-            }
-
-            GUI.color = Color.white;
-        }
-
-        private static void EnsureKillFolderPlaceholderStyle()
-        {
-            if (killFolderPlaceholderStyle != null)
-            {
-                return;
-            }
-
-            killFolderPlaceholderStyle = HudStyleFactory.CreateLabel(
-                24,
-                FontStyle.Bold,
-                TextAnchor.MiddleCenter,
-                Color.white);
-        }
-
-        private static void DrawKillFolderSlotBorder(Rect rect, float thickness, Color color)
-        {
-            GUI.color = color;
-            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            CharacterPageKillFolderUi.DrawFolder(rect, save, troopsFolder);
         }
 
         private void DrawPortrait(CharacterSaveData save)

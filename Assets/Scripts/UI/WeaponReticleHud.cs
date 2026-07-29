@@ -1,5 +1,6 @@
-using F89.Core;
 using F89.Controls;
+using F89.Core;
+using F89.Flight;
 using F89.Weapons;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -41,7 +42,8 @@ namespace F89.UI
         {
             var shouldHideCursor = GameScenes.IsGameplayScene(SceneManager.GetActiveScene().name)
                 && !GamePauseController.IsPaused
-                && !AntarcticaMapOverlay.IsOpen;
+                && !AntarcticaMapOverlay.IsOpen
+                && !AircraftLandingController.IsCarrierApproachPromptVisible;
             if (shouldHideCursor)
             {
                 if (!gameplayCursorHidden)

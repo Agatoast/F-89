@@ -15,8 +15,12 @@ namespace F89.Weapons
         [Header("Firing")]
         public float roundsPerSecond = 10f;
         public float roundSpeedMilesPerSecond = 0.66f;
-        public float hitRadiusTics = 2f;
-        [Range(0f, 1f)] public float hitChancePerRound = 0.85f;
+        [Tooltip("World radius of the central crosshair dot. Targets under the dot auto-hit.")]
+        public float crosshairDotRadiusTics = 0.1f;
+
+        [Header("Ground Hit Points")]
+        [Tooltip("Each round that hits deals this much GHP to any air or ground target.")]
+        public int groundHitPointsPerHit = PlaneWeaponGhp.Gau27PerHit;
 
         [Header("Loadout")]
         public int startingRounds = 300;

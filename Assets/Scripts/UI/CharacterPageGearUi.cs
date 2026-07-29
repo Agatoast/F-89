@@ -496,6 +496,51 @@ namespace F89.UI
         public static string GetEquipmentSlotLabel(int index) =>
             EquipmentSlots[Mathf.Clamp(index, 0, EquipmentSlots.Length - 1)].label;
 
+        /// <summary>
+        /// True when one or more paperdoll equipment spots are empty.
+        /// <paramref name="missingTypesCsv"/> lists display names separated by ", ".
+        /// </summary>
+        public static bool TryGetMissingEquipmentTypes(out string missingTypesCsv)
+        {
+            missingTypesCsv = string.Empty;
+            var loadout = CharacterGearSession.ActiveLoadout;
+            if (loadout == null)
+            {
+                missingTypesCsv = string.Join(", ", GetAllEquipmentTypeLabels());
+                return true;
+            }
+
+            var missing = new System.Collections.Generic.List<string>(EquipmentSlots.Length);
+            for (var i = 0; i < EquipmentSlots.Length; i++)
+            {
+                var slot = EquipmentSlots[i].slot;
+                var equipped = LandLoadoutSlots.GetEquipped(loadout, slot);
+                if (!LandLoadoutSlots.IsValidItem(equipped))
+                {
+                    missing.Add(EquipmentSlots[i].label);
+                }
+            }
+
+            if (missing.Count == 0)
+            {
+                return false;
+            }
+
+            missingTypesCsv = string.Join(", ", missing);
+            return true;
+        }
+
+        private static string[] GetAllEquipmentTypeLabels()
+        {
+            var labels = new string[EquipmentSlots.Length];
+            for (var i = 0; i < EquipmentSlots.Length; i++)
+            {
+                labels[i] = EquipmentSlots[i].label;
+            }
+
+            return labels;
+        }
+
         public static void DrawInventory(Rect gridRect)
         {
             var loadout = CharacterGearSession.ActiveLoadout;

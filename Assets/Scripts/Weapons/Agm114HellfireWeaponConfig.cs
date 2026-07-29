@@ -22,6 +22,10 @@ namespace F89.Weapons
         public float unlockedHitConeHalfAngleDegrees = 1.5f;
         public float collisionRadiusTics = 0.75f;
 
+        [Header("Ground Hit Points")]
+        [Tooltip("GHP to a vehicle on hit. No building GHP (buildings may still be locked).")]
+        public int vehicleGroundHitPoints = PlaneWeaponGhp.Agm114VehicleHit;
+
         [Header("Loadout")]
         public int startingMissileCount = 8;
 

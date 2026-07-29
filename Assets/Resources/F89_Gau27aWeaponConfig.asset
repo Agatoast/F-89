@@ -16,6 +16,6 @@ MonoBehaviour:
   minCrosshairMiles: 0.5
   roundsPerSecond: 10
   roundSpeedMilesPerSecond: 0.66
-  hitRadiusTics: 2
-  hitChancePerRound: 0.85
+  crosshairDotRadiusTics: 0.1
+  groundHitPointsPerHit: 1
   startingRounds: 300

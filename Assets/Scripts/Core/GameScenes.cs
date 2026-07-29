@@ -24,6 +24,14 @@ namespace F89.Core
         public const string WeaponRnDPage = "WeaponRnD";
         public const string BootsRnDPage = "BootsRnD";
 
+        /// <summary>Shared runtime scene for crash landing rescue / wounded / KIA / Purple Heart pages.</summary>
+        public const string CrashLandingOutcome = "CrashLandingOutcome";
+        public const string CrashLandingRescue = "CrashLandingRescue";
+        public const string CrashLandingWounded = "CrashLandingWounded";
+        public const string CrashLandingKIA = "CrashLandingKIA";
+        public const string PurpleHeartAward = "PurpleHeartAward";
+        public const string MissionIncomplete = "MissionIncomplete";
+
         /// <summary>Shared runtime scene for Death / POW / Escaped pages after 0 HP.</summary>
         public const string DownedOutcome = "DownedOutcome";
         public const string DeathScreen = "DeathScreen";
@@ -67,6 +75,20 @@ namespace F89.Core
                 || sceneName == POWScreen
                 || sceneName == EscapedScreen
                 || sceneName == FrozenDeath;
+        }
+
+        public static bool IsCrashLandingOutcomeScene(string sceneName)
+        {
+            return sceneName == CrashLandingOutcome
+                || sceneName == CrashLandingRescue
+                || sceneName == CrashLandingWounded
+                || sceneName == CrashLandingKIA
+                || sceneName == PurpleHeartAward;
+        }
+
+        public static bool IsMissionStatusReportScene(string sceneName)
+        {
+            return sceneName == MissionIncomplete;
         }
 
         public static int GetBossNumber(string sceneName)

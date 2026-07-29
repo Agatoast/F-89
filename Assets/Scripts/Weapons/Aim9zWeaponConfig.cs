@@ -25,6 +25,12 @@ namespace F89.Weapons
         [Header("Loadout")]
         public int startingMissileCount = 4;
 
+        [Header("Air Hit Points")]
+        [Tooltip("Air GHP per hit on aerial targets. AIM-9z never damages ground targets.")]
+        public int airDamagePerHit = PlaneWeaponGhp.Aim9zAirHit;
+
+        public string WeaponName => "AIM-9z";
+
         float ILockCapableWeapon.RangeMiles => rangeMiles;
         float ILockCapableWeapon.LockTimeSeconds => lockTimeSeconds;
         float ILockCapableWeapon.MaxBeepInterval => maxBeepInterval;

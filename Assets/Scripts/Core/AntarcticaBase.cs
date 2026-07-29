@@ -146,6 +146,12 @@ namespace F89.Core
             var lockable = GetComponent<F89.Weapons.LockableTarget>();
             lockable?.ExpireWithoutHit();
 
+            var buildingCluster = transform.Find("BuildingCluster");
+            if (buildingCluster != null)
+            {
+                Destroy(buildingCluster.gameObject);
+            }
+
             var marker = transform.Find("DestroyedOutpostMarker");
             var renderers = GetComponentsInChildren<Renderer>(true);
             foreach (var renderer in renderers)

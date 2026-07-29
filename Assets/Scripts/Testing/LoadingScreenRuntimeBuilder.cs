@@ -1,3 +1,4 @@
+using F89.Core;
 using F89.UI;
 using UnityEngine;
 
@@ -9,6 +10,7 @@ namespace F89.Testing
         {
             if (Object.FindAnyObjectByType<LoadingScreenController>() != null)
             {
+                GameMusic.EnsurePlaying();
                 return;
             }
 
@@ -23,6 +25,7 @@ namespace F89.Testing
             root.AddComponent<LoadingScreenController>();
 
             SetupCamera();
+            GameMusic.EnsurePlaying();
         }
 
         private static void SetupCamera()

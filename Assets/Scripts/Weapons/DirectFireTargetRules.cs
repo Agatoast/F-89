@@ -3,8 +3,22 @@ using UnityEngine;
 
 namespace F89.Weapons
 {
+    public enum DirectFireTargetPriority
+    {
+        ClosestAny,
+        GroundVehiclesFirst
+    }
+
     public static class DirectFireTargetRules
     {
+        /// <summary>
+        /// GAU-27A may damage hostile air and ground targets (not flares, player, or carrier).
+        /// </summary>
+        public static bool CanBeDamagedByGau27(LockableTarget target)
+        {
+            return CanBeDamaged(target);
+        }
+
         public static bool CanBeDamaged(LockableTarget target)
         {
             if (target == null
@@ -24,6 +38,31 @@ namespace F89.Weapons
             Vector3 aimPoint,
             float weaponHitRadiusWorld,
             LockableTarget[] targets)
+        {
+            return FindClosestAtPoint(aimPoint, weaponHitRadiusWorld, targets, DirectFireTargetPriority.GroundVehiclesFirst);
+        }
+
+        public static LockableTarget FindGau27TargetUnderCrosshairDot(
+            Vector3 aimPoint,
+            float dotRadiusWorld,
+            LockableTarget[] targets)
+        {
+            return FindClosestAtPoint(aimPoint, dotRadiusWorld, targets, DirectFireTargetPriority.ClosestAny);
+        }
+
+        public static LockableTarget FindClosestGau27TargetAtPoint(
+            Vector3 aimPoint,
+            float weaponHitRadiusWorld,
+            LockableTarget[] targets)
+        {
+            return FindClosestAtPoint(aimPoint, weaponHitRadiusWorld, targets, DirectFireTargetPriority.ClosestAny);
+        }
+
+        public static LockableTarget FindClosestAtPoint(
+            Vector3 aimPoint,
+            float weaponHitRadiusWorld,
+            LockableTarget[] targets,
+            DirectFireTargetPriority priority)
         {
             aimPoint.y = 0f;
 
@@ -48,7 +87,7 @@ namespace F89.Weapons
                     continue;
                 }
 
-                if (target.IsGroundVehicle)
+                if (priority == DirectFireTargetPriority.GroundVehiclesFirst && target.IsGroundVehicle)
                 {
                     if (distance < closestVehicleDistance)
                     {
@@ -66,7 +105,12 @@ namespace F89.Weapons
                 }
             }
 
-            return closestVehicle != null ? closestVehicle : closest;
+            if (priority == DirectFireTargetPriority.GroundVehiclesFirst)
+            {
+                return closestVehicle != null ? closestVehicle : closest;
+            }
+
+            return closest;
         }
     }
 }

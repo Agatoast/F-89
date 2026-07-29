@@ -64,7 +64,8 @@ namespace F89.Weapons
             SelectedWeapon.Agm114Hellfire => HudTargetFilter.GroundOnly,
             SelectedWeapon.Gbu12Paveway => HudTargetFilter.GroundOnly,
             SelectedWeapon.Gau27a => HudTargetFilter.AirAndGround,
-            _ => HudTargetFilter.None
+            // No weapon: still allow Tab select / HUD markers (cycle uses short-radar range).
+            _ => HudTargetFilter.AirAndGround
         };
 
         public float ActiveWeaponRangeMiles => GetWeaponRangeMiles(ActiveWeapon);
@@ -329,14 +330,14 @@ namespace F89.Weapons
 
         private void TryCycleTarget()
         {
-            if (ActiveWeapon == SelectedWeapon.None
-                || aircraft == null
-                || lockController == null)
+            if (aircraft == null || lockController == null)
             {
                 return;
             }
 
-            var rangeMiles = ActiveWeaponRangeMiles;
+            // Tab cycles contacts inside short-radar range (weapon optional).
+            // Land outposts remain selectable out to hostile-detection range so they match radar.
+            var rangeMiles = RadarContactScanner.HostileDetectionMiles;
             if (rangeMiles <= 0f)
             {
                 return;
@@ -384,6 +385,37 @@ namespace F89.Weapons
 
         private bool IsCycleCandidate(LockableTarget target)
         {
+            if (target == null
+                || !target.IsAlive
+                || target.IsFlareDecoy
+                || target.IsPlayerAircraft)
+            {
+                return false;
+            }
+
+            var baseSite = target.GetComponent<AntarcticaBase>();
+            if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Land)
+            {
+                // Outposts are always Tab-selectable when in range, regardless of weapon.
+                return baseSite.IsActive && !baseSite.IsDestroyed;
+            }
+
+            if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Carrier)
+            {
+                return false;
+            }
+
+            // Non-outpost contacts stay limited to short-radar range.
+            if (!IsWithinShortRadarRange(target))
+            {
+                return false;
+            }
+
+            if (ActiveWeapon == SelectedWeapon.None)
+            {
+                return !target.IsFriendly;
+            }
+
             if (!ShouldShowHudMarkerFor(target))
             {
                 return false;
@@ -391,7 +423,7 @@ namespace F89.Weapons
 
             if (ActiveWeapon == SelectedWeapon.Gau27a)
             {
-                return DirectFireTargetRules.CanBeDamaged(target);
+                return DirectFireTargetRules.CanBeDamagedByGau27(target);
             }
 
             if (target.IsFriendly)
@@ -400,18 +432,29 @@ namespace F89.Weapons
             }
 
             var lockWeapon = GetActiveLockWeapon();
-            if (lockWeapon == null || !target.MatchesWeapon(lockWeapon.ValidTargetKind))
+            return lockWeapon != null && target.MatchesWeapon(lockWeapon.ValidTargetKind);
+        }
+
+        private bool IsWithinShortRadarRange(LockableTarget target)
+        {
+            if (target == null || aircraft == null)
             {
                 return false;
             }
 
-            var baseSite = target.GetComponent<AntarcticaBase>();
-            if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Land)
+            var profile = aircraft.Profile;
+            var worldMap = aircraft.WorldMap;
+            if (profile == null || worldMap == null)
             {
-                return baseSite.IsActive && !baseSite.IsDestroyed;
+                return false;
             }
 
-            return true;
+            return WeaponLockRange.IsWithinRange(
+                aircraft.transform.position,
+                target.transform.position,
+                RadarContactScanner.ShortRangeMiles,
+                worldMap,
+                profile.ticSizeWorldUnits);
         }
 
         private void FireActiveWeapon(Vector2 aimScreen)

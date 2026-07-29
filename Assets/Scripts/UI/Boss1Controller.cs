@@ -32,14 +32,6 @@ namespace F89.UI
             }
         }
 
-        private void Update()
-        {
-            if (Input.GetKeyDown(KeyCode.Escape))
-            {
-                GoToMainMenu();
-            }
-        }
-
         private void OnGUI()
         {
             StartPageMenuStyles.DrawFullscreenBackground(backgroundTexture);
@@ -90,12 +82,6 @@ namespace F89.UI
             }
 
             SceneManager.LoadScene(GameScenes.Bunker);
-        }
-
-        private static void GoToMainMenu()
-        {
-            Time.timeScale = 1f;
-            SceneManager.LoadScene(GameScenes.MainMenu);
         }
 
         private static void EnsureActiveSaveForDevJump()

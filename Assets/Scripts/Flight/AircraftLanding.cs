@@ -19,8 +19,11 @@ namespace F89.Flight
         {
             return speedMph <= MaxLandingSpeedMph
                 && !AircraftLandingController.IsLandingActive
+                && !AircraftLandingController.IsCrashLandingActive
                 && !AircraftLandingController.IsTakeoffActive
-                && !AircraftLandingController.IsLandingComplete;
+                && !AircraftLandingController.IsLandingComplete
+                && !AircraftLandingController.IsCarrierApproachPromptVisible
+                && !PlayerAircraftCrashController.IsCrashActive;
         }
 
         public static void TryLand(AircraftController aircraft)
@@ -59,11 +62,62 @@ namespace F89.Flight
             landingController.BeginLanding();
         }
 
+        public static bool TryGetCarrierBase(out AntarcticaBase carrier)
+        {
+            carrier = null;
+            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            for (var i = 0; i < bases.Length; i++)
+            {
+                var baseSite = bases[i];
+                if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Carrier)
+                {
+                    continue;
+                }
+
+                carrier = baseSite;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// True when the aircraft is in the CV grid square or any of the 8 neighboring squares.
+        /// </summary>
+        public static bool IsInCarrierApproachGrid(AircraftController aircraft)
+        {
+            if (aircraft?.WorldMap == null || aircraft.Profile == null)
+            {
+                return false;
+            }
+
+            if (!TryGetCarrierBase(out var carrier))
+            {
+                return false;
+            }
+
+            var ticSize = aircraft.Profile.ticSizeWorldUnits;
+            if (!aircraft.WorldMap.TryWorldPositionToGridCell(
+                    aircraft.transform.position,
+                    ticSize,
+                    out var planeCell)
+                || !aircraft.WorldMap.TryWorldPositionToGridCell(
+                    carrier.transform.position,
+                    ticSize,
+                    out var carrierCell))
+            {
+                return false;
+            }
+
+            return Mathf.Abs(planeCell.x - carrierCell.x) <= 1
+                && Mathf.Abs(planeCell.y - carrierCell.y) <= 1;
+        }
+
         private static bool IsOverCarrier(AircraftController aircraft)
         {
             var worldMap = aircraft.WorldMap;
             var profile = aircraft.Profile;
-            if (worldMap == null || profile == null)
+            if (worldMap == null || profile == null || !TryGetCarrierBase(out var carrier))
             {
                 return false;
             }
@@ -72,19 +126,7 @@ namespace F89.Flight
                 CarrierLandingRangeMiles,
                 worldMap,
                 profile.ticSizeWorldUnits);
-            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
-            for (var i = 0; i < bases.Length; i++)
-            {
-                var baseSite = bases[i];
-                if (baseSite != null
-                    && baseSite.SiteKind == BaseSiteKind.Carrier
-                    && Vector3.Distance(aircraft.transform.position, baseSite.transform.position) <= rangeWorld)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return Vector3.Distance(aircraft.transform.position, carrier.transform.position) <= rangeWorld;
         }
 
         private static bool IsOverLand(AircraftController aircraft)

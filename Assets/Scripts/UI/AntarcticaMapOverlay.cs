@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using F89.Core;
 using F89.Flight;
+using F89.LandCombat;
 using UnityEngine;
 
 namespace F89.UI
@@ -445,6 +446,7 @@ namespace F89.UI
             IsAutopilotFlightMode = false;
             baseNamePopup = string.Empty;
             ClearMapPointerState();
+            ResolveAutopilot()?.NotifyMapClosed();
             SetOpen(false);
         }
 
@@ -462,7 +464,15 @@ namespace F89.UI
             {
                 if (IsAutopilotSelectMode)
                 {
-                    // Selection mode uses P to cancel; ignore M.
+                    // Leave destination-select without engaging.
+                    if (activeAutopilot != null)
+                    {
+                        activeAutopilot.CancelDestinationSelection();
+                    }
+                    else
+                    {
+                        CloseMap();
+                    }
                 }
                 else if (IsAutopilotFlightMode && IsOpen)
                 {
@@ -552,6 +562,7 @@ namespace F89.UI
                 selectedMapBase = null;
                 hoveredMapBase = null;
                 ClearMapPointerState();
+                ResolveAutopilot()?.NotifyMapClosed();
                 RestoreWaypointHudBearing();
             }
 
@@ -954,6 +965,7 @@ namespace F89.UI
         }
 
         private static readonly Color LandOutpostColor = new Color(0.9f, 0.18f, 0.12f);
+        private static readonly Color ClearedOutpostFillColor = new Color(0.96f, 0.96f, 0.96f, 1f);
         private static readonly Color CarrierLabelColor = new Color(0.95f, 0.85f, 0.1f);
         private const float LandOutpostBorderPixels = 1f;
         private const float CarrierMarkerScale = 1f;
@@ -977,31 +989,49 @@ namespace F89.UI
                     continue;
                 }
 
-                if (baseSite.IsDestroyed)
+                if (baseSite.SiteKind == BaseSiteKind.Carrier)
                 {
-                    if (baseSite.SiteKind == BaseSiteKind.Carrier)
+                    if (baseSite.IsDestroyed)
                     {
                         var destroyedSize = dotSize * 4f * CarrierMarkerScale;
                         DrawMapFrame(guiPoint, destroyedSize);
                     }
                     else
                     {
-                        DrawMapBorderedDot(guiPoint, dotSize, LandOutpostColor, LandOutpostBorderPixels);
-                        DrawMapX(guiPoint, dotSize);
+                        var carrierHeight = GetCarrierMarkerHeight(dotSize);
+                        CarrierMarkerArt.DrawNorthUpMarker(guiPoint, carrierHeight);
                     }
 
                     continue;
                 }
 
-                if (baseSite.SiteKind == BaseSiteKind.Carrier)
+                var bunkerCleared = IsOutpostBunkerCleared(baseSite);
+                if (baseSite.IsDestroyed || bunkerCleared)
                 {
-                    var carrierHeight = GetCarrierMarkerHeight(dotSize);
-                    CarrierMarkerArt.DrawNorthUpMarker(guiPoint, carrierHeight);
+                    var fill = bunkerCleared ? ClearedOutpostFillColor : LandOutpostColor;
+                    DrawMapBorderedDot(guiPoint, dotSize, fill, LandOutpostBorderPixels);
+                    DrawMapX(guiPoint, dotSize);
                     continue;
                 }
 
                 DrawMapBorderedDot(guiPoint, dotSize, LandOutpostColor, LandOutpostBorderPixels);
             }
+        }
+
+        private static bool IsOutpostBunkerCleared(AntarcticaBase baseSite)
+        {
+            if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Land)
+            {
+                return false;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            if (!LandBossMissionAssignment.TryGetBossForOutpost(save, baseSite.BaseName, out var bossNumber))
+            {
+                return false;
+            }
+
+            return LandBossEncounter.IsDefeated(bossNumber);
         }
 
         private void DrawMapBaseNameLabels(Rect mapRect)
@@ -1437,13 +1467,13 @@ namespace F89.UI
                 return;
             }
 
+            // Diagonals meet the outer black frame corners (same rect as DrawMapBorderedDot).
             const float lineThickness = 2f;
-            const float xAlign = -1f;
             var half = size * 0.5f;
-            var topLeft = new Vector2(center.x - half + xAlign, center.y - half);
-            var topRight = new Vector2(center.x + half + xAlign, center.y - half);
-            var bottomLeft = new Vector2(center.x - half + xAlign, center.y + half);
-            var bottomRight = new Vector2(center.x + half + xAlign, center.y + half);
+            var topLeft = new Vector2(center.x - half, center.y - half);
+            var topRight = new Vector2(center.x + half, center.y - half);
+            var bottomLeft = new Vector2(center.x - half, center.y + half);
+            var bottomRight = new Vector2(center.x + half, center.y + half);
 
             var previous = GUI.color;
             GUI.color = Color.black;
@@ -1780,12 +1810,23 @@ namespace F89.UI
                                 0,
                                 pickedBase.SiteCode));
                         SyncHudBearingToCurrentTarget();
+                        if (ResolveAutopilot() is { IsFlying: true })
+                        {
+                            CommitAutopilotRoute();
+                        }
+
                         currentEvent.Use();
                     }
-                    else if (!IsAutopilotFlightMode)
+                    else
                     {
+                        // Waypoints can be set anytime — including during an active autopilot leg.
                         selectedMapBase = null;
                         PlaceMapWaypoint(mapRect, releaseGui);
+                        if (ResolveAutopilot() is { IsFlying: true })
+                        {
+                            CommitAutopilotRoute();
+                        }
+
                         currentEvent.Use();
                     }
                 }

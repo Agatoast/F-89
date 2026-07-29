@@ -1,6 +1,7 @@
 using F89.Controls;
 using F89.Core;
 using F89.LandCombat;
+using F89.UI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -26,10 +27,21 @@ namespace F89.Flight
         private bool landingComplete;
         private bool hasGroundReturnPosition;
         private Vector3 groundReturnPosition;
+        private Vector3 carrierLandingStart;
+        private Vector3 carrierLandingTarget;
+
+        private bool carrierApproachPromptVisible;
+        private bool carrierApproachDeclined;
+        private bool wasInCarrierApproachGrid;
+        private bool carrierApproachInitialized;
+        private bool crashLanding;
 
         public static bool IsLandingActive => activeInstance != null && activeInstance.sequenceActive;
+        public static bool IsCrashLandingActive => activeInstance != null && activeInstance.crashLanding && activeInstance.sequenceActive;
         public static bool IsTakeoffActive => activeInstance != null && activeInstance.takeoffActive;
         public static bool IsLandingComplete => activeInstance != null && activeInstance.landingComplete;
+        public static bool IsCarrierApproachPromptVisible =>
+            activeInstance != null && activeInstance.carrierApproachPromptVisible;
         public static float VisualScaleMultiplier => activeInstance?.currentVisualScale ?? 1f;
 
         private void Awake()
@@ -87,11 +99,36 @@ namespace F89.Flight
             }
         }
 
+        /// <summary>Forced VTOL descent after structural failure — routes to crash landing pages.</summary>
+        public void BeginCrashLanding()
+        {
+            if (sequenceActive || landingComplete)
+            {
+                return;
+            }
+
+            crashLanding = true;
+            BeginLanding();
+        }
+
         public void BeginCarrierLanding()
         {
             if (sequenceActive || landingComplete)
             {
                 return;
+            }
+
+            ClearCarrierApproachPrompt(unlockFlight: false);
+            carrierLandingStart = transform.position;
+            carrierLandingStart.y = 0f;
+            if (AircraftLanding.TryGetCarrierBase(out var carrier))
+            {
+                carrierLandingTarget = carrier.transform.position;
+                carrierLandingTarget.y = 0f;
+            }
+            else
+            {
+                carrierLandingTarget = carrierLandingStart;
             }
 
             carrierLanding = true;
@@ -160,17 +197,156 @@ namespace F89.Flight
                 return;
             }
 
-            if (!sequenceActive)
+            if (sequenceActive)
+            {
+                UpdateLandingSequence();
+                return;
+            }
+
+            UpdateCarrierApproachPrompt();
+        }
+
+        private void OnGUI()
+        {
+            if (!carrierApproachPromptVisible)
             {
                 return;
             }
 
+            var result = CarrierLandConfirmDialog.Draw(true);
+            if (result == CarrierLandConfirmDialog.Result.Confirmed)
+            {
+                AcceptCarrierApproachLanding();
+            }
+            else if (result == CarrierLandConfirmDialog.Result.Cancelled)
+            {
+                DeclineCarrierApproachLanding();
+            }
+        }
+
+        private void UpdateCarrierApproachPrompt()
+        {
+            if (landingComplete
+                || GamePauseController.IsPaused
+                || AntarcticaMapOverlay.IsOpen
+                || aircraft == null)
+            {
+                return;
+            }
+
+            var inApproach = AircraftLanding.IsInCarrierApproachGrid(aircraft);
+            if (!carrierApproachInitialized)
+            {
+                // Spawn/start on or near the CV must not open the prompt until a re-entry.
+                carrierApproachInitialized = true;
+                wasInCarrierApproachGrid = inApproach;
+                return;
+            }
+
+            if (!inApproach)
+            {
+                wasInCarrierApproachGrid = false;
+                carrierApproachDeclined = false;
+                return;
+            }
+
+            var justEntered = !wasInCarrierApproachGrid;
+            wasInCarrierApproachGrid = true;
+
+            if (carrierApproachPromptVisible || carrierApproachDeclined || !justEntered)
+            {
+                return;
+            }
+
+            ShowCarrierApproachPrompt();
+        }
+
+        private void ShowCarrierApproachPrompt()
+        {
+            carrierApproachPromptVisible = true;
+            activeInstance = this;
+            Time.timeScale = 1f;
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+
+            var autopilot = GetComponent<AutopilotController>();
+            autopilot?.DisengageAutopilot("Carrier approach.");
+
+            aircraft?.SetLandingLocked(true);
+            if (body != null)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+
+            if (input != null)
+            {
+                input.enabled = false;
+            }
+        }
+
+        private void AcceptCarrierApproachLanding()
+        {
+            carrierApproachPromptVisible = false;
+            BeginCarrierLanding();
+        }
+
+        private void DeclineCarrierApproachLanding()
+        {
+            carrierApproachDeclined = true;
+            ClearCarrierApproachPrompt(unlockFlight: true);
+        }
+
+        private void ClearCarrierApproachPrompt(bool unlockFlight)
+        {
+            carrierApproachPromptVisible = false;
+            if (!unlockFlight || sequenceActive || takeoffActive || landingComplete)
+            {
+                return;
+            }
+
+            aircraft?.SetLandingLocked(false);
+            if (input != null)
+            {
+                input.enabled = true;
+            }
+
+            if (activeInstance == this && !sequenceActive && !takeoffActive)
+            {
+                activeInstance = null;
+            }
+        }
+
+        private void UpdateLandingSequence()
+        {
             var progress = Mathf.Clamp01((Time.time - sequenceStartTime) / ShrinkDurationSeconds);
             currentVisualScale = Mathf.Lerp(1f, TargetVisualScale, progress);
 
             if (visualPivot != null)
             {
                 visualPivot.localScale = initialVisualScale * currentVisualScale;
+            }
+
+            if (carrierLanding)
+            {
+                var position = Vector3.Lerp(carrierLandingStart, carrierLandingTarget, progress);
+                position.y = transform.position.y;
+                transform.position = position;
+                if (body != null)
+                {
+                    body.position = position;
+                }
+
+                var toCarrier = carrierLandingTarget - carrierLandingStart;
+                toCarrier.y = 0f;
+                if (toCarrier.sqrMagnitude > 0.0001f)
+                {
+                    transform.rotation = Quaternion.LookRotation(toCarrier.normalized, Vector3.up);
+                    if (body != null)
+                    {
+                        body.rotation = transform.rotation;
+                    }
+                }
             }
 
             if (progress >= 1f)
@@ -187,8 +363,22 @@ namespace F89.Flight
                 return;
             }
 
+            if (carrierApproachPromptVisible && body != null)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+                return;
+            }
+
             if (!sequenceActive || aircraft == null || body == null)
             {
+                return;
+            }
+
+            if (carrierLanding)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
                 return;
             }
 
@@ -228,6 +418,15 @@ namespace F89.Flight
                 LandMissionCompleteState.BeginCarrierLanding();
                 Time.timeScale = 1f;
                 SceneManager.LoadScene(GameScenes.MissionComplete);
+                return;
+            }
+
+            if (crashLanding)
+            {
+                Time.timeScale = 1f;
+                var outcome = CrashLandingResolver.RollOutcome();
+                CrashLandingOutcomeState.Begin(outcome);
+                SceneManager.LoadScene(GameScenes.CrashLandingOutcome);
                 return;
             }
 

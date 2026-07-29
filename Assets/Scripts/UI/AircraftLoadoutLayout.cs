@@ -154,7 +154,31 @@ namespace F89.UI
         public static readonly Vector2 LeftWingTipCenterPx = new Vector2(41f, 262.5f);
         public static readonly Vector2 RightWingTipCenterPx = new Vector2(984.5f, 285.5f);
 
+        /// <summary>
+        /// DRAG WEAPON TO HARDPOINT copy, in plane_loadout.png pixels (1024×674).
+        /// Locked to the art so letterboxing/resolution cannot drift it.
+        /// </summary>
+        public const float InstructionsXPx = 685f;
+        public const float InstructionsYPx = 416f;
+        public const float InstructionsWidthPx = 287f;
+        public const float InstructionsHeightPx = 283f;
+
+        public const float MockupReferenceWidthPx = 1024f;
+        public const float MockupReferenceHeightPx = 674f;
+
         public static int LinkedHardpointPairCount => LinkedHardpointPairs.Length;
+
+        public static Rect InstructionsRect(Rect mockupRect, int textureWidth, int textureHeight)
+        {
+            return MockupPixelTopLeftRect(
+                InstructionsXPx,
+                InstructionsYPx,
+                InstructionsWidthPx,
+                InstructionsHeightPx,
+                mockupRect,
+                textureWidth,
+                textureHeight);
+        }
 
         public static Rect MockupPixelTopLeftRect(float xPx, float yPx, float widthPx, float heightPx, Rect mockupRect, int textureWidth, int textureHeight)
         {

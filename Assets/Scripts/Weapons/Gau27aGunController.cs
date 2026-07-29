@@ -166,7 +166,6 @@ namespace F89.Weapons
                 aircraft.WorldMap,
                 spawnPoint,
                 CrosshairWorldPoint,
-                accuracyMultiplier,
                 GetHorizontalForward() * aircraft.CurrentSpeed);
         }
 
@@ -178,12 +177,12 @@ namespace F89.Weapons
             }
 
             var ticSize = aircraft.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
-            var hitRadius = config.hitRadiusTics * ticSize;
+            var dotRadius = config.crosshairDotRadiusTics * ticSize;
             var aimPoint = CrosshairWorldPoint;
             aimPoint.y = 0f;
 
             var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
-            return DirectFireTargetRules.FindClosestAtPoint(aimPoint, hitRadius, targets);
+            return DirectFireTargetRules.FindGau27TargetUnderCrosshairDot(aimPoint, dotRadius, targets);
         }
 
         private Vector3 GetHorizontalForward()

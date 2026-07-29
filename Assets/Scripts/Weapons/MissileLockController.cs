@@ -375,10 +375,10 @@ namespace F89.Weapons
             }
 
             var baseSite = target.GetComponent<AntarcticaBase>();
-            if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Land
-                && (!baseSite.IsActive || baseSite.IsDestroyed))
+            if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Land)
             {
-                return false;
+                // Tab/radar selection can designate outposts even with an air-to-air weapon.
+                return baseSite.IsActive && !baseSite.IsDestroyed;
             }
 
             if (lockWeapon == null)
@@ -524,6 +524,7 @@ namespace F89.Weapons
                 return;
             }
 
+            SyncSfxVolume();
             var t = LockProgressNormalized;
             var interval = Mathf.Lerp(lockWeapon.MaxBeepInterval, lockWeapon.MinBeepInterval, t);
             beepTimer -= Time.deltaTime;
@@ -544,6 +545,7 @@ namespace F89.Weapons
             }
 
             EnsureAudio();
+            SyncSfxVolume();
             lockTonePlaying = true;
             audioSource.loop = true;
             audioSource.clip = lockToneClip;
@@ -604,10 +606,18 @@ namespace F89.Weapons
             audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false;
             audioSource.spatialBlend = 0f;
-            audioSource.volume = 0.7f;
+            audioSource.volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
             beepClip = ProceduralBeepTone.CreateBeep(880f, 0.06f);
             lockToneClip = ProceduralBeepTone.CreateLockTone(1320f, 0.6f);
             iffFriendClip = ProceduralBeepTone.CreateIffFriendTone();
+        }
+
+        private void SyncSfxVolume()
+        {
+            if (audioSource != null)
+            {
+                audioSource.volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
+            }
         }
 
         private void OnDisable()

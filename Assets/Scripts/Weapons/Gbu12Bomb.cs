@@ -22,7 +22,6 @@ namespace F89.Weapons
         private float terminalRangeWorld;
         private float flightTimeRemaining;
         private float accuracyMultiplier;
-        private float blastRadiusWorld;
 
         public static Gbu12Bomb Drop(
             Gbu12PavewayConfig weaponConfig,
@@ -106,7 +105,6 @@ namespace F89.Weapons
             terminalRangeWorld = worldMap != null
                 ? worldMap.MilesToTics(config.terminalGuidanceMiles) * ticSize
                 : config.terminalGuidanceMiles * 20f * ticSize;
-            blastRadiusWorld = config.blastRadiusTics * ticSize;
 
             transform.position = spawnPosition;
             lastGuidancePoint = guidedTarget != null
@@ -212,37 +210,22 @@ namespace F89.Weapons
             }
 
             var intended = guidedTarget != null ? guidedTarget.TargetLabel : "none";
-            var hits = 0;
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
-            foreach (var target in targets)
+            if (guidedTarget != null && guidedTarget.IsAlive)
             {
-                if (!DirectFireTargetRules.CanBeDamaged(target)
-                    || !target.MatchesWeapon(config.ValidTargetKind))
+                var effectiveChance = config.lockHitChance * accuracyMultiplier;
+                if (Random.value > effectiveChance)
                 {
-                    continue;
+                    Debug.Log(
+                        $"{config.WeaponName} guided impact missed {intended} "
+                        + $"({effectiveChance:P0} effective chance). Accuracy at drop: {accuracyMultiplier:P0}.");
+                    Destroy(gameObject);
+                    return;
                 }
-
-                if (FlattenDistance(center, target.transform.position) > blastRadiusWorld)
-                {
-                    continue;
-                }
-
-                var isGuidedTarget = target == guidedTarget;
-                if (isGuidedTarget)
-                {
-                    var effectiveChance = config.lockHitChance * accuracyMultiplier;
-                    if (Random.value > effectiveChance)
-                    {
-                        continue;
-                    }
-                }
-
-                target.RegisterHit(config.WeaponName, isGuidedTarget);
-                hits++;
             }
 
+            PlaneWeaponGhp.ApplyGbu12Detonation(center, ticSize, wasLockedShot: guidedTarget != null);
             Debug.Log(
-                $"{config.WeaponName} detonated near {intended}. {hits} target(s) hit. Accuracy at drop: {accuracyMultiplier:P0}.");
+                $"{config.WeaponName} detonated near {intended}. Accuracy at drop: {accuracyMultiplier:P0}.");
             Destroy(gameObject);
         }
 

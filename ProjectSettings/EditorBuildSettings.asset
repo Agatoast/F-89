@@ -48,6 +48,12 @@ EditorBuildSettings:
     path: Assets/Scenes/DownedOutcome.unity
     guid: 7b2e9c41a8f04d6e9c5d1a2b3e4f5062
   - enabled: 1
+    path: Assets/Scenes/CrashLandingOutcome.unity
+    guid: c3a8f1d24e5b4a7890bcde1234567890
+  - enabled: 1
+    path: Assets/Scenes/MissionIncomplete.unity
+    guid: d4b9e2c35f6a4b8901cdef2345678901
+  - enabled: 1
     path: Assets/Scenes/Boss1.unity
     guid: a0b1c2d3e4f5061728394a5b6c7d8e9f
   - enabled: 1

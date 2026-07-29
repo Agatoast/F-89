@@ -10,6 +10,7 @@
         },
         {
             "Id": "0d6cd6508e844b8db8646e8374e37012",
+            "SiteCode": "OP-SOUTH",
             "Label": "Outpost South",
             "XMiles": -1091.972412109375,
             "ZMiles": -573.5249633789063,
@@ -18,6 +19,7 @@
         },
         {
             "Id": "9547391650d443e18fb8dc4f5f5ce759",
+            "SiteCode": "OP-01",
             "Label": "Outpost 01",
             "XMiles": -991.39599609375,
             "ZMiles": -513.6580200195313,

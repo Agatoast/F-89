@@ -36,5 +36,16 @@ namespace F89.LandCombat
             PlayerPrefs.Save();
             return true;
         }
+
+        public static void ClearPrefsForSave(string saveId)
+        {
+            if (string.IsNullOrEmpty(saveId))
+            {
+                return;
+            }
+
+            PlayerPrefs.DeleteKey(LegacyAutoEquipClearedPrefsPrefix + saveId);
+            PlayerPrefs.Save();
+        }
     }
 }

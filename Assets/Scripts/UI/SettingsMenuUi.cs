@@ -15,12 +15,16 @@ namespace F89.UI
         private const float ButtonHeightDesign = 44f;
         private const float ButtonSpacingDesign = 10f;
         private const float KeymapRowHeightDesign = 40f;
+        private const float VolumeRowHeightDesign = 36f;
+        private const float VolumeStackWidthDesign = 520f;
         private const int RootButtonFontSize = 22;
 
         private static GUIStyle titleStyle;
         private static GUIStyle rowLabelStyle;
         private static GUIStyle rowKeyStyle;
         private static GUIStyle promptStyle;
+        private static GUIStyle volumeLabelStyle;
+        private static GUIStyle volumeValueStyle;
         private static Vector2 keymapScrollPosition;
 
         public static View Draw(
@@ -68,10 +72,15 @@ namespace F89.UI
             var buttonX = UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - buttonWidth) * 0.5f;
             var backRect = GetBackButtonRect();
 
-            const int buttonCount = 7;
+            var volumeBottom = DrawVolumeSliders();
+
+            const int buttonCount = 5;
             var stackHeight = buttonCount * buttonHeight + (buttonCount - 1) * buttonSpacing;
-            // Center the action stack on the page; Back stays pinned at the bottom.
-            var buttonY = UiFitCanvas.Rect.y + (UiFitCanvas.Rect.height - stackHeight) * 0.5f;
+            var availableTop = volumeBottom + UiFitCanvas.Px(18f);
+            var availableBottom = backRect.y - UiFitCanvas.Px(16f);
+            var availableHeight = Mathf.Max(stackHeight, availableBottom - availableTop);
+            var buttonY = availableTop + (availableHeight - stackHeight) * 0.5f;
+            buttonY = Mathf.Max(buttonY, availableTop);
 
             if (StartPageMenuStyles.DrawMenuButton(
                     new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
@@ -86,24 +95,6 @@ namespace F89.UI
                 {
                     onExitSettings?.Invoke();
                 }
-            }
-
-            buttonY += buttonHeight + buttonSpacing;
-            if (StartPageMenuStyles.DrawMenuButton(
-                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
-                    GameSettings.SoundLabel.ToUpperInvariant(),
-                    fontSize: RootButtonFontSize))
-            {
-                GameSettings.ToggleSound();
-            }
-
-            buttonY += buttonHeight + buttonSpacing;
-            if (StartPageMenuStyles.DrawMenuButton(
-                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
-                    GameSettings.MusicLabel.ToUpperInvariant(),
-                    fontSize: RootButtonFontSize))
-            {
-                GameSettings.ToggleMusic();
             }
 
             buttonY += buttonHeight + buttonSpacing;
@@ -155,6 +146,87 @@ namespace F89.UI
             }
 
             return View.Root;
+        }
+
+        private static float DrawVolumeSliders()
+        {
+            var stackWidth = UiFitCanvas.Px(VolumeStackWidthDesign);
+            var rowHeight = UiFitCanvas.Px(VolumeRowHeightDesign);
+            var rowGap = UiFitCanvas.Px(8f);
+            var top = UiFitCanvas.NormY(0.11f);
+            var x = UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - stackWidth) * 0.5f;
+
+            DrawVolumeRow(
+                new Rect(x, top, stackWidth, rowHeight),
+                "SOUND",
+                GameSettings.SoundVolumePercent,
+                GameSettings.SetSoundVolumePercent);
+            top += rowHeight + rowGap;
+
+            DrawVolumeRow(
+                new Rect(x, top, stackWidth, rowHeight),
+                "MUSIC",
+                GameSettings.MusicVolumePercent,
+                GameSettings.SetMusicVolumePercent);
+            top += rowHeight + rowGap;
+
+            DrawVolumeRow(
+                new Rect(x, top, stackWidth, rowHeight),
+                "SOUND FX",
+                GameSettings.SfxVolumePercent,
+                GameSettings.SetSfxVolumePercent);
+            top += rowHeight;
+
+            return top;
+        }
+
+        private static void DrawVolumeRow(Rect row, string label, int percent, System.Action<int> setPercent)
+        {
+            var labelWidth = UiFitCanvas.Px(120f);
+            var valueWidth = UiFitCanvas.Px(64f);
+            var gap = UiFitCanvas.Px(12f);
+            var labelRect = new Rect(row.x, row.y, labelWidth, row.height);
+            var valueRect = new Rect(row.xMax - valueWidth, row.y, valueWidth, row.height);
+            var sliderRect = new Rect(
+                labelRect.xMax + gap,
+                row.y + row.height * 0.28f,
+                valueRect.x - labelRect.xMax - gap * 2f,
+                row.height * 0.44f);
+
+            GUI.Label(labelRect, label, volumeLabelStyle);
+            GUI.Label(valueRect, $"{percent}%", volumeValueStyle);
+
+            var previous = GUI.color;
+            GUI.color = new Color(0.18f, 0.22f, 0.28f, 0.95f);
+            GUI.DrawTexture(sliderRect, Texture2D.whiteTexture);
+            GUI.color = new Color(0.42f, 0.72f, 1f, 0.95f);
+            var fillWidth = sliderRect.width * (percent / 100f);
+            if (fillWidth > 0f)
+            {
+                GUI.DrawTexture(
+                    new Rect(sliderRect.x, sliderRect.y, fillWidth, sliderRect.height),
+                    Texture2D.whiteTexture);
+            }
+
+            GUI.color = Color.black;
+            HudGuiUtility.DrawWireBox(sliderRect, 1f);
+            GUI.color = previous;
+
+            var evt = Event.current;
+            if (evt != null
+                && (evt.type == EventType.MouseDown || evt.type == EventType.MouseDrag)
+                && evt.button == 0
+                && sliderRect.Contains(evt.mousePosition))
+            {
+                var t = (evt.mousePosition.x - sliderRect.x) / Mathf.Max(1f, sliderRect.width);
+                var newPercent = Mathf.RoundToInt(Mathf.Clamp01(t) * 100f);
+                if (newPercent != percent)
+                {
+                    setPercent(newPercent);
+                }
+
+                evt.Use();
+            }
         }
 
         private static bool DrawKeymapMenu()
@@ -296,6 +368,16 @@ namespace F89.UI
                 FontStyle.Normal,
                 TextAnchor.MiddleCenter,
                 new Color(0.78f, 0.86f, 0.95f));
+            volumeLabelStyle = HudStyleFactory.CreateLabel(
+                18,
+                FontStyle.Bold,
+                TextAnchor.MiddleLeft,
+                new Color(0.82f, 0.88f, 0.94f));
+            volumeValueStyle = HudStyleFactory.CreateLabel(
+                18,
+                FontStyle.Bold,
+                TextAnchor.MiddleRight,
+                new Color(0.82f, 0.88f, 0.94f));
         }
     }
 }

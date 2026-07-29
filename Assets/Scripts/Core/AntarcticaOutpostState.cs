@@ -73,6 +73,10 @@ namespace F89.Core
 
             save.DestroyedOutpostNames = Array.Empty<string>();
             save.DestroyedWorldTargetIds = Array.Empty<string>();
+            save.UrVehicleKillsByLevel = new int[UrKillCredit.LevelCount];
+            save.UrTroopKillsByLevel = new int[UrKillCredit.LevelCount];
+            save.EnemyVehiclesKilled = 0;
+            save.EnemyTroopsKilled = 0;
             CharacterSaveRepository.WriteWorldProgress(save);
             Debug.Log($"F-89: Reset {destroyedCount} destroyed outpost(s) and {targetCount} destroyed map target(s).");
         }

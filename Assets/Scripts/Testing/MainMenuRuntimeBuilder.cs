@@ -28,11 +28,13 @@ namespace F89.Testing
 
         private static void BootstrapActiveScene()
         {
+            F89.UI.GamePauseController.ClearPauseOnSceneLoad();
             Time.timeScale = 1f;
             GameSettings.Load();
             GameKeyBindings.Load();
             EnsurePauseController();
             RemoveLegacyMainMenuRoots();
+            GameMusic.EnsurePlaying();
 
             var sceneName = SceneManager.GetActiveScene().name;
             if (!GameScenes.IsGameplayScene(sceneName))
@@ -100,6 +102,18 @@ namespace F89.Testing
                 return;
             }
 
+            if (GameScenes.IsCrashLandingOutcomeScene(sceneName))
+            {
+                CrashLandingOutcomeRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (GameScenes.IsMissionStatusReportScene(sceneName))
+            {
+                MissionIncompleteRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
             if (sceneName == GameScenes.GroundAttack)
             {
                 GroundAttackRuntimeBuilder.BuildIfNeeded();
@@ -151,13 +165,7 @@ namespace F89.Testing
 
         private static void EnsurePauseController()
         {
-            if (Object.FindAnyObjectByType<F89.UI.GamePauseController>() != null)
-            {
-                return;
-            }
-
-            var pauseObject = new GameObject("GamePauseController");
-            pauseObject.AddComponent<F89.UI.GamePauseController>();
+            F89.UI.GamePauseController.EnsureExists();
         }
     }
 }

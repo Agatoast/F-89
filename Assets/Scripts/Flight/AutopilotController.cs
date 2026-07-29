@@ -62,7 +62,8 @@ namespace F89.Flight
                 return;
             }
 
-            SuspendAutopilot(closeMap: true);
+            // Keep map state as-is; next P resumes without opening/closing the map.
+            SuspendAutopilot(closeMap: false);
             suspendInputFrame = Time.frameCount;
             ShowToast("Autopilot paused — P to resume.");
         }
@@ -114,13 +115,6 @@ namespace F89.Flight
                 return;
             }
 
-            if (HasHostileContact())
-            {
-                Debug.Log(
-                    "F-89: Autopilot blocked — hostile contact within 40 MI.");
-                return;
-            }
-
             if (mapOverlay == null)
             {
                 mapOverlay = Object.FindAnyObjectByType<AntarcticaMapOverlay>();
@@ -141,6 +135,12 @@ namespace F89.Flight
             ShowToast(destinationLabel);
             Debug.Log(
                 $"F-89: Autopilot resumed — {destinationLabel} at {currentTimeWarpScale:0}x speed.");
+        }
+
+        /// <summary>Clears destination-select state when the map is closed without engaging.</summary>
+        public void NotifyMapClosed()
+        {
+            IsSelectingDestination = false;
         }
 
         public void Configure(AntarcticaMapOverlay map)
@@ -254,12 +254,6 @@ namespace F89.Flight
                 return;
             }
 
-            if (HasHostileContact())
-            {
-                Disengage("Hostile contact — autopilot off.", closeMap: true);
-                return;
-            }
-
             FlyTowardDestination();
 
             DestinationDistanceMiles = CombatThreatRange.DistanceMiles(
@@ -295,12 +289,18 @@ namespace F89.Flight
 
         private void HandleAutopilotKey()
         {
+            if (mapOverlay == null)
+            {
+                mapOverlay = Object.FindAnyObjectByType<AntarcticaMapOverlay>();
+            }
+
             if (IsFlying)
             {
                 CancelAutopilot();
                 return;
             }
 
+            // Paused route: P always resumes. Never open/close the map or start a new trip.
             if (CanResume)
             {
                 if (Time.frameCount == suspendInputFrame)
@@ -308,24 +308,24 @@ namespace F89.Flight
                     return;
                 }
 
-                // Already sitting on the paused destination — drop it so P can start a new trip.
                 if (IsWithinArrivalRange(destinationWorld))
                 {
                     AbandonSuspendedRoute();
                     mapOverlay?.ClearMapRouteOnArrival();
+                    return;
                 }
-                else
-                {
-                    var shiftHeldWhilePaused =
-                        Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-                    if (!shiftHeldWhilePaused)
-                    {
-                        ResumeAutopilot();
-                        return;
-                    }
 
-                    AbandonSuspendedRoute();
-                    mapOverlay?.ClearMapRouteOnArrival();
+                ResumeAutopilot();
+                return;
+            }
+
+            // New map waypoints / selection only when there is no paused route.
+            if (mapOverlay != null && mapOverlay.HasAutopilotMapTarget)
+            {
+                IsSelectingDestination = false;
+                if (mapOverlay.TryEngageAutopilotToMapTarget())
+                {
+                    return;
                 }
             }
 
@@ -340,29 +340,6 @@ namespace F89.Flight
                 return;
             }
 
-            if (mapOverlay == null)
-            {
-                mapOverlay = Object.FindAnyObjectByType<AntarcticaMapOverlay>();
-            }
-
-            var shiftHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-            if (!shiftHeld && mapOverlay != null && mapOverlay.HasAutopilotMapTarget)
-            {
-                if (HasHostileContact())
-                {
-                    Debug.Log(
-                        "F-89: Autopilot blocked — hostile contact within 40 MI.");
-                    BeginDestinationSelection();
-                    return;
-                }
-
-                if (mapOverlay.TryEngageAutopilotToMapTarget())
-                {
-                    return;
-                }
-            }
-
-            // Still allow opening the map to pick a new destination while near hostiles.
             BeginDestinationSelection();
         }
 
@@ -594,19 +571,6 @@ namespace F89.Flight
             return CombatThreatRange.DistanceMiles(
                 transform.position,
                 worldTarget,
-                aircraft.WorldMap,
-                aircraft.Profile.ticSizeWorldUnits);
-        }
-
-        private bool HasHostileContact()
-        {
-            if (aircraft?.WorldMap == null || aircraft.Profile == null)
-            {
-                return false;
-            }
-
-            return CombatThreatRange.HasHostileContact(
-                transform.position,
                 aircraft.WorldMap,
                 aircraft.Profile.ticSizeWorldUnits);
         }

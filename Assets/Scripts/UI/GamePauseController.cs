@@ -1,5 +1,6 @@
 using F89.Core;
 using F89.Flight;
+using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -23,9 +24,12 @@ namespace F89.UI
 
         public static bool IsPaused { get; private set; }
 
+        public static GamePauseController Instance { get; private set; }
+
         private static PauseView currentView = PauseView.Root;
         private static SettingsMenuUi.View settingsView = SettingsMenuUi.View.Root;
         private static float timeScaleBeforePause = 1f;
+        private static int lastEscapePauseFrame = -1;
 
         private GUIStyle titleStyle;
         private GUIStyle messageStyle;
@@ -34,42 +38,97 @@ namespace F89.UI
         private static void ResetStaticState()
         {
             IsPaused = false;
+            Instance = null;
             currentView = PauseView.Root;
             settingsView = SettingsMenuUi.View.Root;
+            lastEscapePauseFrame = -1;
+        }
+
+        public static void ClearPauseOnSceneLoad()
+        {
+            IsPaused = false;
+            currentView = PauseView.Root;
+            settingsView = SettingsMenuUi.View.Root;
+            lastEscapePauseFrame = -1;
+            GameKeyBindings.CancelListening();
+            AudioListener.pause = false;
+        }
+
+        public static void EnsureExists()
+        {
+            var controllers = Object.FindObjectsByType<GamePauseController>(FindObjectsSortMode.None);
+            if (controllers.Length == 0)
+            {
+                var pauseObject = new GameObject("GamePauseController");
+                pauseObject.AddComponent<GamePauseController>();
+                return;
+            }
+
+            GamePauseController keeper = null;
+            if (Instance != null)
+            {
+                for (var i = 0; i < controllers.Length; i++)
+                {
+                    if (controllers[i] == Instance)
+                    {
+                        keeper = Instance;
+                        break;
+                    }
+                }
+            }
+
+            keeper ??= controllers[0];
+            keeper.ClaimInstance();
+
+            for (var i = 0; i < controllers.Length; i++)
+            {
+                var controller = controllers[i];
+                if (controller != null && controller != keeper)
+                {
+                    Object.Destroy(controller.gameObject);
+                }
+            }
         }
 
         private void Awake()
         {
-            var controllers = Object.FindObjectsByType<GamePauseController>(FindObjectsSortMode.None);
-            if (controllers.Length > 1 && controllers[0] != this)
+            if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
 
+            ClaimInstance();
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Instance = null;
+            }
+        }
+
+        private void ClaimInstance()
+        {
+            Instance = this;
             DontDestroyOnLoad(gameObject);
         }
 
         private void Update()
         {
-            if (!Input.GetKeyDown(KeyCode.Escape) || !CanOpenPauseMenu())
+            // Update stops when timeScale is 0, so unpause is handled in OnGUI.
+            if (IsPaused || !Input.GetKeyDown(KeyCode.Escape))
             {
                 return;
             }
 
-            if (IsPaused)
-            {
-                HandleEscapeWhilePaused();
-            }
-            else
-            {
-                ShowPauseMenu();
-            }
+            TryHandleEscapePause();
         }
 
         private void LateUpdate()
         {
-            if (!IsPaused || !ShouldFreezeGameplay())
+            if (!IsPaused)
             {
                 return;
             }
@@ -80,7 +139,20 @@ namespace F89.UI
 
         private void OnGUI()
         {
-            if (Event.current == null || !IsPaused)
+            if (Event.current != null
+                && Event.current.type == EventType.KeyDown
+                && Event.current.keyCode == KeyCode.Escape
+                && TryHandleEscapePause())
+            {
+                Event.current.Use();
+            }
+
+            if (!IsPaused)
+            {
+                return;
+            }
+
+            if (Event.current == null)
             {
                 return;
             }
@@ -104,8 +176,53 @@ namespace F89.UI
 
         private static bool CanOpenPauseMenu()
         {
-            var sceneName = SceneManager.GetActiveScene().name;
-            return sceneName != GameScenes.LoadingScreen;
+            if (GameKeyBindings.IsListening)
+            {
+                return false;
+            }
+
+            if (AircraftLandingController.IsCarrierApproachPromptVisible)
+            {
+                return false;
+            }
+
+            if (LandLootBagSession.IsOpen)
+            {
+                return false;
+            }
+
+            if (AircraftLoadoutController.BlocksPauseMenu)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryHandleEscapePause()
+        {
+            if (!CanOpenPauseMenu())
+            {
+                return false;
+            }
+
+            var frame = Time.frameCount;
+            if (lastEscapePauseFrame == frame)
+            {
+                return false;
+            }
+
+            lastEscapePauseFrame = frame;
+            if (IsPaused)
+            {
+                HandleEscapeWhilePaused();
+            }
+            else
+            {
+                ShowPauseMenu();
+            }
+
+            return true;
         }
 
         private static void HandleEscapeWhilePaused()
@@ -153,11 +270,8 @@ namespace F89.UI
             IsPaused = true;
             currentView = PauseView.Root;
             CaptureTimeScaleBeforePause();
-            if (ShouldFreezeGameplay())
-            {
-                Time.timeScale = 0f;
-                AudioListener.pause = true;
-            }
+            Time.timeScale = 0f;
+            AudioListener.pause = true;
 
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
@@ -185,14 +299,6 @@ namespace F89.UI
             timeScaleBeforePause = Time.timeScale > 0f ? Time.timeScale : 1f;
         }
 
-        private static bool ShouldFreezeGameplay()
-        {
-            var sceneName = SceneManager.GetActiveScene().name;
-            return sceneName == GameScenes.FlightTest
-                || sceneName == GameScenes.GroundAttack
-                || sceneName == GameScenes.Bunker;
-        }
-
         private void DrawOverlay()
         {
             GUI.color = new Color(0f, 0f, 0f, 0.55f);
@@ -202,7 +308,7 @@ namespace F89.UI
 
         private void DrawRootMenu()
         {
-            var buttonCount = 6;
+            var buttonCount = 7;
             var dialogHeight = GetDialogHeight(buttonCount, includeMessage: false);
             var dialogRect = GetDialogRect(dialogHeight);
             DrawDialogFrame(dialogRect, "Paused");
@@ -231,6 +337,13 @@ namespace F89.UI
             if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), GameSettings.MissileSoundsLabel.ToUpperInvariant(), fontSize: ButtonFontSize))
             {
                 GameSettings.ToggleMissileSounds();
+            }
+
+            buttonY += ButtonHeight + ButtonSpacing;
+            var displayLabel = GameSettings.FullscreenEnabled ? "WINDOW" : "FULLSCREEN";
+            if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), displayLabel, fontSize: ButtonFontSize))
+            {
+                GameSettings.ToggleFullscreen();
             }
 
             buttonY += ButtonHeight + ButtonSpacing;

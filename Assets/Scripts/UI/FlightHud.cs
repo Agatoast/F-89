@@ -68,6 +68,7 @@ namespace F89.UI
 
             if (GameKeyBindings.WasPressed(GameKeyBindingIds.Land)
                 && aircraft != null
+                && !AircraftLandingController.IsCarrierApproachPromptVisible
                 && AircraftLanding.CanLand(aircraft.CurrentSpeedMph))
             {
                 AircraftLanding.TryLand(aircraft);
@@ -100,7 +101,9 @@ namespace F89.UI
 
         private void DrawLandPrompt()
         {
-            if (aircraft == null || !AircraftLanding.CanLand(aircraft.CurrentSpeedMph))
+            if (aircraft == null
+                || AircraftLandingController.IsCarrierApproachPromptVisible
+                || !AircraftLanding.CanLand(aircraft.CurrentSpeedMph))
             {
                 return;
             }

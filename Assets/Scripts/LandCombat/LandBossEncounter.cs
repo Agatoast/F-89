@@ -254,6 +254,14 @@ namespace F89.LandCombat
         private static int ClampBossNumber(int bossNumber) =>
             Mathf.Clamp(bossNumber, FirstBossNumber, LastBossNumber);
 
+        /// <summary>
+        /// Marks a boss mission resolved for campaign progression (victory or abandoned early-end).
+        /// </summary>
+        public static void MarkMissionResolved(int bossNumber)
+        {
+            MarkDefeated(ClampBossNumber(bossNumber));
+        }
+
         private static void MarkDefeated(int bossNumber)
         {
             DefeatedBosses[bossNumber] = true;

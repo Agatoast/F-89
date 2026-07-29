@@ -7,6 +7,10 @@ namespace F89.UI
 {
     public class AircraftLoadoutController : MonoBehaviour
     {
+        private static AircraftLoadoutController activeInstance;
+
+        public static bool BlocksPauseMenu => activeInstance != null && activeInstance.isEditingGunRounds;
+
         private const string MockupResourcePath = "Loadout/plane_loadout";
         private const float ActionButtonMargin = 20f;
         private const float ActionButtonWidth = 285f;
@@ -64,23 +68,6 @@ namespace F89.UI
         private const float GunArrowMinRepeatIntervalSeconds = 0.008f;
         private const float GunArrowRepeatRampSeconds = 0.9f;
 
-        private struct NormalizedRect
-        {
-            public float X;
-            public float Y;
-            public float W;
-            public float H;
-
-            public Rect ToScreenRect(Rect imageRect)
-            {
-                return new Rect(
-                    imageRect.x + X * imageRect.width,
-                    imageRect.y + Y * imageRect.height,
-                    W * imageRect.width,
-                    H * imageRect.height);
-            }
-        }
-
         private enum HardpointSlotType
         {
             LinkedPair,
@@ -96,15 +83,23 @@ namespace F89.UI
             public int PairIndex;
         }
 
-        private static readonly NormalizedRect LoadoutInstructionsRect = new NormalizedRect { X = 0.695f, Y = 0.30f, W = 0.28f, H = 0.42f };
         // Rear tip of the baked aircraft on plane_loadout.png (1024x674).
         private static readonly Vector2 AircraftTailTipCenterPx = new Vector2(512f, 530f);
 
         private void OnEnable()
         {
+            activeInstance = this;
             AircraftLoadoutState.LoadCharacterDefault(CharacterSessionState.ActiveSave);
             mockupTexture = Resources.Load<Texture2D>(MockupResourcePath);
             ResetDragState();
+        }
+
+        private void OnDisable()
+        {
+            if (activeInstance == this)
+            {
+                activeInstance = null;
+            }
         }
 
         private void Update()
@@ -121,6 +116,7 @@ namespace F89.UI
                 return;
             }
 
+            SyncArtLockedFontSizes();
             hardpointHitCount = 0;
             BuildHardpointHitRects();
             HandleDragAndDropInput();
@@ -541,6 +537,7 @@ namespace F89.UI
                 weightParagraphLabelStyle.font = HudStyleFactory.ArialFont;
                 weightParagraphLabelStyle.fontStyle = FontStyle.Bold;
                 loadoutValueStyle.alignment = TextAnchor.MiddleCenter;
+                SyncArtLockedFontSizes();
                 return;
             }
 
@@ -576,6 +573,60 @@ namespace F89.UI
                 FontStyle.Bold,
                 TextAnchor.MiddleCenter,
                 new Color(0.82f, 0.88f, 0.94f));
+            SyncArtLockedFontSizes();
+        }
+
+        /// <summary>
+        /// Scales art-locked copy with the fitted mockup so text tracks the plane graphic
+        /// across resolutions and aspect letterboxing.
+        /// </summary>
+        private void SyncArtLockedFontSizes()
+        {
+            var scale = mockupRect.height > 1f
+                ? mockupRect.height / AircraftLoadoutLayout.MockupReferenceHeightPx
+                : UiFitCanvas.Scale;
+            scale = Mathf.Max(0.5f, scale);
+
+            if (instructionStyle != null)
+            {
+                instructionStyle.fontSize = Mathf.Max(10, Mathf.RoundToInt(18f * scale));
+            }
+
+            if (weightParagraphLabelStyle != null)
+            {
+                weightParagraphLabelStyle.fontSize = Mathf.Max(10, Mathf.RoundToInt(18f * scale));
+            }
+
+            if (speedDecreaseLabelStyle != null)
+            {
+                speedDecreaseLabelStyle.fontSize = Mathf.Max(10, Mathf.RoundToInt(18f * scale));
+            }
+
+            if (loadoutValueStyle != null)
+            {
+                loadoutValueStyle.fontSize = Mathf.Max(12, Mathf.RoundToInt(36f * scale));
+            }
+        }
+
+        /// <summary>Offset in mockup pixels → screen pixels (resolution-independent vs the art).</summary>
+        private float MockupPxToScreenX(float mockupPixels)
+        {
+            if (mockupTexture == null || mockupTexture.width <= 0)
+            {
+                return UiFitCanvas.Px(mockupPixels);
+            }
+
+            return mockupPixels / mockupTexture.width * mockupRect.width;
+        }
+
+        private float MockupPxToScreenY(float mockupPixels)
+        {
+            if (mockupTexture == null || mockupTexture.height <= 0)
+            {
+                return UiFitCanvas.Px(mockupPixels);
+            }
+
+            return mockupPixels / mockupTexture.height * mockupRect.height;
         }
 
         private void DrawWeaponTrayCounters()
@@ -960,7 +1011,8 @@ namespace F89.UI
                 + currentValueHeight;
             var threeLetterWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("MAX")).x;
             var twoLetterWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("MA")).x;
-            var y = center.y - totalHeight * 0.5f + UiFitCanvas.Px(110f);
+            // 110 mockup-px down from tail tip — locked to plane_loadout art.
+            var y = center.y - totalHeight * 0.5f + MockupPxToScreenY(110f);
             var x = center.x - lineWidth * 0.5f + threeLetterWidth - twoLetterWidth;
             var currentBlockY = y + maxLabelHeight + maxValueHeight + blankLineHeight;
 
@@ -998,7 +1050,7 @@ namespace F89.UI
             var layout = GetLoadoutWeightParagraphLayout();
             var currentLabelWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("CURRENT LOADOUT")).x;
             var currentLabelRight = layout.CurrentLabelRect.center.x + currentLabelWidth * 0.5f;
-            var payloadLeft = currentLabelRight + UiFitCanvas.Px(50f) - UiFitCanvas.Px(10f);
+            var payloadLeft = currentLabelRight + MockupPxToScreenX(40f);
 
             var labelContent = new GUIContent("PAYLOAD EFFECT ON MAXIMUM SPEED");
             var labelSize = speedDecreaseLabelStyle.CalcSize(labelContent);
@@ -1028,9 +1080,15 @@ namespace F89.UI
 
         private void DrawLoadoutInstructions()
         {
-            var rect = LoadoutInstructionsRect.ToScreenRect(mockupRect);
-            rect.x -= UiFitCanvas.Px(50f);
-            rect.y += UiFitCanvas.Px(350f);
+            if (mockupTexture == null)
+            {
+                return;
+            }
+
+            var rect = AircraftLoadoutLayout.InstructionsRect(
+                mockupRect,
+                mockupTexture.width,
+                mockupTexture.height);
             GUI.Label(
                 rect,
                 "DRAG WEAPON TO HARDPOINT\n\n" +
@@ -1068,10 +1126,29 @@ namespace F89.UI
             }
 
             var gap = UiFitCanvas.Px(32f);
-            var totalWidth = buttonWidth * 2f + gap;
-            var startX = UiFitCanvas.Rect.xMax - totalWidth - margin + UiFitCanvas.Px(160f);
+            var fromCarrierResupply = CarrierResupplyState.IsResupplyFromCarrier;
             var y = UiFitCanvas.Rect.yMax - buttonHeight - margin;
 
+            if (fromCarrierResupply)
+            {
+                var continueWidth = UiFitCanvas.Px(320f);
+                var continueRect = new Rect(
+                    UiFitCanvas.Rect.xMax - continueWidth - margin + UiFitCanvas.Px(160f),
+                    y,
+                    continueWidth,
+                    buttonHeight);
+                if (DrawActionButton(continueRect, "CONTINUE MISSION", 20))
+                {
+                    heldGunArrowIndex = -1;
+                    CancelGunRoundsEdit();
+                    StartMission();
+                }
+
+                return;
+            }
+
+            var totalWidth = buttonWidth * 2f + gap;
+            var startX = UiFitCanvas.Rect.xMax - totalWidth - margin + UiFitCanvas.Px(160f);
             var bailRect = new Rect(startX, y, buttonWidth, buttonHeight);
             var startRect = new Rect(startX + buttonWidth + gap, y, buttonWidth, buttonHeight);
 
@@ -1266,7 +1343,12 @@ namespace F89.UI
         private static void StartMission()
         {
             AircraftLoadoutState.MarkConfigured();
-            LandBossMissionAssignment.MarkAssignedMissionRun(CharacterSessionState.ActiveSave);
+            if (!CarrierResupplyState.IsResupplyFromCarrier)
+            {
+                LandBossMissionAssignment.MarkAssignedMissionRun(CharacterSessionState.ActiveSave);
+            }
+
+            CarrierResupplyState.Clear();
             Time.timeScale = 1f;
             FlightMissionLaunchState.BeginCarrierLaunch();
             SceneManager.LoadScene(GameScenes.FlightTest);

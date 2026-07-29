@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using F89.Core;
+using F89.Enemies;
 using F89.Flight;
 using F89.LandCombat;
 using F89.Weapons;
@@ -18,7 +19,7 @@ namespace F89.Testing
         private const int CarrierCount = 1;
         private const int ExpectedBaseCount = CatalogBaseCount + LandBaseCount - ExcludedLandBaseCount
             + FixedCarrierRelativeBaseCount + FixedAnchorRelativeBaseCount + CarrierCount;
-        private const int BasesLayoutVersion = 53;
+        private const int BasesLayoutVersion = 54;
         private const float FixedRelativeBaseOffsetMiles = 200f;
         private const float AnchorRelativeBaseSnapSearchMiles = 45f;
         private const float SolidIceSnapSearchMiles = AntarcticaLandMask.BasePlacementSnapSearchMiles;
@@ -85,8 +86,10 @@ namespace F89.Testing
                     EnsureCarrierSpawned(existing.transform, mapSizeMiles, worldUnitsPerMile);
                     ApplyLockedCampaignLayout(existing.transform, worldUnitsPerMile);
                     SyncAllLandBaseWorldState(worldUnitsPerMile);
+                    EnsureOutpostBuildingClusters(worldUnitsPerMile, profile);
                     LogCarrierReadyState();
                     LogOutpostSiteIdSystem();
+                    EnsureOpSouthPlatoonIfPlayerPresent();
                     return;
                 }
 
@@ -109,8 +112,25 @@ namespace F89.Testing
             MarkMissionObjective(root.transform, mission.firstObjectiveBaseName);
             EnsureCarrierAtLockedPosition(worldUnitsPerMile, carrierPositionMiles);
             SyncAllLandBaseWorldState(worldUnitsPerMile);
+            EnsureOutpostBuildingClusters(worldUnitsPerMile, profile);
             LogCarrierReadyState();
             LogOutpostSiteIdSystem();
+            EnsureOpSouthPlatoonIfPlayerPresent();
+        }
+
+        private static void EnsureOpSouthPlatoonIfPlayerPresent()
+        {
+            var player = Object.FindAnyObjectByType<AircraftController>();
+            if (player != null)
+            {
+                OutpostVehicleSpawner.EnsureOpSouthEnemyPlatoon(player);
+            }
+        }
+
+        private static void EnsureOutpostBuildingClusters(float worldUnitsPerMile, FlightProfile profile)
+        {
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            OutpostBuildingClusterSpawner.EnsureAllLandOutpostClusters(worldUnitsPerMile, ticSize);
         }
 
         private static void SpawnCampaignLayoutOutposts(Transform parent, float worldUnitsPerMile)

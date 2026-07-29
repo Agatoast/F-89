@@ -12,7 +12,8 @@ namespace F89.Core
 
         /// Fixed map seed for the carrier — resolved to visible ocean on the satellite map at spawn.
         /// Map display up/north is -Z miles (see AntarcticaMapOverlay map georef).
-        public static readonly Vector2 DefaultCarrierPositionMiles = new Vector2(-1023f, 570f);
+        // +X east/right, -Y map-up/north (mile +Y draws toward screen bottom).
+        public static readonly Vector2 DefaultCarrierPositionMiles = new Vector2(-1022.5f, 569.5f);
 
         private static Vector2 runtimeCarrierPositionMiles = DefaultCarrierPositionMiles;
 

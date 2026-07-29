@@ -29,6 +29,8 @@ namespace F89.LandCombat
 
             save.EnemyVehiclesKilled = 0;
             save.EnemyTroopsKilled = 0;
+            save.UrVehicleKillsByLevel = new int[UrKillCredit.LevelCount];
+            save.UrTroopKillsByLevel = new int[UrKillCredit.LevelCount];
             save.BestMissionScore = 0;
             save.TotalScore = 0;
             save.VehicleKillSummary = string.Empty;

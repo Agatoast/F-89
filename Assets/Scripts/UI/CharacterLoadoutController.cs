@@ -18,6 +18,8 @@ namespace F89.UI
         private Texture2D paperdollTexture;
         private Texture2D portraitFrameTexture;
         private bool showBailOutConfirm;
+        private bool showMissingEquipmentDialog;
+        private string missingEquipmentTypesCsv = string.Empty;
 
         private void Start()
         {
@@ -79,6 +81,7 @@ namespace F89.UI
             DrawGearDeleteConfirmDialog();
 
             DrawActionButtons();
+            DrawMissingEquipmentDialog();
             if (showBailOutConfirm && CharacterLoadoutNavState.EnteredFromMissionBrief)
             {
                 var dialogResult = BailOutConfirmDialog.Draw(true);
@@ -93,6 +96,21 @@ namespace F89.UI
             }
 
             LandItemTooltipUi.Draw(LandItemTooltipUi.Placement.AboveCursor);
+        }
+
+        private void DrawMissingEquipmentDialog()
+        {
+            if (!showMissingEquipmentDialog)
+            {
+                return;
+            }
+
+            if (MissingEquipmentDialog.Draw(true, missingEquipmentTypesCsv)
+                == MissingEquipmentDialog.Result.Acknowledged)
+            {
+                showMissingEquipmentDialog = false;
+                missingEquipmentTypesCsv = string.Empty;
+            }
         }
 
         private static void DrawBasicLoadoutSlotOccupiedDialog()
@@ -181,15 +199,17 @@ namespace F89.UI
                 var bailRect = new Rect(startX, y, buttonWidth, buttonHeight);
                 var aircraftRect = new Rect(startX + buttonWidth + gap, y, buttonWidth, buttonHeight);
 
-                if (StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15))
+                if (StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15)
+                    && !showMissingEquipmentDialog)
                 {
                     showBailOutConfirm = true;
                 }
 
                 if (StartPageMenuStyles.DrawMenuButton(aircraftRect, "AIRCRAFT LOADOUT", fontSize: 15)
-                    && !showBailOutConfirm)
+                    && !showBailOutConfirm
+                    && !showMissingEquipmentDialog)
                 {
-                    ProceedToAircraftLoadout();
+                    TryLeaveLoadout(ProceedToAircraftLoadout);
                 }
 
                 return;
@@ -200,10 +220,23 @@ namespace F89.UI
                 y,
                 buttonWidth,
                 buttonHeight);
-            if (StartPageMenuStyles.DrawMenuButton(characterPageRect, "CHARACTER PAGE", fontSize: 15))
+            if (StartPageMenuStyles.DrawMenuButton(characterPageRect, "CHARACTER PAGE", fontSize: 15)
+                && !showMissingEquipmentDialog)
             {
-                ReturnToCharacterPage();
+                TryLeaveLoadout(ReturnToCharacterPage);
             }
+        }
+
+        private void TryLeaveLoadout(System.Action leaveAction)
+        {
+            if (CharacterPageGearUi.TryGetMissingEquipmentTypes(out var missingTypes))
+            {
+                missingEquipmentTypesCsv = missingTypes;
+                showMissingEquipmentDialog = true;
+                return;
+            }
+
+            leaveAction?.Invoke();
         }
 
         private static void ProceedToAircraftLoadout()

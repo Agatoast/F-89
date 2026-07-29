@@ -22,3 +22,4 @@ MonoBehaviour:
   unlockedHitConeHalfAngleDegrees: 1.5
   collisionRadiusTics: 0.5
   startingMissileCount: 4
+  airDamagePerHit: 5

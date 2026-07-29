@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using F89.Enemies;
+using F89.LandCombat;
+using F89.UI;
 using UnityEngine;
 
 namespace F89.Core
@@ -118,6 +121,8 @@ namespace F89.Core
                 return false;
             }
 
+            WipeCharacterSidecars(id);
+
             if (GetLastSelectedSaveId() == id)
             {
                 PlayerPrefs.DeleteKey(LastSelectedSaveIdKey);
@@ -127,6 +132,9 @@ namespace F89.Core
             if (CharacterSessionState.ActiveSave != null && CharacterSessionState.ActiveSave.Id == id)
             {
                 CharacterSessionState.ActiveSave = null;
+                CharacterGearSession.Bind(null);
+                AircraftLoadoutState.ResetForNewSortie();
+                LandMissionHandoffState.Clear();
             }
 
             WriteToDisk();
@@ -156,11 +164,34 @@ namespace F89.Core
         public static void ClearAllSaves()
         {
             EnsureLoaded();
+            foreach (var save in cachedSaves)
+            {
+                if (save != null && !string.IsNullOrEmpty(save.Id))
+                {
+                    WipeCharacterSidecars(save.Id);
+                }
+            }
+
+            CharacterPortraitService.DeleteAllCustomPortraits();
             cachedSaves.Clear();
             PlayerPrefs.DeleteKey(LastSelectedSaveIdKey);
             PlayerPrefs.Save();
             CharacterSessionState.ActiveSave = null;
+            CharacterGearSession.Bind(null);
+            AircraftLoadoutState.ResetForNewSortie();
+            LandMissionHandoffState.Clear();
             WriteToDisk();
+        }
+
+        private static void WipeCharacterSidecars(string saveId)
+        {
+            if (string.IsNullOrEmpty(saveId))
+            {
+                return;
+            }
+
+            CharacterPortraitService.DeleteCustomPortrait(saveId);
+            LandDefaultLoadout.ClearPrefsForSave(saveId);
         }
 
         public static void ApplyScorePenalty(CharacterSaveData save, int penalty)
@@ -173,6 +204,65 @@ namespace F89.Core
             EnsureLoaded();
             save.TotalScore = Mathf.Max(0, save.TotalScore - penalty);
             WriteToDisk();
+        }
+
+        /// <summary>Cuts TotalScore by a fraction (e.g. 0.5 = 50%). Does not change rank by itself.</summary>
+        public static void ApplyTotalScoreFractionPenalty(CharacterSaveData save, float fractionKept)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            EnsureLoaded();
+            var kept = Mathf.Clamp01(fractionKept);
+            save.TotalScore = Mathf.Max(0, Mathf.RoundToInt(save.TotalScore * kept));
+            WriteToDisk();
+        }
+
+        /// <summary>Syncs vehicle/troop kill totals from per-level UR kill folders.</summary>
+        public static void SyncVehicleKillCredit(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            EnsureLoaded();
+            EnsureUrKillArrays(save);
+            WriteToDisk();
+        }
+
+        /// <summary>Adds a ribbon if the character has not already earned it. Updates HighestAward.</summary>
+        public static bool TryGrantRibbon(CharacterSaveData save, string ribbonId)
+        {
+            if (save == null || string.IsNullOrEmpty(ribbonId))
+            {
+                return false;
+            }
+
+            EnsureLoaded();
+            save.EarnedRibbonIds ??= Array.Empty<string>();
+            for (var i = 0; i < save.EarnedRibbonIds.Length; i++)
+            {
+                if (save.EarnedRibbonIds[i] == ribbonId)
+                {
+                    return false;
+                }
+            }
+
+            var updated = new string[save.EarnedRibbonIds.Length + 1];
+            for (var i = 0; i < save.EarnedRibbonIds.Length; i++)
+            {
+                updated[i] = save.EarnedRibbonIds[i];
+            }
+
+            updated[updated.Length - 1] = ribbonId;
+            save.EarnedRibbonIds = updated;
+            var derived = MilitaryMedalCatalog.GetHighestMedalIdFromEarnedRibbons(save.EarnedRibbonIds);
+            save.HighestAward = MilitaryMedalCatalog.NormalizeAwardId(derived);
+            WriteToDisk();
+            return true;
         }
 
         public static void EnsureGearInitialized(CharacterSaveData save)
@@ -193,6 +283,71 @@ namespace F89.Core
             NormalizeVaultItems(save.Vault);
             EnsureBossProgressInitialized(save);
             EnsureBossMissionInitialized(save);
+            EnsureUrKillArrays(save);
+        }
+
+        public static void EnsureUrKillArrays(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            if (save.UrVehicleKillsByLevel == null || save.UrVehicleKillsByLevel.Length != UrKillCredit.LevelCount)
+            {
+                save.UrVehicleKillsByLevel = new int[UrKillCredit.LevelCount];
+            }
+
+            if (save.UrTroopKillsByLevel == null || save.UrTroopKillsByLevel.Length != UrKillCredit.LevelCount)
+            {
+                save.UrTroopKillsByLevel = new int[UrKillCredit.LevelCount];
+            }
+
+            if (UrKillCredit.Sum(save.UrVehicleKillsByLevel) == 0
+                && UrKillCredit.Sum(save.UrTroopKillsByLevel) == 0
+                && save.DestroyedWorldTargetIds is { Length: > 0 })
+            {
+                BackfillUrKillArraysFromDestroyedTargets(save);
+            }
+
+            save.EnemyVehiclesKilled = UrKillCredit.Sum(save.UrVehicleKillsByLevel);
+            save.EnemyTroopsKilled = UrKillCredit.Sum(save.UrTroopKillsByLevel);
+        }
+
+        private static void BackfillUrKillArraysFromDestroyedTargets(CharacterSaveData save)
+        {
+            var catalog = Enemies.VehicleUnitCatalog.LoadOrDefault();
+            for (var i = 0; i < save.DestroyedWorldTargetIds.Length; i++)
+            {
+                var targetId = save.DestroyedWorldTargetIds[i];
+                if (string.IsNullOrWhiteSpace(targetId))
+                {
+                    continue;
+                }
+
+                var separator = targetId.IndexOf("::", StringComparison.Ordinal);
+                if (separator < 0 || separator >= targetId.Length - 2)
+                {
+                    continue;
+                }
+
+                var label = targetId.Substring(separator + 2).Trim();
+                if (!catalog.TryGetByAbbreviation(label, VehicleUnitDesignation.UR, out var definition)
+                    || definition == null)
+                {
+                    continue;
+                }
+
+                var index = UrKillCredit.LevelToIndex(definition.vehicleLevel);
+                if (definition.isTroop)
+                {
+                    save.UrTroopKillsByLevel[index]++;
+                }
+                else
+                {
+                    save.UrVehicleKillsByLevel[index]++;
+                }
+            }
         }
 
         public static void EnsureBossMissionInitialized(CharacterSaveData save)
@@ -417,13 +572,8 @@ namespace F89.Core
 
                 if (save.EarnedRibbonIds == null)
                 {
+                    // Fresh characters get FruitSalad in CreateSave; null means empty legacy data.
                     save.EarnedRibbonIds = Array.Empty<string>();
-                    changed = true;
-                }
-
-                if (string.Equals(save.Name, "Don", StringComparison.OrdinalIgnoreCase))
-                {
-                    save.EarnedRibbonIds = GetAllRibbonIdsExcept(MilitaryRibbonIds.PrisonerOfWar);
                     changed = true;
                 }
             }
@@ -432,23 +582,6 @@ namespace F89.Core
             {
                 WriteToDisk();
             }
-        }
-
-        private static string[] GetAllRibbonIdsExcept(string excludedRibbonId)
-        {
-            var allRibbonIds = MilitaryRibbonCatalog.GetAllRibbonIds();
-            var filtered = new List<string>(allRibbonIds.Length);
-            foreach (var ribbonId in allRibbonIds)
-            {
-                if (ribbonId == excludedRibbonId)
-                {
-                    continue;
-                }
-
-                filtered.Add(ribbonId);
-            }
-
-            return filtered.ToArray();
         }
 
         private static void ClearAllSavesOnce()

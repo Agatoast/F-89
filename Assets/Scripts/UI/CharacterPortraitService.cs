@@ -111,6 +111,62 @@ namespace F89.UI
             CustomTextures.Remove(saveId);
         }
 
+        public static void DeleteCustomPortrait(string saveId)
+        {
+            if (string.IsNullOrEmpty(saveId))
+            {
+                return;
+            }
+
+            InvalidateCache(saveId);
+            var path = GetCustomPortraitPath(saveId);
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                File.Delete(path);
+            }
+            catch (IOException exception)
+            {
+                Debug.LogWarning($"F-89: Failed to delete custom portrait. {exception.Message}");
+            }
+        }
+
+        public static void DeleteAllCustomPortraits()
+        {
+            var directory = GetCustomPortraitDirectory();
+            if (!Directory.Exists(directory))
+            {
+                CustomTextures.Clear();
+                return;
+            }
+
+            try
+            {
+                foreach (var path in Directory.GetFiles(directory, "*.png"))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch (IOException exception)
+            {
+                Debug.LogWarning($"F-89: Failed to clear custom portraits. {exception.Message}");
+            }
+
+            foreach (var texture in CustomTextures.Values)
+            {
+                if (texture != null)
+                {
+                    Object.Destroy(texture);
+                }
+            }
+
+            CustomTextures.Clear();
+        }
+
         private static Texture2D GetCustomPortraitTexture(string saveId)
         {
             if (string.IsNullOrEmpty(saveId))

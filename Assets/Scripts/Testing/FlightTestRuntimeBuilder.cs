@@ -33,9 +33,10 @@ namespace F89.Testing
 
                 EnsureMapSystems(existingPlayer);
                 EnsurePlayerVisuals(existingPlayer);
-                EnsureWeaponSystems(existingPlayer.gameObject);
-                WeaponTestTargetSpawner.RemoveIfPresent();
                 AntarcticaBaseSpawner.SpawnIfNeeded();
+                EnsureWeaponSystems(existingPlayer.gameObject);
+                OutpostVehicleSpawner.EnsureOpSouthEnemyPlatoon(existingPlayer);
+                WeaponTestTargetSpawner.RemoveIfPresent();
 
                 // Restore landing site after weapon/flare systems init (they refill by default).
                 var restoredFromGround = FlightGroundReturnService.TryApplyPendingReturn(existingPlayer.gameObject);
@@ -102,7 +103,7 @@ namespace F89.Testing
             CreateWeaponSystems(player);
             EnsureCountermeasureSystems(player);
             EnsureEnemySamSites(player.GetComponent<AircraftController>());
-            BasicTankSpawner.EnsureOutpostSouthTank(player.GetComponent<AircraftController>());
+            OutpostVehicleSpawner.EnsureOpSouthEnemyPlatoon(player.GetComponent<AircraftController>());
             CreateFlightHud(player);
             CreateAntarcticaMapOverlay(player);
             WeaponTestTargetSpawner.RemoveIfPresent();
@@ -327,6 +328,7 @@ namespace F89.Testing
                 LockableTargetKind.Air,
                 TargetAffiliation.Friendly,
                 TargetUnitClass.PlayerAircraft);
+            target.SetMaxGroundHitPoints(PlayerAircraftGhp.Max);
         }
 
         private static void CreateWeaponSystems(GameObject player)
@@ -437,7 +439,6 @@ namespace F89.Testing
             var controller = player.GetComponent<AircraftController>();
             var weaponController = player.GetComponent<PlayerWeaponController>();
             EnsureEnemySamSites(controller);
-            BasicTankSpawner.EnsureOutpostSouthTank(controller);
             CreateFlightHud(player);
             if (weaponController != null && controller != null)
             {

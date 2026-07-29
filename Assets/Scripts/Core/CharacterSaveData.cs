@@ -12,6 +12,10 @@ namespace F89.Core
         public string HighestAward = MilitaryMedalIds.DefaultForNewCharacter;
         public int EnemyVehiclesKilled;
         public int EnemyTroopsKilled;
+        /// <summary>UR vehicle kills indexed by level 1–10 (slot index = level - 1).</summary>
+        public int[] UrVehicleKillsByLevel = new int[UrKillCredit.LevelCount];
+        /// <summary>UR troop kills indexed by level 1–10 (slot index = level - 1).</summary>
+        public int[] UrTroopKillsByLevel = new int[UrKillCredit.LevelCount];
         public int BestMissionScore;
         public int TotalScore;
         public string PortraitId = string.Empty;

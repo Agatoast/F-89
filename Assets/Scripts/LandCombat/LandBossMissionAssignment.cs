@@ -27,6 +27,32 @@ namespace F89.LandCombat
         public static bool HasActiveAssignment(CharacterSaveData save) =>
             save != null && save.AssignedBossNumber >= 1 && save.AssignedBossNumber <= BossMissionCount;
 
+        /// <summary>True when the assigned primary boss objective is already defeated.</summary>
+        public static bool IsPrimaryMissionComplete(CharacterSaveData save)
+        {
+            if (!HasActiveAssignment(save))
+            {
+                return true;
+            }
+
+            return LandBossEncounter.IsDefeated(save.AssignedBossNumber);
+        }
+
+        /// <summary>
+        /// Marks the active assigned mission complete without requiring a boss kill,
+        /// so the pilot becomes eligible for the next mission.
+        /// </summary>
+        public static void ResolveAssignedMissionWithoutVictory(CharacterSaveData save)
+        {
+            if (!HasActiveAssignment(save))
+            {
+                return;
+            }
+
+            LandBossEncounter.MarkMissionResolved(save.AssignedBossNumber);
+            PrepareNextAssignment(save);
+        }
+
         public static void PrepareNextAssignment(CharacterSaveData save)
         {
             if (save == null)

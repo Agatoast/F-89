@@ -9,8 +9,7 @@ namespace F89.Weapons
         private Gau27aWeaponConfig config;
         private Vector3 aimPoint;
         private float speedWorld;
-        private float hitRadiusWorld;
-        private float hitChance;
+        private float dotRadiusWorld;
         private Vector3 launchVelocity;
 
         public static void Fire(
@@ -19,7 +18,6 @@ namespace F89.Weapons
             WorldMapConfig worldMap,
             Vector3 spawnPoint,
             Vector3 destination,
-            float accuracyMultiplier,
             Vector3 launchVelocityWorld = default)
         {
             if (weaponConfig == null)
@@ -35,7 +33,6 @@ namespace F89.Weapons
                 worldMap,
                 spawnPoint,
                 destination,
-                accuracyMultiplier,
                 launchVelocityWorld);
         }
 
@@ -45,13 +42,11 @@ namespace F89.Weapons
             WorldMapConfig worldMap,
             Vector3 spawnPoint,
             Vector3 destination,
-            float accuracyMultiplier,
             Vector3 launchVelocityWorld)
         {
             config = weaponConfig;
             aimPoint = destination;
             aimPoint.y = 0.5f;
-            hitChance = weaponConfig.hitChancePerRound * Mathf.Clamp01(accuracyMultiplier);
             launchVelocity = Flatten(launchVelocityWorld);
 
             var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
@@ -59,7 +54,7 @@ namespace F89.Weapons
                 weaponConfig.roundSpeedMilesPerSecond,
                 worldMap,
                 ticSize);
-            hitRadiusWorld = weaponConfig.hitRadiusTics * ticSize;
+            dotRadiusWorld = weaponConfig.crosshairDotRadiusTics * ticSize;
 
             spawnPoint.y = 0.5f;
             transform.position = spawnPoint;
@@ -117,24 +112,20 @@ namespace F89.Weapons
 
         private void ResolveImpact()
         {
-            var target = FindTargetAtAimPoint();
+            var target = FindTargetUnderCrosshairDot();
             if (target == null)
             {
                 return;
             }
 
-            if (!target.IsGroundVehicle && Random.value > hitChance)
-            {
-                return;
-            }
-
-            target.RegisterHit(config.WeaponName, false);
+            // Anything under the central crosshair dot auto-hits.
+            PlaneWeaponGhp.ApplyGau27Hit(target, wasLockedShot: false);
         }
 
-        private LockableTarget FindTargetAtAimPoint()
+        private LockableTarget FindTargetUnderCrosshairDot()
         {
             var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
-            return DirectFireTargetRules.FindClosestAtPoint(aimPoint, hitRadiusWorld, targets);
+            return DirectFireTargetRules.FindGau27TargetUnderCrosshairDot(aimPoint, dotRadiusWorld, targets);
         }
     }
 }

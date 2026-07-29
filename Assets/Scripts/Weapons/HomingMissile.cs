@@ -453,6 +453,19 @@ namespace F89.Weapons
         {
             center.y = 0.5f;
             var blastRadius = ImpactBlastRadiusWorld();
+            if (PlaneWeaponGhp.TryApplyMissileImpactBlast(
+                    config,
+                    center,
+                    blastRadius,
+                    accuracyMultiplier,
+                    flightProfile))
+            {
+                Debug.Log(
+                    $"{config.WeaponName} dumb-fire impact (GHP). Accuracy: {accuracyMultiplier:P0}.");
+                CompleteFlight();
+                return;
+            }
+
             var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
             var hits = 0;
 
@@ -506,7 +519,14 @@ namespace F89.Weapons
             var hit = Random.value <= effectiveChance;
             if (hit)
             {
-                target.RegisterHit(config.WeaponName, true, ResolveDestroyChanceFor(target));
+                if (config is GroundUnitAirMissileConfig groundAir)
+                {
+                    target.ApplyAirDamage(groundAir.AirDamage, config.WeaponName, wasLockedShot: true);
+                }
+                else if (!PlaneWeaponGhp.TryApplyMissileLockedHit(config, target, flightProfile, wasLockedShot: true))
+                {
+                    target.RegisterHit(config.WeaponName, true, ResolveDestroyChanceFor(target));
+                }
             }
             else
             {

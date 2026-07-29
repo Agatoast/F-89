@@ -18,10 +18,23 @@ namespace F89.Enemies
 
             var mapSizeMiles = worldMap.antarcticaSizeMiles;
             var fullDelta = unitTransform.position + deltaWorld;
-            if (IsLandWorldPosition(fullDelta, worldMap, worldUnitsPerMile, mapSizeMiles))
+            if (IsAllowedWorldPosition(fullDelta, worldMap, worldUnitsPerMile, mapSizeMiles))
             {
                 unitTransform.position = fullDelta;
                 return true;
+            }
+
+            // Soft push out of a building keep-out if already inside.
+            if (OutpostBuildingCluster.TryGetKeepOutPush(unitTransform.position, out var push, out var penetration)
+                && penetration > 0.001f)
+            {
+                var escape = push * Mathf.Min(penetration, deltaWorld.magnitude + penetration * 0.25f);
+                var escaped = unitTransform.position + escape;
+                if (IsAllowedWorldPosition(escaped, worldMap, worldUnitsPerMile, mapSizeMiles))
+                {
+                    unitTransform.position = escaped;
+                    return true;
+                }
             }
 
             var deltaX = new Vector3(deltaWorld.x, 0f, 0f);
@@ -29,7 +42,7 @@ namespace F89.Enemies
             if (deltaX.sqrMagnitude > 0.000001f)
             {
                 var xOnly = unitTransform.position + deltaX;
-                if (IsLandWorldPosition(xOnly, worldMap, worldUnitsPerMile, mapSizeMiles))
+                if (IsAllowedWorldPosition(xOnly, worldMap, worldUnitsPerMile, mapSizeMiles))
                 {
                     unitTransform.position = xOnly;
                     return true;
@@ -39,7 +52,7 @@ namespace F89.Enemies
             if (deltaZ.sqrMagnitude > 0.000001f)
             {
                 var zOnly = unitTransform.position + deltaZ;
-                if (IsLandWorldPosition(zOnly, worldMap, worldUnitsPerMile, mapSizeMiles))
+                if (IsAllowedWorldPosition(zOnly, worldMap, worldUnitsPerMile, mapSizeMiles))
                 {
                     unitTransform.position = zOnly;
                     return true;
@@ -49,12 +62,27 @@ namespace F89.Enemies
             return false;
         }
 
-        private static bool IsLandWorldPosition(
+        public static bool IsAllowedWorldPosition(
             Vector3 worldPosition,
             WorldMapConfig worldMap,
             float worldUnitsPerMile,
-            float mapSizeMiles)
+            float mapSizeMiles = -1f)
         {
+            if (worldMap == null)
+            {
+                return false;
+            }
+
+            if (mapSizeMiles <= 0f)
+            {
+                mapSizeMiles = worldMap.antarcticaSizeMiles;
+            }
+
+            if (OutpostBuildingCluster.IsInsideAnyKeepOut(worldPosition))
+            {
+                return false;
+            }
+
             var miles = WorldMapConfig.WorldToMileOffset(worldPosition, worldUnitsPerMile);
             return AntarcticaLandMask.IsDisplayLandMiles(miles, mapSizeMiles);
         }

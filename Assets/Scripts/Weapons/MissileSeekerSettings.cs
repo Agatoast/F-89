@@ -23,5 +23,20 @@ namespace F89.Weapons
                 SeekerForwardHalfAngleDegrees = config.seekerForwardHalfAngleDegrees
             };
         }
+
+        public static MissileSeekerSettings FromGroundUnitAir(
+            GroundUnitAirMissileConfig config,
+            LockableTarget primaryTarget)
+        {
+            return new MissileSeekerSettings
+            {
+                RespondsToFlares = true,
+                PrimaryTarget = primaryTarget,
+                FlareRetargetRangeMiles = config != null ? config.flareRetargetRangeMiles : 10f,
+                FlareRetargetChance = config != null ? config.flareRetargetChance : 1f,
+                FlareBurnoutReacquireChance = config != null ? config.flareBurnoutReacquireChance : 0.1f,
+                SeekerForwardHalfAngleDegrees = config != null ? config.seekerForwardHalfAngleDegrees : 90f
+            };
+        }
     }
 }

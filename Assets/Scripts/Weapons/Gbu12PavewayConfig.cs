@@ -25,9 +25,17 @@ namespace F89.Weapons
 
         [Header("Impact")]
         [Range(0f, 1f)] public float lockHitChance = 0.88f;
-        public float blastRadiusTics = 1.5f;
+        [Tooltip("Legacy circular radius (unused for GHP). Blast uses chebyshev tic footprint.")]
+        public float blastRadiusTics = 2f;
         [Tooltip("Max random impact scatter at 0% firing accuracy, in tics.")]
         public float maxScatterTicsAtZeroAccuracy = 3f;
+
+        [Header("Ground Hit Points")]
+        [Tooltip("GHP to buildings and troops in hit tic + 2 tics around (5×5 including diagonals).")]
+        public int buildingOrTroopGroundHitPoints = PlaneWeaponGhp.Gbu12BuildingOrTroopHit;
+        [Tooltip("GHP to vehicles in the same tic footprint.")]
+        public int vehicleGroundHitPoints = PlaneWeaponGhp.Gbu12VehicleHit;
+        public int blastChebyshevTics = PlaneWeaponGhp.Gbu12BlastChebyshevTics;
 
         [Header("Loadout")]
         public int startingBombCount = 4;

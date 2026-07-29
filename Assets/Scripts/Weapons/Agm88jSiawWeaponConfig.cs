@@ -20,6 +20,11 @@ namespace F89.Weapons
         public float unlockedHitConeHalfAngleDegrees = 1.5f;
         public float collisionRadiusTics = 0.75f;
 
+        [Header("Ground Hit Points")]
+        [Tooltip("GHP to vehicles/troops in the hit tic and each surrounding tic (3×3, diagonals included). No building GHP.")]
+        public int groundHitPoints = PlaneWeaponGhp.Agm88Hit;
+        public int blastChebyshevTics = PlaneWeaponGhp.Agm88BlastChebyshevTics;
+
         [Header("Loadout")]
         public int startingMissileCount = 2;
 
