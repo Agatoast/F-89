@@ -23,7 +23,20 @@ namespace F89.Flight
                 && !AircraftLandingController.IsTakeoffActive
                 && !AircraftLandingController.IsLandingComplete
                 && !AircraftLandingController.IsCarrierApproachPromptVisible
+                && !AircraftLandingController.IsRunwayRefuelPromptVisible
                 && !PlayerAircraftCrashController.IsCrashActive;
+        }
+
+        public static bool CanShowLandPrompt(AircraftController aircraft)
+        {
+            if (aircraft == null || !CanLand(aircraft.CurrentSpeedMph))
+            {
+                return false;
+            }
+
+            return IsInCarrierApproachGrid(aircraft)
+                || OutpostRunwayLanding.IsNearRunway(aircraft)
+                || IsOverLand(aircraft);
         }
 
         public static void TryLand(AircraftController aircraft)
@@ -38,6 +51,24 @@ namespace F89.Flight
                 var carrierLanding = aircraft.GetComponent<AircraftLandingController>()
                     ?? aircraft.gameObject.AddComponent<AircraftLandingController>();
                 carrierLanding.BeginCarrierLanding();
+                return;
+            }
+
+            if (OutpostRunwayLanding.TryFindNearestRunway(
+                    aircraft,
+                    out var runwayBase,
+                    out var runwayTransform,
+                    out _))
+            {
+                if (HasEnemiesNearLandingSite(aircraft))
+                {
+                    FlightHudBanner.Show(LandingBlockedByEnemiesMessage, LandingBlockedMessageSeconds);
+                    return;
+                }
+
+                var runwayLanding = aircraft.GetComponent<AircraftLandingController>()
+                    ?? aircraft.gameObject.AddComponent<AircraftLandingController>();
+                runwayLanding.BeginRunwayLanding(runwayBase, runwayTransform);
                 return;
             }
 

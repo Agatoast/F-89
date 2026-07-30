@@ -57,6 +57,21 @@ namespace F89.Core
                 ? pendingReturnSnapshot.ReturnSceneName
                 : GameScenes.FlightTest;
 
+        public static bool HasActiveSortieHandoff()
+        {
+            EnsureRestoredAfterScriptReload();
+            return storedFlightSnapshot.IsValid
+                || pendingEnterSnapshot.IsValid
+                || pendingReturnSnapshot.IsValid
+                || suppressCarrierRespawn;
+        }
+
+        public static void ForceReloadFromPrefs()
+        {
+            restoredFromPrefs = false;
+            EnsureRestoredAfterScriptReload();
+        }
+
         public static LandSortieSnapshot GetStoredFlightSnapshot()
         {
             EnsureRestoredAfterScriptReload();
@@ -102,11 +117,24 @@ namespace F89.Core
 
         public static void BeginReturnToFlight(LandSortieSnapshot snapshot, LandGroundSessionResult groundResult)
         {
+            storedFlightSnapshot = snapshot;
+            storedFlightSnapshot.IsValid = true;
             pendingReturnSnapshot = snapshot;
             pendingReturnSnapshot.IsValid = true;
             lastGroundResult = groundResult;
             suppressCarrierRespawn = true;
             SaveToPrefs();
+        }
+
+        public static bool IsRunwayDeckSortie()
+        {
+            EnsureRestoredAfterScriptReload();
+            if (storedFlightSnapshot.ReturnToRunwayDeck)
+            {
+                return true;
+            }
+
+            return OutpostRunwayDeckState.IsParkedAtRunway;
         }
 
         public static bool TryConsumeReturnToFlight(out LandSortieSnapshot snapshot, out LandGroundSessionResult groundResult)
@@ -122,6 +150,22 @@ namespace F89.Core
             pendingReturnSnapshot = LandSortieSnapshot.Empty;
             SaveToPrefs();
             return true;
+        }
+
+        public static void ClearRunwayDeckReturnIntent()
+        {
+            EnsureRestoredAfterScriptReload();
+            if (storedFlightSnapshot.IsValid)
+            {
+                storedFlightSnapshot.ReturnToRunwayDeck = false;
+            }
+
+            if (pendingReturnSnapshot.IsValid)
+            {
+                pendingReturnSnapshot.ReturnToRunwayDeck = false;
+            }
+
+            SaveToPrefs();
         }
 
         public static void ConfirmReturnApplied()

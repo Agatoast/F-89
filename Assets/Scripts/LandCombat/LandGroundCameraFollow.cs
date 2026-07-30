@@ -4,23 +4,23 @@ using UnityEngine;
 namespace F89.LandCombat
 {
     /// <summary>
-    /// Follows the ground player. Press X to shift the view so the avatar sits halfway down
-    /// the screen (same idea as flight HUD TopDownFollowCamera), then X again to center.
+    /// Follows the ground player. Default view keeps the avatar 25% above screen bottom; X toggles center.
     /// </summary>
     public sealed class LandGroundCameraFollow : MonoBehaviour
     {
-        private const float ShiftedPlayerViewportY = 0.25f;
+        private const float DefaultPlayerViewportY = 0.25f;
+        private const float CenterPlayerViewportY = 0.5f;
         private const float ViewShiftSmoothTime = 0.2f;
 
         private Transform target;
-        private bool isViewShifted;
+        private bool isViewShifted = true;
         private float currentViewShift;
         private float viewShiftVelocity;
 
         public void SetTarget(Transform followTarget)
         {
             target = followTarget;
-            isViewShifted = false;
+            isViewShifted = true;
             currentViewShift = 0f;
             viewShiftVelocity = 0f;
         }
@@ -46,11 +46,12 @@ namespace F89.LandCombat
             }
 
             var camera = GetComponent<Camera>();
+            var targetViewportY = isViewShifted ? DefaultPlayerViewportY : CenterPlayerViewportY;
             var fullShift = camera != null && camera.orthographic
-                ? (0.5f - ShiftedPlayerViewportY) * 2f * camera.orthographicSize
+                ? (CenterPlayerViewportY - targetViewportY) * 2f * camera.orthographicSize
                 : 0f;
 
-            var viewShiftTarget = isViewShifted ? fullShift : 0f;
+            var viewShiftTarget = fullShift;
             currentViewShift = Mathf.SmoothDamp(
                 currentViewShift,
                 viewShiftTarget,

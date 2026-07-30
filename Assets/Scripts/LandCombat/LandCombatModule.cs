@@ -40,6 +40,25 @@ namespace F89.LandCombat
                 returnSnapshot.ReturnSceneName = GameScenes.FlightTest;
             }
 
+            if (OutpostRunwayDeckState.IsParkedAtRunway)
+            {
+                OutpostGroundGuardState.SyncClearanceFromGroundSession();
+                OutpostRunwayDeckState.RefreshSurfaceGuardsCleared(OutpostRunwayDeckState.ParkedOutpostName);
+                if (string.IsNullOrWhiteSpace(returnSnapshot.OutpostName))
+                {
+                    returnSnapshot.OutpostName = OutpostRunwayDeckState.ParkedOutpostName;
+                }
+
+                if (OutpostRunwayDeckState.ConsumePendingDeckTakeoffOnRestore())
+                {
+                    returnSnapshot.ReturnToRunwayDeck = false;
+                }
+                else
+                {
+                    returnSnapshot.ReturnToRunwayDeck = true;
+                }
+            }
+
             LandSurfaceSession.Clear();
             LandBossAreaState.Clear();
             LandOutpostLandingState.Clear();

@@ -5,7 +5,8 @@ namespace F89.UI
     public static class HudTargetMarkerLayout
     {
         public const float SquareSize = 32f;
-        public const float DiamondSize = 20f;
+        public const float DiamondSize = SquareSize * 2f;
+        public const int DiamondOutlineThickness = 3;
         public const float PickPadding = 8f;
 
         public static Vector2 ScreenToGui(Vector2 screenBottomLeft)

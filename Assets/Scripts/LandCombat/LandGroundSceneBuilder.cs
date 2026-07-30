@@ -30,6 +30,7 @@ namespace F89.LandCombat
                 EnsureColdExposure();
                 EnsurePlayerHitbox();
                 BindTerrainFollow();
+                EnsureOutpostSurfaceIfNeeded();
                 return;
             }
 
@@ -43,18 +44,11 @@ namespace F89.LandCombat
                 + new Vector3(LandGameConstants.LandedPlaneOffsetWorldUnits, 0f, 0f);
             BuildPlayer(playerPosition);
             BindTerrainFollow();
-            if (LandBossAreaState.TryGetActiveArea(out var bossArea))
+            if (LandOutpostLandingState.HasActiveOutpost)
             {
-                var save = CharacterSessionState.ActiveSave;
-                var spawnBunker = LandOutpostLandingState.HasActiveOutpost
-                    && LandBossMissionAssignment.IsBunkerRevealedAtOutpost(
-                        save,
-                        LandOutpostLandingState.ActiveOutpostName);
-                SpawnBossArea(planePosition, bossArea, spawnBunker);
-            }
-            else if (LandOutpostLandingState.HasActiveOutpost)
-            {
-                SpawnOutpostBunker(planePosition, LandOutpostLandingState.ActiveOutpostName);
+                SpawnOutpostSurface(
+                    planePosition,
+                    LandOutpostLandingState.ActiveOutpostName);
             }
         }
 
@@ -251,54 +245,116 @@ namespace F89.LandCombat
                 + $"bunker at {bunkerLandRange:0.0} range.");
         }
 
-        private static void SpawnOutpostBunker(Vector3 planeWorldPosition, string outpostName)
+        private static void EnsureOutpostSurfaceIfNeeded()
         {
-            var bunkerPosition = (Vector2)planeWorldPosition + Vector2.up * LandUnits.ToWorld(70f);
-            var bunker = LandBunkerEntrance.Spawn(bunkerPosition);
-            bunker.name = $"{outpostName} Bunker";
-            Debug.Log($"F-89 Land: Landed at {outpostName}; bunker access available, no surface enemies spawned.");
+            if (!LandOutpostLandingState.HasActiveOutpost)
+            {
+                return;
+            }
+
+            var plane = LandLandedPlane.Instance;
+            if (plane == null)
+            {
+                return;
+            }
+
+            var hasBunker = Object.FindAnyObjectByType<LandBunkerEntrance>() != null;
+            var hasGuards = Object.FindAnyObjectByType<LandOutpostGuardMarker>() != null;
+            if (hasBunker && hasGuards)
+            {
+                return;
+            }
+
+            SpawnOutpostSurface(plane.WorldPosition, LandOutpostLandingState.ActiveOutpostName);
         }
 
-        private static void SpawnBossArea(
-            Vector3 planeWorldPosition,
-            LandBossAreaCatalog.Definition area,
-            bool spawnBunker)
+        private static void SpawnOutpostSurface(Vector3 planeWorldPosition, string outpostName)
         {
-            var bearing = area.BearingDegrees * Mathf.Deg2Rad;
-            var bearingDir = new Vector2(Mathf.Cos(bearing), Mathf.Sin(bearing));
+            var save = CharacterSessionState.ActiveSave;
             var plane = (Vector2)planeWorldPosition;
             var player = Object.FindAnyObjectByType<LandPlayerController>();
             var faceTarget = player != null ? player.transform : null;
 
-            var guardRange = (LandGameConstants.EnemySpawnMinRangeLandUnits
-                              + LandGameConstants.EnemySpawnMaxRangeLandUnits) * 0.5f;
-            var spawnGuards = !LandBossEncounter.IsGuardCleared(area.BossNumber);
-            for (var i = 0; spawnGuards && i < area.GuardCount; i++)
+            var bossNumber = 0;
+            LandBossAreaCatalog.Definition area = default;
+            var hasBossArea = LandBossAreaState.TryGetActiveArea(out area);
+            if (hasBossArea)
             {
-                var lateral = (i - (area.GuardCount - 1) * 0.5f) * 2.2f;
-                var distanceOffset = (i % 2 == 0 ? -2f : 2f);
-                var spawn = plane
-                            + bearingDir * LandUnits.ToWorld(guardRange + distanceOffset)
-                            + new Vector2(-bearingDir.y, bearingDir.x) * lateral;
-                var enemyObject = new GameObject($"{area.SurfaceCode}_Guard_{i + 1}");
-                var enemy = enemyObject.AddComponent<LandGroundEnemy>();
-                enemy.Initialize(spawn, area.GuardLevel, faceTarget);
+                bossNumber = area.BossNumber;
+            }
+            else
+            {
+                LandBossMissionAssignment.TryGetBossForOutpost(save, outpostName, out bossNumber);
+                hasBossArea = bossNumber > 0 && LandBossAreaCatalog.TryGet(bossNumber, out area);
+            }
+
+            var spawnBunker = OutpostSurfaceAccess.HasBunkerGroundAccess(outpostName)
+                || LandBossMissionAssignment.IsBunkerRevealedAtOutpost(save, outpostName)
+                || hasBossArea;
+
+            if (hasBossArea)
+            {
+                var guardsSpawned = 0;
+                for (var i = 0; i < area.GuardCount; i++)
+                {
+                    if (!OutpostSurfaceAccess.ShouldSpawnGroundGuard(outpostName, bossNumber, i))
+                    {
+                        continue;
+                    }
+
+                    var spawn = LandOutpostSurfaceLayout.GetGuardPosition(plane, i, area.GuardCount);
+                    var enemyObject = new GameObject($"{area.SurfaceCode}_Guard_{i + 1}");
+                    var enemy = enemyObject.AddComponent<LandGroundEnemy>();
+                    enemy.Initialize(spawn, area.GuardLevel, faceTarget);
+                    var marker = enemyObject.AddComponent<LandOutpostGuardMarker>();
+                    marker.Configure(outpostName, i, bossNumber);
+                    guardsSpawned++;
+                }
+
+                var bunkerPos = LandOutpostSurfaceLayout.BunkerPositionFromPlane(plane);
+                var bunker = LandBunkerEntrance.Spawn(bunkerPos);
+                bunker.name = area.BunkerCode;
+
+                Debug.Log(
+                    $"F-89 Land: {area.SurfaceCode} at {outpostName} — {guardsSpawned}/{area.GuardCount} guards"
+                    + (spawnBunker
+                        ? $"; {area.BunkerCode} bunker available."
+                        : $"; {area.BunkerCode} bunker marked (surface access pending)."));
+                return;
             }
 
             if (spawnBunker)
             {
-                var bunkerRange = (LandGameConstants.BunkerEntranceMinRangeLandUnits
-                                   + LandGameConstants.BunkerEntranceMaxRangeLandUnits) * 0.5f;
-                var bunkerPos = plane + bearingDir * LandUnits.ToWorld(bunkerRange);
-                var bunker = LandBunkerEntrance.Spawn(bunkerPos);
-                bunker.name = area.BunkerCode;
-            }
+                var guardCount = hasBossArea
+                    ? area.GuardCount
+                    : OutpostRunwayDeckState.DefaultRunwayGuardCount;
+                var guardLevel = hasBossArea ? area.GuardLevel : 1;
+                var assignedBoss = hasBossArea ? bossNumber : 0;
+                var guardsSpawned = 0;
 
-            Debug.Log(
-                $"F-89 Land: {area.SurfaceCode} ready — {(spawnGuards ? area.GuardCount : 0)} UR level {area.GuardLevel} guards"
-                + (spawnBunker
-                    ? $"; {area.BunkerCode} bunker available."
-                    : "; bunker locked until mission launch."));
+                for (var i = 0; i < guardCount; i++)
+                {
+                    if (!OutpostSurfaceAccess.ShouldSpawnGroundGuard(outpostName, assignedBoss, i))
+                    {
+                        continue;
+                    }
+
+                    var spawn = LandOutpostSurfaceLayout.GetGuardPosition(plane, i, guardCount);
+                    var enemyObject = new GameObject($"RunwayGuard_{i + 1}");
+                    var enemy = enemyObject.AddComponent<LandGroundEnemy>();
+                    enemy.Initialize(spawn, guardLevel, faceTarget);
+                    var marker = enemyObject.AddComponent<LandOutpostGuardMarker>();
+                    marker.Configure(outpostName, i, assignedBoss);
+                    guardsSpawned++;
+                }
+
+                var bunkerPosition = LandOutpostSurfaceLayout.BunkerPositionFromPlane(plane);
+                var bunker = LandBunkerEntrance.Spawn(bunkerPosition);
+                bunker.name = hasBossArea ? area.BunkerCode : $"{outpostName} Bunker";
+                Debug.Log(
+                    $"F-89 Land: {outpostName} runway surface — {guardsSpawned}/{guardCount} guards"
+                    + "; bunker access available.");
+            }
         }
     }
 }

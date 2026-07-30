@@ -13,7 +13,8 @@ namespace F89.UI
         {
             Root = 0,
             Settings = 1,
-            MainMenuConfirm = 2
+            MainMenuConfirm = 2,
+            Memorial = 3
         }
 
         private const float DialogWidth = 420f;
@@ -50,7 +51,7 @@ namespace F89.UI
             currentView = PauseView.Root;
             settingsView = SettingsMenuUi.View.Root;
             lastEscapePauseFrame = -1;
-            GameKeyBindings.CancelListening();
+            GameKeyBindings.ClearRebindState();
             AudioListener.pause = false;
         }
 
@@ -168,6 +169,9 @@ namespace F89.UI
                 case PauseView.MainMenuConfirm:
                     DrawMainMenuConfirm();
                     break;
+                case PauseView.Memorial:
+                    DrawMemorialWall();
+                    break;
                 default:
                     DrawRootMenu();
                     break;
@@ -230,9 +234,15 @@ namespace F89.UI
             switch (currentView)
             {
                 case PauseView.Settings:
+                    if (GameKeyBindings.HasPendingConflict)
+                    {
+                        GameKeyBindings.CancelPendingConflict();
+                        break;
+                    }
+
                     if (GameKeyBindings.IsListening)
                     {
-                        GameKeyBindings.CancelListening();
+                        GameKeyBindings.ClearRebindState();
                         break;
                     }
 
@@ -246,6 +256,9 @@ namespace F89.UI
                     settingsView = SettingsMenuUi.View.Root;
                     break;
                 case PauseView.MainMenuConfirm:
+                    currentView = PauseView.Root;
+                    break;
+                case PauseView.Memorial:
                     currentView = PauseView.Root;
                     break;
                 default:
@@ -282,20 +295,14 @@ namespace F89.UI
             IsPaused = false;
             currentView = PauseView.Root;
             settingsView = SettingsMenuUi.View.Root;
-            GameKeyBindings.CancelListening();
+            GameKeyBindings.ClearRebindState();
             AudioListener.pause = false;
             Time.timeScale = timeScaleBeforePause > 0f ? timeScaleBeforePause : 1f;
         }
 
         private static void CaptureTimeScaleBeforePause()
         {
-            var autopilot = AutopilotController.Instance;
-            if (autopilot != null && autopilot.IsFlying)
-            {
-                timeScaleBeforePause = autopilot.TimeWarpScale;
-                return;
-            }
-
+            // Autopilot warp no longer changes Time.timeScale.
             timeScaleBeforePause = Time.timeScale > 0f ? Time.timeScale : 1f;
         }
 
@@ -308,7 +315,7 @@ namespace F89.UI
 
         private void DrawRootMenu()
         {
-            var buttonCount = 7;
+            var buttonCount = 8;
             var dialogHeight = GetDialogHeight(buttonCount, includeMessage: false);
             var dialogRect = GetDialogRect(dialogHeight);
             DrawDialogFrame(dialogRect, "Paused");
@@ -354,10 +361,21 @@ namespace F89.UI
             }
 
             buttonY += ButtonHeight + ButtonSpacing;
+            if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "MEMORIAL WALL", fontSize: ButtonFontSize))
+            {
+                currentView = PauseView.Memorial;
+            }
+
+            buttonY += ButtonHeight + ButtonSpacing;
             if (StartPageMenuStyles.DrawMenuButton(new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight), "EXIT GAME", fontSize: ButtonFontSize))
             {
                 ExitGame();
             }
+        }
+
+        private void DrawMemorialWall()
+        {
+            MemorialWallUi.Draw(() => currentView = PauseView.Root);
         }
 
         private void DrawSettingsMenu()

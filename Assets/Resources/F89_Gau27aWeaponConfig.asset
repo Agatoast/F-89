@@ -13,7 +13,9 @@ MonoBehaviour:
   m_Name: F89_Gau27aWeaponConfig
   m_EditorClassIdentifier: Assembly-CSharp::F89.Weapons.Gau27aWeaponConfig
   maxRangeMiles: 2
-  minCrosshairMiles: 0.5
+  ogiveMaxRangeMiles: 2.5
+  minCrosshairMiles: 0.1
+  ogiveHalfAngleDegrees: 15
   roundsPerSecond: 10
   roundSpeedMilesPerSecond: 0.66
   crosshairDotRadiusTics: 0.1

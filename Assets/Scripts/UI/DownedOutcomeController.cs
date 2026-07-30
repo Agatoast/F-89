@@ -1,4 +1,5 @@
 using F89.Core;
+using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -87,9 +88,17 @@ namespace F89.UI
 
         private static void FinishToMainMenu()
         {
+            var outcome = LandDownedOutcomeState.Outcome;
+            var save = CharacterSessionState.ActiveSave;
+            var isKia = outcome == LandDownedOutcome.Death || outcome == LandDownedOutcome.FrozenToDeath;
+            if (save != null && isKia)
+            {
+                CharacterSaveRepository.MarkKilledInAction(save);
+            }
+
             LandDownedOutcomeState.Clear();
             Time.timeScale = 1f;
-            SceneManager.LoadScene(GameScenes.MainMenu);
+            SceneManager.LoadScene(isKia ? GameScenes.SelectionPage : GameScenes.MainMenu);
         }
     }
 }

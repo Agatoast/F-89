@@ -192,14 +192,16 @@ namespace F89.UI
             var gap = UiFitCanvas.Px(16f);
             var y = UiFitCanvas.Rect.yMax - buttonHeight - margin;
 
-            if (CharacterLoadoutNavState.EnteredFromMissionBrief)
+            if (CharacterLoadoutNavState.EnteredFromMissionBrief
+                || CharacterLoadoutNavState.EnteredFromFriendlyOutpostTakeoff)
             {
                 var totalWidth = buttonWidth * 2f + gap;
                 var startX = UiFitCanvas.Rect.xMax - totalWidth - margin;
                 var bailRect = new Rect(startX, y, buttonWidth, buttonHeight);
                 var aircraftRect = new Rect(startX + buttonWidth + gap, y, buttonWidth, buttonHeight);
 
-                if (StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15)
+                if (!CharacterLoadoutNavState.EnteredFromFriendlyOutpostTakeoff
+                    && StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15)
                     && !showMissingEquipmentDialog)
                 {
                     showBailOutConfirm = true;

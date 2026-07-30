@@ -372,13 +372,11 @@ namespace F89.LandCombat
 
         private static void DrawMinimapBunker(Rect mapInner, Vector3 center, float viewHalf)
         {
-            var bunker = Object.FindAnyObjectByType<LandBunkerEntrance>();
-            if (bunker == null)
+            if (!TryGetMinimapBunkerPosition(out var bunkerPos))
             {
                 return;
             }
 
-            var bunkerPos = bunker.WorldPosition;
             var delta = bunkerPos - (Vector2)center;
             var landRange = LandUnits.ToLand(delta.magnitude);
             if (landRange > LandGameConstants.BunkerMinimapIndicatorMaxRangeLandUnits)
@@ -398,6 +396,35 @@ namespace F89.LandCombat
             }
 
             DrawMinimapEdgeArrow(mapInner, localX, localY, viewHalf, bunkerColor);
+        }
+
+        private static bool TryGetMinimapBunkerPosition(out Vector2 bunkerPos)
+        {
+            var bunker = Object.FindAnyObjectByType<LandBunkerEntrance>();
+            if (bunker != null)
+            {
+                bunkerPos = bunker.WorldPosition;
+                return true;
+            }
+
+            var plane = LandLandedPlane.Instance;
+            if (plane == null)
+            {
+                bunkerPos = default;
+                return false;
+            }
+
+            var hasSurfaceMission = LandOutpostLandingState.HasActiveOutpost
+                || LandBossAreaState.HasActiveArea
+                || Object.FindAnyObjectByType<LandOutpostGuardMarker>() != null;
+            if (!hasSurfaceMission)
+            {
+                bunkerPos = default;
+                return false;
+            }
+
+            bunkerPos = LandOutpostSurfaceLayout.BunkerPositionFromPlane(plane.WorldPosition);
+            return true;
         }
 
         private static void DrawMinimapDotAtCenter(Rect mapInner, Color color, float size)

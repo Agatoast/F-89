@@ -1,3 +1,4 @@
+using F89.Audio;
 using F89.Controls;
 using F89.Core;
 using F89.Flight;
@@ -78,7 +79,7 @@ namespace F89.Weapons
                 SelectedWeapon.Agm88jSiaw => agm88jConfig != null ? agm88jConfig.rangeMiles : 0f,
                 SelectedWeapon.Agm114Hellfire => agm114Config != null ? agm114Config.rangeMiles : 0f,
                 SelectedWeapon.Gbu12Paveway => gbu12Config != null ? gbu12Config.rangeMiles : 0f,
-                SelectedWeapon.Gau27a => gau27aConfig != null ? gau27aConfig.maxRangeMiles : 0f,
+                SelectedWeapon.Gau27a => gau27aConfig != null ? gau27aConfig.ogiveMaxRangeMiles : 0f,
                 _ => 0f
             };
         }
@@ -231,7 +232,13 @@ namespace F89.Weapons
             var input = inputSource.Current;
             var rawAimScreen = input.aimScreenPosition;
             var aimScreen = GetClampedAimScreenPosition();
+            lockController.SetClickSelectionRules(IsClickSelectCandidate, GetClickSelectPriority);
             HandleWeaponSelect(input);
+
+            if (ActiveWeapon != SelectedWeapon.Gau27a)
+            {
+                GetComponent<Gau27FireSound>()?.NotifyFireReleased();
+            }
 
             if (ActiveWeapon == SelectedWeapon.Gau27a && gau27aGun != null)
             {
@@ -244,10 +251,10 @@ namespace F89.Weapons
 
                 lockController.UpdateLockProgress(false);
                 gau27aGun.UpdateCrosshairFromMouse(rawAimScreen);
+                HandleTargetSelectionClick(input, rawAimScreen);
                 gau27aGun.TryFire(
                     aircraft.GetWeaponAccuracyMultiplier(),
                     input.fireHeld || input.firePressed);
-                HandleTargetSelectionClick(input, rawAimScreen);
                 return;
             }
 
@@ -259,6 +266,7 @@ namespace F89.Weapons
             else
             {
                 lockController.SetActiveWeapon(null);
+                lockController.UpdateLockProgress(false);
             }
 
             if (input.cycleTargetPressed)
@@ -266,16 +274,12 @@ namespace F89.Weapons
                 TryCycleTarget();
             }
 
-            HandleTargetSelectionClick(input, rawAimScreen, lockWeapon != null ? FireActiveWeapon : null, aimScreen);
-
             if (lockWeapon != null)
             {
                 lockController.UpdateLockProgress(true);
             }
-            else
-            {
-                lockController.UpdateLockProgress(false);
-            }
+
+            HandleTargetSelectionClick(input, rawAimScreen, lockWeapon != null ? FireActiveWeapon : null, aimScreen);
         }
 
         private void HandleTargetSelectionClick(
@@ -284,38 +288,53 @@ namespace F89.Weapons
             System.Action<Vector2> fireAction = null,
             Vector2 aimScreen = default)
         {
-            if (!input.firePressed)
+            var click = Input.GetMouseButtonDown(0);
+            if (!click && !input.firePressed)
             {
                 return;
             }
 
-            var radar = ResolveRadarOverlay();
-            if (radar != null && radar.TrySelectBlipAtScreenPosition(rawAimScreen))
+            if (click)
             {
-                return;
+                if (lockController.TrySelectTargetOnClick(rawAimScreen))
+                {
+                    return;
+                }
+
+                var radar = ResolveRadarOverlay();
+                if (radar != null && radar.TrySelectBlipAtScreenPosition(rawAimScreen))
+                {
+                    return;
+                }
             }
 
-            if (lockController.TrySelectTargetOnClick(rawAimScreen))
+            TryFireIfReady(fireAction, aimScreen);
+        }
+
+        private bool TryFireIfReady(System.Action<Vector2> fireAction, Vector2 aimScreen)
+        {
+            if (fireAction == null)
             {
-                return;
+                return false;
             }
 
             if (lockController.ShouldBlockFireForSelection())
             {
-                return;
+                return false;
             }
 
             if (lockController.ShouldBlockFireWithoutSelection())
             {
-                return;
+                return false;
             }
 
             if (lockController.ShouldBlockFireWithoutLock())
             {
-                return;
+                return false;
             }
 
-            fireAction?.Invoke(aimScreen);
+            fireAction.Invoke(aimScreen);
+            return true;
         }
 
         private PlaneRadarOverlay ResolveRadarOverlay()
@@ -354,7 +373,73 @@ namespace F89.Weapons
                 rangeMiles,
                 worldMap,
                 profile.ticSizeWorldUnits,
-                IsCycleCandidate);
+                IsCycleCandidate,
+                CompareCycleCandidates);
+        }
+
+        private int CompareCycleCandidates(LockableTarget a, LockableTarget b)
+        {
+            if (a == null || b == null)
+            {
+                return 0;
+            }
+
+            var priority = GetCyclePriority(a).CompareTo(GetCyclePriority(b));
+            if (priority != 0)
+            {
+                return priority;
+            }
+
+            if (aircraft == null)
+            {
+                return 0;
+            }
+
+            var observer = aircraft.transform.position;
+            var distanceA = HorizontalDistanceMeters(observer, a.transform.position);
+            var distanceB = HorizontalDistanceMeters(observer, b.transform.position);
+            return distanceA.CompareTo(distanceB);
+        }
+
+        private static float HorizontalDistanceMeters(Vector3 observer, Vector3 targetPosition)
+        {
+            var delta = targetPosition - observer;
+            delta.y = 0f;
+            return delta.magnitude;
+        }
+
+        private int GetCyclePriority(LockableTarget target)
+        {
+            if (target == null)
+            {
+                return int.MaxValue;
+            }
+
+            switch (ActiveWeapon)
+            {
+                case SelectedWeapon.Agm88jSiaw:
+                case SelectedWeapon.Agm114Hellfire:
+                    if (target.IsGroundVehicle)
+                    {
+                        return 0;
+                    }
+
+                    if (target.IsInfantry)
+                    {
+                        return 1;
+                    }
+
+                    return 2;
+                case SelectedWeapon.Gbu12Paveway:
+                    if (target.IsBuilding)
+                    {
+                        return 0;
+                    }
+
+                    return 1;
+                default:
+                    return 0;
+            }
         }
 
         private void AlignGauCrosshairToSelectedTarget()
@@ -375,15 +460,10 @@ namespace F89.Weapons
                 return;
             }
 
-            var distanceMiles = CombatThreatRange.DistanceMiles(
-                aircraft.transform.position,
-                lockController.SelectedTarget.transform.position,
-                worldMap,
-                profile.ticSizeWorldUnits);
-            gau27aGun.SetCrosshairDistanceMiles(distanceMiles);
+            gau27aGun.SetCrosshairToWorldPoint(lockController.SelectedTarget.transform.position);
         }
 
-        private bool IsCycleCandidate(LockableTarget target)
+        private bool IsClickSelectCandidate(LockableTarget target)
         {
             if (target == null
                 || !target.IsAlive
@@ -393,10 +473,113 @@ namespace F89.Weapons
                 return false;
             }
 
+            if (target.IsFriendly)
+            {
+                return target.RespondsWithIff;
+            }
+
+            if (target.IsNeutral)
+            {
+                return false;
+            }
+
+            var outpostBuilding = target.GetComponent<OutpostBuilding>();
+            if (outpostBuilding != null
+                && !OutpostPrimaryObjective.IsMissionHostileBuilding(
+                    outpostBuilding.BuildingType,
+                    target.TargetLabel))
+            {
+                return false;
+            }
+
+            var baseSite = target.GetComponent<AntarcticaBase>();
+            if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Carrier)
+            {
+                return false;
+            }
+
+            switch (ActiveWeapon)
+            {
+                case SelectedWeapon.Aim9z:
+                    return target.IsAirTarget;
+                case SelectedWeapon.Agm88jSiaw:
+                case SelectedWeapon.Agm114Hellfire:
+                    return target.IsGroundVehicle
+                        || target.IsInfantry
+                        || target.IsBuilding
+                        || target.GetComponent<OutpostBuilding>() != null;
+                case SelectedWeapon.Gbu12Paveway:
+                    return target.TargetKind == LockableTargetKind.Ground;
+                case SelectedWeapon.Gau27a:
+                    return DirectFireTargetRules.CanBeDamagedByGau27(target);
+                default:
+                    return true;
+            }
+        }
+
+        private int GetClickSelectPriority(LockableTarget target)
+        {
+            if (target == null)
+            {
+                return int.MaxValue;
+            }
+
+            switch (ActiveWeapon)
+            {
+                case SelectedWeapon.Agm88jSiaw:
+                case SelectedWeapon.Agm114Hellfire:
+                    if (target.IsGroundVehicle)
+                    {
+                        return 0;
+                    }
+
+                    if (target.IsInfantry)
+                    {
+                        return 1;
+                    }
+
+                    if (target.IsBuilding || target.GetComponent<OutpostBuilding>() != null)
+                    {
+                        return 2;
+                    }
+
+                    return 3;
+                case SelectedWeapon.Gbu12Paveway:
+                    if (target.IsBuilding || target.GetComponent<OutpostBuilding>() != null)
+                    {
+                        return 0;
+                    }
+
+                    return 1;
+                default:
+                    return 0;
+            }
+        }
+
+        private bool IsCycleCandidate(LockableTarget target)
+        {
+            if (target == null
+                || !target.IsAlive
+                || target.IsFlareDecoy
+                || target.IsPlayerAircraft
+                || target.IsFriendly
+                || target.IsNeutral)
+            {
+                return false;
+            }
+
+            var outpostBuilding = target.GetComponent<OutpostBuilding>();
+            if (outpostBuilding != null
+                && !OutpostPrimaryObjective.IsMissionHostileBuilding(
+                    outpostBuilding.BuildingType,
+                    target.TargetLabel))
+            {
+                return false;
+            }
+
             var baseSite = target.GetComponent<AntarcticaBase>();
             if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Land)
             {
-                // Outposts are always Tab-selectable when in range, regardless of weapon.
                 return baseSite.IsActive && !baseSite.IsDestroyed;
             }
 
@@ -405,34 +588,26 @@ namespace F89.Weapons
                 return false;
             }
 
-            // Non-outpost contacts stay limited to short-radar range.
             if (!IsWithinShortRadarRange(target))
             {
                 return false;
             }
 
-            if (ActiveWeapon == SelectedWeapon.None)
+            switch (ActiveWeapon)
             {
-                return !target.IsFriendly;
+                case SelectedWeapon.Aim9z:
+                    return target.IsAirTarget;
+                case SelectedWeapon.Agm88jSiaw:
+                case SelectedWeapon.Agm114Hellfire:
+                    return target.TargetKind == LockableTargetKind.Ground
+                        && (target.IsGroundVehicle || target.IsInfantry);
+                case SelectedWeapon.Gbu12Paveway:
+                    return target.TargetKind == LockableTargetKind.Ground;
+                case SelectedWeapon.Gau27a:
+                    return DirectFireTargetRules.CanBeDamagedByGau27(target);
+                default:
+                    return true;
             }
-
-            if (!ShouldShowHudMarkerFor(target))
-            {
-                return false;
-            }
-
-            if (ActiveWeapon == SelectedWeapon.Gau27a)
-            {
-                return DirectFireTargetRules.CanBeDamagedByGau27(target);
-            }
-
-            if (target.IsFriendly)
-            {
-                return false;
-            }
-
-            var lockWeapon = GetActiveLockWeapon();
-            return lockWeapon != null && target.MatchesWeapon(lockWeapon.ValidTargetKind);
         }
 
         private bool IsWithinShortRadarRange(LockableTarget target)
@@ -623,6 +798,7 @@ namespace F89.Weapons
                 launchVelocity);
 
             remaining--;
+            MissileFireSound.Play(this);
             lockController.ClearLockAfterFire();
             Debug.Log(
                 $"{config.WeaponName} fired. Remaining: {remaining}. {(lockedShot ? "LOCKED" : "UNLOCKED")}. Accuracy: {accuracy:P0}");
@@ -659,6 +835,7 @@ namespace F89.Weapons
                 launchVelocity);
 
             gbu12Remaining--;
+            MissileFireSound.Play(this);
             lockController.ClearLockAfterFire();
             var targetLabel = lockedShot ? lockedTarget.TargetLabel : "unguided";
             Debug.Log(

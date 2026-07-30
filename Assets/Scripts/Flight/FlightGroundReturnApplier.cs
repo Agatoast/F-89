@@ -11,7 +11,8 @@ namespace F89.Flight
     {
         private void Start()
         {
-            if (AircraftLandingController.IsTakeoffActive)
+            if (AircraftLandingController.IsTakeoffActive
+                || AircraftLandingController.IsParkedAtRunway)
             {
                 return;
             }

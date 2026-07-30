@@ -1212,7 +1212,7 @@ namespace F89.UI
         {
             if (LandLoadoutSlots.IsValidItem(item))
             {
-                var fill = LandItemRarityColors.GetTile(item.Rarity);
+                var fill = LandItemRarityColors.GetTile(item);
                 var border = Color.Lerp(fill, Color.black, 0.28f);
                 border.a = 0.95f;
                 DrawFilledBox(cell, fill, border, selected ? 3f : 1.5f);

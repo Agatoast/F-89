@@ -531,6 +531,8 @@ namespace F89.UI
             {
                 speedDecreaseLabelStyle.font = HudStyleFactory.ArialFont;
                 speedDecreaseLabelStyle.fontStyle = FontStyle.Bold;
+                speedDecreaseLabelStyle.alignment = TextAnchor.MiddleLeft;
+                speedDecreaseLabelStyle.wordWrap = false;
                 instructionStyle.font = HudStyleFactory.ArialFont;
                 instructionStyle.fontStyle = FontStyle.Bold;
                 instructionStyle.alignment = TextAnchor.UpperCenter;
@@ -545,8 +547,9 @@ namespace F89.UI
             speedDecreaseLabelStyle = HudStyleFactory.CreateLabel(
                 18,
                 FontStyle.Bold,
-                TextAnchor.LowerCenter,
+                TextAnchor.MiddleLeft,
                 HudYellow,
+                wordWrap: false,
                 font: HudStyleFactory.ArialFont);
             instructionStyle = HudStyleFactory.CreateLabel(
                 18,
@@ -585,7 +588,7 @@ namespace F89.UI
             var scale = mockupRect.height > 1f
                 ? mockupRect.height / AircraftLoadoutLayout.MockupReferenceHeightPx
                 : UiFitCanvas.Scale;
-            scale = Mathf.Max(0.5f, scale);
+            scale = Mathf.Clamp(scale, 0.5f, 1f);
 
             if (instructionStyle != null)
             {
@@ -600,6 +603,7 @@ namespace F89.UI
             if (speedDecreaseLabelStyle != null)
             {
                 speedDecreaseLabelStyle.fontSize = Mathf.Max(10, Mathf.RoundToInt(18f * scale));
+                speedDecreaseLabelStyle.wordWrap = false;
             }
 
             if (loadoutValueStyle != null)
@@ -1011,8 +1015,8 @@ namespace F89.UI
                 + currentValueHeight;
             var threeLetterWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("MAX")).x;
             var twoLetterWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("MA")).x;
-            // 110 mockup-px down from tail tip — locked to plane_loadout art.
-            var y = center.y - totalHeight * 0.5f + MockupPxToScreenY(110f);
+            // 85 mockup-px down from tail tip — locked to plane_loadout art.
+            var y = center.y - totalHeight * 0.5f + MockupPxToScreenY(85f);
             var x = center.x - lineWidth * 0.5f + threeLetterWidth - twoLetterWidth;
             var currentBlockY = y + maxLabelHeight + maxValueHeight + blankLineHeight;
 
@@ -1047,26 +1051,33 @@ namespace F89.UI
 
         private void DrawSpeedDecrease()
         {
+            if (mockupTexture == null)
+            {
+                return;
+            }
+
             var layout = GetLoadoutWeightParagraphLayout();
-            var currentLabelWidth = weightParagraphLabelStyle.CalcSize(new GUIContent("CURRENT LOADOUT")).x;
-            var currentLabelRight = layout.CurrentLabelRect.center.x + currentLabelWidth * 0.5f;
-            var payloadLeft = currentLabelRight + MockupPxToScreenX(40f);
+
+            var maxLabelContent = new GUIContent("MAXIMUM LOADOUT");
+            var maxLabelTextWidth = weightParagraphLabelStyle.CalcSize(maxLabelContent).x;
+            var payloadLeft = layout.MaximumLabelRect.center.x
+                + maxLabelTextWidth * 0.5f
+                + MockupPxToScreenX(24f);
 
             var labelContent = new GUIContent("PAYLOAD EFFECT ON MAXIMUM SPEED");
-            var labelSize = speedDecreaseLabelStyle.CalcSize(labelContent);
+            var labelWidth = speedDecreaseLabelStyle.CalcSize(labelContent).x;
             var labelRect = new Rect(
                 payloadLeft,
-                layout.CurrentLabelRect.y + (layout.CurrentLabelRect.height - labelSize.y) * 0.5f,
-                labelSize.x + 4f,
-                Mathf.Max(labelSize.y, layout.CurrentLabelRect.height));
+                layout.MaximumLabelRect.y,
+                labelWidth,
+                layout.MaximumLabelRect.height);
 
             var percentText = $"-{AircraftLoadoutState.ComputeSpeedDecreasePercent()}%";
-            var percentSize = loadoutValueStyle.CalcSize(new GUIContent(percentText));
             var valueRect = new Rect(
-                labelRect.x + (labelRect.width - percentSize.x) * 0.5f,
-                layout.CurrentValueRect.y + (layout.CurrentValueRect.height - percentSize.y) * 0.5f,
-                percentSize.x + 4f,
-                Mathf.Max(percentSize.y, layout.CurrentValueRect.height));
+                payloadLeft,
+                layout.MaximumValueRect.y,
+                labelWidth,
+                layout.MaximumValueRect.height);
 
             var previousLabelAlign = speedDecreaseLabelStyle.alignment;
             var previousValueAlign = loadoutValueStyle.alignment;
@@ -1089,15 +1100,23 @@ namespace F89.UI
                 mockupRect,
                 mockupTexture.width,
                 mockupTexture.height);
-            GUI.Label(
-                rect,
+            const string instructions =
                 "DRAG WEAPON TO HARDPOINT\n\n" +
                 "HARDPOINT ON OTHER WING WILL\n" +
                 "HAVE IDENTICAL WEAPON ADDED\n\n" +
                 "USE ARROWS ON GUN TO\n" +
                 "INCREASE GAU-27A ROUNDS\n" +
-                "MAXIMUM 3,000 ROUNDS",
-                instructionStyle);
+                "MAXIMUM 3,000 ROUNDS";
+
+            var fontSize = instructionStyle.fontSize;
+            while (fontSize > 10
+                   && instructionStyle.CalcHeight(new GUIContent(instructions), rect.width) > rect.height)
+            {
+                fontSize--;
+                instructionStyle.fontSize = fontSize;
+            }
+
+            GUI.Label(rect, instructions, instructionStyle);
         }
 
         private void DrawActionButtons()
@@ -1343,14 +1362,42 @@ namespace F89.UI
         private static void StartMission()
         {
             AircraftLoadoutState.MarkConfigured();
-            if (!CarrierResupplyState.IsResupplyFromCarrier)
-            {
-                LandBossMissionAssignment.MarkAssignedMissionRun(CharacterSessionState.ActiveSave);
-            }
-
+            var resupplyFromCarrier = CarrierResupplyState.IsResupplyFromCarrier;
+            var fromFriendlyOutpost = FriendlyOutpostTakeoffState.HasPending;
             CarrierResupplyState.Clear();
             Time.timeScale = 1f;
-            FlightMissionLaunchState.BeginCarrierLaunch();
+
+            if (resupplyFromCarrier || fromFriendlyOutpost)
+            {
+                LandBossEncounter.ResetUndefeatedBossHealthOnRearm();
+            }
+
+            if (FriendlyOutpostTakeoffState.TryConsume(out var takeoffOutpost))
+            {
+                FlightMissionLaunchState.BeginOutpostLaunch(takeoffOutpost, vtolTakeoff: true);
+                SceneManager.LoadScene(GameScenes.FlightTest);
+                return;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            if (!resupplyFromCarrier)
+            {
+                LandBossMissionAssignment.MarkAssignedMissionRun(save);
+            }
+
+            if (resupplyFromCarrier)
+            {
+                FlightMissionLaunchState.BeginCarrierLaunch();
+            }
+            else if (save != null && !string.IsNullOrWhiteSpace(save.MissionLaunchOutpostName))
+            {
+                FlightMissionLaunchState.BeginOutpostLaunch(save.MissionLaunchOutpostName);
+            }
+            else
+            {
+                FlightMissionLaunchState.BeginCarrierLaunch();
+            }
+
             SceneManager.LoadScene(GameScenes.FlightTest);
         }
 

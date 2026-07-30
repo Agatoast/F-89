@@ -31,6 +31,7 @@ namespace F89.UI
             StartPageMenuStyles.DrawSaveAntarcticaLogo(saveAntarcticaLogoTexture);
             DrawButtons();
             DrawTempFightReichButton();
+            DrawDevResetMapButton();
         }
 
         private static void DrawButtons()
@@ -45,6 +46,24 @@ namespace F89.UI
 
                 HandleButton(ButtonLabels[i]);
             }
+        }
+
+        /// <summary>Temporary land-combat jump; remove when land entry is fully wired.</summary>
+        private static void DrawDevResetMapButton()
+        {
+            var width = UiFitCanvas.Px(220f);
+            var height = UiFitCanvas.Px(44f);
+            var x = UiFitCanvas.Rect.x + UiFitCanvas.Px(18f);
+            var y = UiFitCanvas.Rect.y + UiFitCanvas.Px(18f);
+            var resetRect = new Rect(x, y, width, height);
+            if (!StartPageMenuStyles.DrawMenuButton(resetRect, "RESET MAP", fontSize: 22))
+            {
+                return;
+            }
+
+            EnsureActiveSaveForDevJump();
+            CharacterGearSession.Bind(CharacterSessionState.ActiveSave, forceReload: true);
+            CampaignWorldReset.ResetMapForFreshPlay();
         }
 
         /// <summary>Temporary land-combat jump; remove when land entry is fully wired.</summary>
@@ -85,7 +104,7 @@ namespace F89.UI
             {
                 if (LandCombatTestCheats.ResetAllBossProgressOnDevEntry)
                 {
-                    LandBossEncounter.ResetAllBossesForTest();
+                    CampaignWorldReset.ResetMapForFreshPlay();
                 }
 
                 LandBossAreaState.BeginArea(bossNumber);

@@ -23,6 +23,7 @@ namespace F89.Core
 
             CharacterSaveRepository.EnsureUrKillArrays(save);
             var index = LevelToIndex(definition.vehicleLevel);
+            var points = PilotScoreService.GetDestroyPointValue(definition);
             if (definition.isTroop)
             {
                 save.UrTroopKillsByLevel[index]++;
@@ -34,6 +35,26 @@ namespace F89.Core
                 save.EnemyVehiclesKilled = Sum(save.UrVehicleKillsByLevel);
             }
 
+            MissionScoreState.AddPoints(points);
+            CharacterSaveRepository.ReconcileTotalScore(save);
+            CharacterSaveRepository.WriteWorldProgress(save);
+        }
+
+        public static void RegisterUrTroopKillByLevel(int level)
+        {
+            if (CharacterSessionState.ActiveSave == null)
+            {
+                return;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            CharacterSaveRepository.EnsureUrKillArrays(save);
+            var index = LevelToIndex(level);
+            var points = PilotScoreService.GetUrTroopPointValue(level);
+            save.UrTroopKillsByLevel[index]++;
+            save.EnemyTroopsKilled = Sum(save.UrTroopKillsByLevel);
+            MissionScoreState.AddPoints(points);
+            CharacterSaveRepository.ReconcileTotalScore(save);
             CharacterSaveRepository.WriteWorldProgress(save);
         }
 

@@ -115,9 +115,9 @@ namespace F89.Weapons
                 return;
             }
 
-            if (!IsVehicle(target))
+            if (!IsVehicle(target) && !IsTroop(target))
             {
-                Debug.Log($"AGM-114 Hellfire hit {target.TargetLabel} but only damages vehicles.");
+                Debug.Log($"AGM-114 Hellfire hit {target.TargetLabel} but only damages vehicles and troops.");
                 return;
             }
 
@@ -130,7 +130,7 @@ namespace F89.Weapons
             float ticSizeWorldUnits,
             bool wasLockedShot)
         {
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
             var hits = 0;
             for (var i = 0; i < targets.Length; i++)
             {
@@ -170,7 +170,7 @@ namespace F89.Weapons
 
         public static void ApplyGbu12Detonation(Vector3 impactWorld, float ticSizeWorldUnits, bool wasLockedShot)
         {
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
             var lockableHits = 0;
             var buildingHits = 0;
             for (var i = 0; i < targets.Length; i++)
@@ -266,7 +266,7 @@ namespace F89.Weapons
         {
             if (config is Agm114HellfireWeaponConfig)
             {
-                var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+                var targets = CombatThreatRange.GetCachedLockableTargets();
                 for (var i = 0; i < targets.Length; i++)
                 {
                     var target = targets[i];
@@ -293,7 +293,7 @@ namespace F89.Weapons
 
             if (config is Aim9zWeaponConfig aim9z)
             {
-                var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+                var targets = CombatThreatRange.GetCachedLockableTargets();
                 for (var i = 0; i < targets.Length; i++)
                 {
                     var target = targets[i];

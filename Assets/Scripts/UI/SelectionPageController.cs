@@ -215,7 +215,7 @@ namespace F89.UI
             var pictureRect = SelectionPageLayout.GetDossierPictureRect();
             var portraitTexture = save != null ? CharacterPortraitService.GetPortraitTexture(save) : null;
             SelectionPageStyles.DrawDossierPortrait(pictureRect, portraitTexture, portraitFrameTexture);
-            if (save != null && SelectionPageStyles.DrawInvisibleButton(pictureRect))
+            if (save != null && !save.IsKilledInAction && SelectionPageStyles.DrawInvisibleButton(pictureRect))
             {
                 OpenSelectPortraitDialog();
             }
@@ -297,13 +297,15 @@ namespace F89.UI
 
         private void DrawSelectButton()
         {
-            if (FindSelectedSave() == null)
+            var save = FindSelectedSave();
+            if (save == null)
             {
                 return;
             }
 
             var rect = SelectionPageLayout.GetSelectButtonRect();
-            if (StartPageMenuStyles.DrawMenuButton(rect, "SELECT CHARACTER", panelAlpha: 1f))
+            var label = save.IsKilledInAction ? "VIEW CHARACTER" : "SELECT CHARACTER";
+            if (StartPageMenuStyles.DrawMenuButton(rect, label, panelAlpha: 1f))
             {
                 OpenSelectedCharacterPage();
             }
@@ -320,7 +322,11 @@ namespace F89.UI
             CharacterSessionState.ActiveSave = save;
             CharacterGearSession.Bind(save, forceReload: true);
             CharacterSaveRepository.SetLastSelectedSaveId(save.Id);
-            CharacterSaveRepository.TouchLastPlayed(save);
+            if (!save.IsKilledInAction)
+            {
+                CharacterSaveRepository.TouchLastPlayed(save);
+            }
+
             SceneManager.LoadScene(GameScenes.CharacterPage);
         }
 

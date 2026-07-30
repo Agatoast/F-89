@@ -55,7 +55,7 @@ namespace F89.LandCombat
 
             if (paintRarityFill)
             {
-                GUI.color = LandItemRarityColors.GetTile(item.Rarity);
+                GUI.color = LandItemRarityColors.GetTile(item);
                 GUI.DrawTexture(cell, Texture2D.whiteTexture);
                 GUI.color = Color.white;
             }
@@ -159,7 +159,7 @@ namespace F89.LandCombat
         {
             if (paintRarityFill)
             {
-                GUI.color = LandItemRarityColors.GetTile(item.Rarity);
+                GUI.color = LandItemRarityColors.GetTile(item);
                 GUI.DrawTexture(cell, Texture2D.whiteTexture);
                 GUI.color = Color.white;
             }

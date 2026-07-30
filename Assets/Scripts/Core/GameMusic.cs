@@ -40,6 +40,33 @@ namespace F89.Core
             }
         }
 
+        public static void PauseForFlight()
+        {
+            EnsureSource();
+            if (musicSource != null && musicSource.isPlaying)
+            {
+                musicSource.Pause();
+            }
+        }
+
+        public static void ResumeFromFlight()
+        {
+            GameSettings.Load();
+            EnsureSource();
+            ApplyVolume();
+            ApplyMuteState();
+
+            if (musicSource == null || musicSource.clip == null)
+            {
+                return;
+            }
+
+            if (!musicSource.isPlaying)
+            {
+                musicSource.Play();
+            }
+        }
+
         public static void Bind(AudioSource source)
         {
             musicSource = source;

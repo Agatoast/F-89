@@ -1,3 +1,5 @@
+using F89.Core;
+
 namespace F89.LandCombat
 {
     public static class LandGroundSceneController
@@ -14,7 +16,7 @@ namespace F89.LandCombat
         public static void RegisterKill(int enemyLevel)
         {
             SessionKills++;
-            SessionScore += LandUrEnemyStats.ClampLevel(enemyLevel);
+            SessionScore += PilotScoreService.GetUrTroopPointValue(enemyLevel);
         }
     }
 }

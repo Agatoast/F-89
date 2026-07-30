@@ -2,6 +2,20 @@ using UnityEngine;
 
 namespace F89.Core
 {
+    public readonly struct PendingKeyConflict
+    {
+        public PendingKeyConflict(string targetBindingId, KeyCode requestedKey, string existingBindingId)
+        {
+            TargetBindingId = targetBindingId;
+            RequestedKey = requestedKey;
+            ExistingBindingId = existingBindingId;
+        }
+
+        public string TargetBindingId { get; }
+        public KeyCode RequestedKey { get; }
+        public string ExistingBindingId { get; }
+    }
+
     public static class GameKeyBindings
     {
         private const string PlayerPrefsPrefix = "F89.KeyBinding.";
@@ -10,10 +24,14 @@ namespace F89.Core
             new System.Collections.Generic.Dictionary<string, KeyCode>();
 
         private static bool isLoaded;
+        private static int ignoreListenEventsUntilFrame = -1;
+        private static PendingKeyConflict? pendingConflict;
 
         public static string ListeningBindingId { get; private set; }
 
         public static bool IsListening => !string.IsNullOrEmpty(ListeningBindingId);
+
+        public static bool HasPendingConflict => pendingConflict.HasValue;
 
         public static void Load()
         {
@@ -39,6 +57,63 @@ namespace F89.Core
             return FormatKey(GetKey(bindingId));
         }
 
+        public static bool TryFindBindingForKey(KeyCode key, string excludeBindingId, out string bindingId)
+        {
+            bindingId = null;
+            if (key == KeyCode.None)
+            {
+                return false;
+            }
+
+            EnsureLoaded();
+            foreach (var pair in Keys)
+            {
+                if (pair.Value != key)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(excludeBindingId) && pair.Key == excludeBindingId)
+                {
+                    continue;
+                }
+
+                bindingId = pair.Key;
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool TryGetPendingConflict(out PendingKeyConflict conflict)
+        {
+            if (!pendingConflict.HasValue)
+            {
+                conflict = default;
+                return false;
+            }
+
+            conflict = pendingConflict.Value;
+            return true;
+        }
+
+        public static void ConfirmPendingConflict()
+        {
+            if (!pendingConflict.HasValue)
+            {
+                return;
+            }
+
+            var conflict = pendingConflict.Value;
+            SwapOrAssignKey(conflict.TargetBindingId, conflict.RequestedKey);
+            pendingConflict = null;
+        }
+
+        public static void CancelPendingConflict()
+        {
+            pendingConflict = null;
+        }
+
         public static void SetKey(string bindingId, KeyCode key)
         {
             EnsureLoaded();
@@ -47,17 +122,28 @@ namespace F89.Core
                 return;
             }
 
-            foreach (var pair in Keys)
-            {
-                if (pair.Key != bindingId && pair.Value == key)
-                {
-                    Keys[pair.Key] = KeyCode.None;
-                    PlayerPrefs.SetInt(PlayerPrefsPrefix + pair.Key, (int)KeyCode.None);
-                }
-            }
-
             Keys[bindingId] = key;
             PlayerPrefs.SetInt(PlayerPrefsPrefix + bindingId, (int)key);
+            PlayerPrefs.Save();
+        }
+
+        public static void SwapOrAssignKey(string bindingId, KeyCode newKey)
+        {
+            EnsureLoaded();
+            if (string.IsNullOrEmpty(bindingId) || newKey == KeyCode.None)
+            {
+                return;
+            }
+
+            var previousKey = GetKey(bindingId);
+            if (TryFindBindingForKey(newKey, bindingId, out var existingBindingId))
+            {
+                Keys[existingBindingId] = previousKey;
+                PlayerPrefs.SetInt(PlayerPrefsPrefix + existingBindingId, (int)previousKey);
+            }
+
+            Keys[bindingId] = newKey;
+            PlayerPrefs.SetInt(PlayerPrefsPrefix + bindingId, (int)newKey);
             PlayerPrefs.Save();
         }
 
@@ -72,21 +158,36 @@ namespace F89.Core
 
             PlayerPrefs.Save();
             isLoaded = true;
+            pendingConflict = null;
         }
 
         public static void BeginListening(string bindingId)
         {
+            pendingConflict = null;
             ListeningBindingId = bindingId;
+            ignoreListenEventsUntilFrame = Time.frameCount;
         }
 
         public static void CancelListening()
         {
             ListeningBindingId = null;
+            ignoreListenEventsUntilFrame = -1;
+        }
+
+        public static void ClearRebindState()
+        {
+            CancelListening();
+            pendingConflict = null;
         }
 
         public static bool TryHandleListenEvent(Event currentEvent)
         {
-            if (!IsListening || currentEvent == null)
+            if (HasPendingConflict || !IsListening || currentEvent == null)
+            {
+                return false;
+            }
+
+            if (Time.frameCount <= ignoreListenEventsUntilFrame)
             {
                 return false;
             }
@@ -102,8 +203,7 @@ namespace F89.Core
 
                 if (currentEvent.keyCode != KeyCode.None)
                 {
-                    SetKey(ListeningBindingId, currentEvent.keyCode);
-                    CancelListening();
+                    TryCompleteListening(currentEvent.keyCode);
                     currentEvent.Use();
                     return true;
                 }
@@ -114,8 +214,7 @@ namespace F89.Core
                 var mouseKey = MouseButtonToKeyCode(currentEvent.button);
                 if (mouseKey != KeyCode.None)
                 {
-                    SetKey(ListeningBindingId, mouseKey);
-                    CancelListening();
+                    TryCompleteListening(mouseKey);
                     currentEvent.Use();
                     return true;
                 }
@@ -191,6 +290,25 @@ namespace F89.Core
 
                     return label;
             }
+        }
+
+        private static void TryCompleteListening(KeyCode key)
+        {
+            if (string.IsNullOrEmpty(ListeningBindingId) || key == KeyCode.None)
+            {
+                CancelListening();
+                return;
+            }
+
+            if (TryFindBindingForKey(key, ListeningBindingId, out var existingBindingId))
+            {
+                pendingConflict = new PendingKeyConflict(ListeningBindingId, key, existingBindingId);
+                CancelListening();
+                return;
+            }
+
+            SetKey(ListeningBindingId, key);
+            CancelListening();
         }
 
         private static void EnsureLoaded()

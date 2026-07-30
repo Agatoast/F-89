@@ -17,7 +17,10 @@ namespace F89.LandCombat
             }
 
             var save = CharacterSessionState.ActiveSave;
-            if (!LandBossMissionAssignment.TryGetBossForOutpost(save, snapshot.OutpostName, out var bossNumber))
+            var hasBunkerAccess = snapshot.HasOutpostBunker
+                || OutpostSurfaceAccess.HasBunkerGroundAccess(snapshot.OutpostName);
+            LandBossMissionAssignment.TryGetBossForOutpost(save, snapshot.OutpostName, out var bossNumber);
+            if (!hasBunkerAccess && bossNumber <= 0)
             {
                 return;
             }
@@ -28,7 +31,10 @@ namespace F89.LandCombat
             }
 
             ActiveOutpostName = snapshot.OutpostName;
-            LandBossAreaState.BeginArea(bossNumber);
+            if (bossNumber > 0)
+            {
+                LandBossAreaState.BeginArea(bossNumber);
+            }
         }
 
         public static void Clear() => ActiveOutpostName = string.Empty;

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using F89.Enemies;
+using F89.LandCombat;
 using UnityEngine;
 
 namespace F89.Core
@@ -54,31 +56,127 @@ namespace F89.Core
             CharacterSaveRepository.WriteWorldProgress(save);
         }
 
-        public static void ResetAllDestroyedOutposts()
+        public static bool IsFriendlyOccupied(string outpostName) =>
+            Contains(CharacterSessionState.ActiveSave?.FriendlyOccupiedOutpostNames, outpostName);
+
+        /// <summary>True when the bunker boss was defeated or the flight-map bunker building was destroyed.</summary>
+        public static bool IsBunkerCleared(string outpostName)
+        {
+            if (string.IsNullOrWhiteSpace(outpostName))
+            {
+                return false;
+            }
+
+            if (IsBossDefeatedAtOutpost(outpostName))
+            {
+                return true;
+            }
+
+            return IsTargetDestroyed(outpostName, OutpostPrimaryObjective.BunkerBuildingLabel);
+        }
+
+        /// <summary>Persisted friendly occupation — set only after END MISSION with air objectives complete.</summary>
+        public static bool IsFriendlyBase(string outpostName) => IsFriendlyOccupied(outpostName);
+
+        /// <summary>
+        /// Marks the mission outpost friendly after air objectives are destroyed and the pilot
+        /// ends the mission from the carrier deck or an outpost runway.
+        /// </summary>
+        public static void TryApplyMissionCompleteOccupation(string landedOutpostName)
+        {
+            if (!GamePlayModeState.IsCampaign)
+            {
+                return;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            if (save == null || !LandBossMissionAssignment.IsPrimaryMissionComplete(save))
+            {
+                return;
+            }
+
+            var outpostName = !string.IsNullOrWhiteSpace(landedOutpostName)
+                ? landedOutpostName
+                : save.AssignedBossOutpostName;
+            if (string.IsNullOrWhiteSpace(outpostName))
+            {
+                return;
+            }
+
+            if (!OutpostPrimaryObjective.AreAirObjectivesDestroyed(outpostName))
+            {
+                return;
+            }
+
+            MarkFriendlyOccupied(outpostName);
+        }
+
+        public static void MarkFriendlyOccupied(string outpostName)
+        {
+            if (string.IsNullOrWhiteSpace(outpostName))
+            {
+                return;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            if (save == null || Contains(save.FriendlyOccupiedOutpostNames, outpostName))
+            {
+                return;
+            }
+
+            save.FriendlyOccupiedOutpostNames = Add(save.FriendlyOccupiedOutpostNames, outpostName);
+            CharacterSaveRepository.WriteWorldProgress(save);
+            ApplyFriendlyControlToBase(outpostName);
+        }
+
+        public static void ApplyFriendlyControlToAllBases()
         {
             var save = CharacterSessionState.ActiveSave;
-            if (save == null)
+            if (save?.FriendlyOccupiedOutpostNames == null)
             {
-                Debug.LogWarning("F-89: Cannot reset destroyed outposts — no active character save.");
                 return;
             }
 
-            var destroyedCount = save.DestroyedOutpostNames?.Length ?? 0;
-            var targetCount = save.DestroyedWorldTargetIds?.Length ?? 0;
-            if (destroyedCount == 0 && targetCount == 0)
+            for (var i = 0; i < save.FriendlyOccupiedOutpostNames.Length; i++)
             {
-                Debug.Log("F-89: No destroyed outposts to reset.");
+                ApplyFriendlyControlToBase(save.FriendlyOccupiedOutpostNames[i]);
+            }
+        }
+
+        private static void ApplyFriendlyControlToBase(string outpostName)
+        {
+            if (string.IsNullOrWhiteSpace(outpostName))
+            {
                 return;
             }
 
-            save.DestroyedOutpostNames = Array.Empty<string>();
-            save.DestroyedWorldTargetIds = Array.Empty<string>();
-            save.UrVehicleKillsByLevel = new int[UrKillCredit.LevelCount];
-            save.UrTroopKillsByLevel = new int[UrKillCredit.LevelCount];
-            save.EnemyVehiclesKilled = 0;
-            save.EnemyTroopsKilled = 0;
-            CharacterSaveRepository.WriteWorldProgress(save);
-            Debug.Log($"F-89: Reset {destroyedCount} destroyed outpost(s) and {targetCount} destroyed map target(s).");
+            var bases = UnityEngine.Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            for (var i = 0; i < bases.Length; i++)
+            {
+                var baseSite = bases[i];
+                if (baseSite == null
+                    || baseSite.SiteKind != BaseSiteKind.Land
+                    || !string.Equals(baseSite.BaseName, outpostName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                baseSite.Capture();
+                OutpostFlightPlatoonState.MarkPlatoonCleared(outpostName);
+                var platoon = baseSite.transform.Find("VehiclePlatoon");
+                if (platoon != null)
+                {
+                    UnityEngine.Object.Destroy(platoon.gameObject);
+                }
+
+                OutpostVehicleSpawner.EnsureEmptyPlatoonMarker(baseSite);
+                return;
+            }
+        }
+
+        public static void ResetAllDestroyedOutposts()
+        {
+            CampaignWorldReset.ResetAllOutpostsAndBunkers();
         }
 
         public static string GetTargetId(string outpostName, string targetLabel)
@@ -104,6 +202,27 @@ namespace F89.Core
                 {
                     return true;
                 }
+            }
+
+            return false;
+        }
+
+        private static bool IsBossDefeatedAtOutpost(string outpostName)
+        {
+            var save = CharacterSessionState.ActiveSave;
+            if (save?.BossMissionOutpostNames == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < save.BossMissionOutpostNames.Length; i++)
+            {
+                if (!string.Equals(save.BossMissionOutpostNames[i], outpostName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                return (save.DefeatedBossMask & (1 << i)) != 0;
             }
 
             return false;

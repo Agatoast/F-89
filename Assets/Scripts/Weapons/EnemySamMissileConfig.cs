@@ -36,7 +36,8 @@ namespace F89.Weapons
         float ILockCapableWeapon.ForwardLockHalfAngleDegrees => seekerForwardHalfAngleDegrees;
         WeaponEngagementType ILockCapableWeapon.EngagementType => WeaponEngagementType.AirToAirMissile;
         float IMissileWeaponConfig.LockHitChance => lockHitChance;
-        float IMissileWeaponConfig.SpeedMilesPerSecond => speedMilesPerSecond;
+        float IMissileWeaponConfig.SpeedMilesPerSecond =>
+            speedMilesPerSecond * EnemyMissileBalance.SpeedMultiplier;
         float IMissileWeaponConfig.MissileLifetimeSeconds => missileLifetimeSeconds;
         float IMissileWeaponConfig.UnlockedHitConeHalfAngleDegrees => unlockedHitConeHalfAngleDegrees;
         float IMissileWeaponConfig.CollisionRadiusTics => collisionRadiusTics;

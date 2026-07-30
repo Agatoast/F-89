@@ -13,7 +13,8 @@ namespace F89.UI
         [SerializeField] private float squareSize = HudTargetMarkerLayout.SquareSize;
         [SerializeField] private float diamondSize = HudTargetMarkerLayout.DiamondSize;
 
-        private static readonly Color FriendlyMarkerColor = Color.white;
+        private static readonly Color FriendlyMarkerColor = new Color(0.25f, 0.78f, 0.35f, 1f);
+        private static readonly Color HostileSelectedDiamondColor = new Color(0.95f, 0.15f, 0.1f, 1f);
 
         private Texture2D squareTexture;
         private Texture2D diamondTexture;
@@ -29,6 +30,8 @@ namespace F89.UI
             EnsureTextures();
         }
 
+        private const float HudMarkerMaxRangeMiles = 80f;
+
         private void OnGUI()
         {
             if (Event.current == null
@@ -36,6 +39,12 @@ namespace F89.UI
                 || AntarcticaMapOverlay.IsOpen
                 || aircraft == null
                 || worldCamera == null)
+            {
+                return;
+            }
+
+            var autopilot = AutopilotController.Instance;
+            if (autopilot != null && autopilot.IsFlying)
             {
                 return;
             }
@@ -49,18 +58,50 @@ namespace F89.UI
 
             var hudColor = FlightHudColorPalette.Current;
             var squareHalf = squareSize * 0.5f;
-            var diamondHalf = diamondSize * 0.5f;
+            var diamondDrawSize = HudTargetMarkerLayout.DiamondSize;
+            var diamondHalf = diamondDrawSize * 0.5f;
             var activeTarget = weaponController != null ? weaponController.GetActiveHudTarget() : null;
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
+            var observer = aircraft.transform.position;
+            var maxRangeSqr = HudMarkerMaxRangeMiles * HudMarkerMaxRangeMiles;
+            var worldMap = aircraft.WorldMap;
+            var ticSize = aircraft.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
 
             foreach (var target in targets)
             {
-                if (target == null || !target.IsAlive || !IsTargetOnScreen(target, out var guiCenter))
+                if (target == null || !target.IsAlive)
                 {
                     continue;
                 }
 
-                if (IsCarrierTarget(target) || target.IsFlareDecoy || target.IsPlayerAircraft)
+                if (worldMap != null && ticSize > 0f)
+                {
+                    var miles = CombatThreatRange.DistanceMiles(
+                        observer,
+                        target.transform.position,
+                        worldMap,
+                        ticSize);
+                    if (miles * miles > maxRangeSqr)
+                    {
+                        continue;
+                    }
+                }
+
+                if (!IsTargetOnScreen(target, out var guiCenter))
+                {
+                    continue;
+                }
+
+                if (IsCarrierTarget(target) || target.IsFlareDecoy || target.IsPlayerAircraft || target.IsNeutral)
+                {
+                    continue;
+                }
+
+                var outpostBuilding = target.GetComponent<OutpostBuilding>();
+                if (outpostBuilding != null
+                    && !OutpostPrimaryObjective.IsMissionHostileBuilding(
+                        outpostBuilding.BuildingType,
+                        target.TargetLabel))
                 {
                     continue;
                 }
@@ -74,8 +115,8 @@ namespace F89.UI
                 && !IsCarrierTarget(activeTarget)
                 && IsTargetOnScreen(activeTarget, out var activeCenter))
             {
-                var diamondColor = activeTarget.IsFriendly ? FriendlyMarkerColor : hudColor;
-                DrawMarker(activeCenter, diamondHalf, diamondSize, diamondColor, diamondTexture);
+                var diamondColor = activeTarget.IsFriendly ? FriendlyMarkerColor : HostileSelectedDiamondColor;
+                DrawMarker(activeCenter, diamondHalf, diamondDrawSize, diamondColor, diamondTexture);
             }
         }
 
@@ -110,10 +151,53 @@ namespace F89.UI
                 squareTexture = CreateCornerBracketTexture(Mathf.RoundToInt(squareSize));
             }
 
-            if (diamondTexture == null)
+            var diamondPixels = Mathf.RoundToInt(HudTargetMarkerLayout.DiamondSize);
+            if (diamondTexture == null || diamondTexture.width != diamondPixels)
             {
-                diamondTexture = CreateCornerBracketTexture(Mathf.RoundToInt(diamondSize));
+                diamondTexture = CreateOutlineDiamondTexture(
+                    diamondPixels,
+                    HudTargetMarkerLayout.DiamondOutlineThickness);
             }
+        }
+
+        private static Texture2D CreateOutlineDiamondTexture(int size, int thickness = 1)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            texture.filterMode = FilterMode.Point;
+            var clear = new Color(0f, 0f, 0f, 0f);
+            var pixels = new Color[size * size];
+            for (var i = 0; i < pixels.Length; i++)
+            {
+                pixels[i] = clear;
+            }
+
+            var center = (size - 1) * 0.5f;
+            var halfExtent = size * 0.46f;
+            var edgeWidth = thickness / halfExtent;
+
+            for (var y = 0; y < size; y++)
+            {
+                for (var x = 0; x < size; x++)
+                {
+                    var dx = Mathf.Abs(x - center) / halfExtent;
+                    var dy = Mathf.Abs(y - center) / halfExtent;
+                    var sum = dx + dy;
+                    if (sum > 1f)
+                    {
+                        continue;
+                    }
+
+                    var edgeDistance = 1f - sum;
+                    if (edgeDistance <= edgeWidth)
+                    {
+                        pixels[y * size + x] = Color.white;
+                    }
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply();
+            return texture;
         }
 
         private static Texture2D CreateCornerBracketTexture(int size, int thickness = 2)

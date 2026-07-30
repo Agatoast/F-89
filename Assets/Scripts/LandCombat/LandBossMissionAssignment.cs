@@ -9,11 +9,15 @@ namespace F89.LandCombat
     public static class LandBossMissionAssignment
     {
         public const int BossMissionCount = LandBossEncounter.LastBossNumber;
+        public const string Boss1OutpostName = "Outpost South";
+        public const string LegacyBoss1OutpostName = "Outpost 02";
+        public const string Boss2OutpostName = "Outpost 01";
+        public const string LegacyBoss2OutpostName = "Outpost 04";
 
         private static readonly string[] DesignatedOutposts =
         {
-            "Outpost 02",
-            "Outpost 04",
+            Boss1OutpostName,
+            Boss2OutpostName,
             "Outpost 05",
             "Outpost 06",
             "Outpost 07",
@@ -27,7 +31,7 @@ namespace F89.LandCombat
         public static bool HasActiveAssignment(CharacterSaveData save) =>
             save != null && save.AssignedBossNumber >= 1 && save.AssignedBossNumber <= BossMissionCount;
 
-        /// <summary>True when the assigned primary boss objective is already defeated.</summary>
+        /// <summary>True when the assigned primary air objectives are already complete.</summary>
         public static bool IsPrimaryMissionComplete(CharacterSaveData save)
         {
             if (!HasActiveAssignment(save))
@@ -35,7 +39,7 @@ namespace F89.LandCombat
                 return true;
             }
 
-            return LandBossEncounter.IsDefeated(save.AssignedBossNumber);
+            return OutpostPrimaryObjective.AreAirObjectivesDestroyed(save.AssignedBossOutpostName);
         }
 
         /// <summary>
@@ -161,6 +165,21 @@ namespace F89.LandCombat
             return DesignatedOutposts[index];
         }
 
+        /// <summary>Writes the canonical boss-to-outpost links into the active save.</summary>
+        public static void InitializeBossMissionOutpostLinks(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            CharacterSaveRepository.EnsureBossMissionInitialized(save);
+            for (var i = 0; i < BossMissionCount; i++)
+            {
+                save.BossMissionOutpostNames[i] = GetDesignatedOutpostName(i + 1);
+            }
+        }
+
         public static string BuildMissionObjective(CharacterSaveData save)
         {
             if (!HasActiveAssignment(save))
@@ -174,9 +193,42 @@ namespace F89.LandCombat
             }
 
             return
-                $"Proceed to {save.AssignedBossOutpostName}. Surface guards are already deployed there; "
-                + $"after launch, the {area.BunkerCode} bunker will appear for the UR level "
-                + $"{LandBossEncounter.GetEnemyLevel(save.AssignedBossNumber)} boss fight.";
+                $"Proceed to {save.AssignedBossOutpostName}. Destroy the bunker building and runway tower "
+                + $"from the air, then land and clear the {area.BunkerCode} bunker "
+                + $"(UR level {LandBossEncounter.GetEnemyLevel(save.AssignedBossNumber)}).";
+        }
+
+        /// <summary>
+        /// Chooses a friendly occupied outpost runway for campaign launch when available.
+        /// Boss 1 always launches from the carrier.
+        /// </summary>
+        public static void AssignMissionLaunchOrigin(CharacterSaveData save)
+        {
+            ClearMissionLaunchOutpost(save);
+        }
+
+        /// <summary>Clears launch origin so the next sortie starts from the carrier deck.</summary>
+        public static void ClearMissionLaunchOutpost(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            save.MissionLaunchOutpostName = string.Empty;
+            CharacterSaveRepository.WriteBossProgress(save);
+        }
+
+        /// <summary>Parks the aircraft at this outpost runway for the next sortie launch.</summary>
+        public static void PersistLaunchOutpost(CharacterSaveData save, string outpostName)
+        {
+            if (save == null || string.IsNullOrWhiteSpace(outpostName))
+            {
+                return;
+            }
+
+            save.MissionLaunchOutpostName = outpostName;
+            CharacterSaveRepository.WriteBossProgress(save);
         }
 
         private static int GetNextUndefeatedBoss(CharacterSaveData save)

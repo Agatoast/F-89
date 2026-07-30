@@ -7,12 +7,15 @@ using UnityEngine.SceneManagement;
 namespace F89.UI
 {
     /// <summary>
-    /// Routes from crash landing pages through mission status, demotion, R&amp;D, then Character page.
+    /// Routes from crash landing pages through mission status and demotion, then Character page.
+    /// R&amp;D breakthrough rolls run only after a successful carrier END MISSION.
+    /// KIA returns to the character select (save) page.
     /// </summary>
     public static class PostMissionContinuation
     {
         public static void ContinueAfterCrashLanding()
         {
+            var outcome = CrashLandingOutcomeState.Outcome;
             CrashLandingOutcomeState.Clear();
             PlayerAircraftCrashController.ClearActiveState();
 
@@ -21,10 +24,18 @@ namespace F89.UI
             {
                 CharacterGearSession.PersistActive();
                 CharacterSaveRepository.SyncVehicleKillCredit(save);
+                MissionScoreState.FinalizeToSave(save);
             }
 
-            var primaryIncomplete = GamePlayModeState.IsCampaign
-                && save != null
+            if (outcome == CrashLandingOutcome.NotRescued && save != null)
+            {
+                CharacterSaveRepository.MarkKilledInAction(save);
+                Time.timeScale = 1f;
+                SceneManager.LoadScene(GameScenes.SelectionPage);
+                return;
+            }
+
+            var primaryIncomplete = GamePlayModeState.IsCampaign                && save != null
                 && !LandBossMissionAssignment.IsPrimaryMissionComplete(save);
 
             if (primaryIncomplete && save != null)
@@ -56,19 +67,25 @@ namespace F89.UI
                 return;
             }
 
-            ContinueToResearchOrCharacter(save);
+            ContinueToCharacterPage();
         }
 
         public static void ContinueAfterMissionIncomplete()
         {
             MissionIncompleteState.Clear();
-            ContinueToResearchOrCharacter(CharacterSessionState.ActiveSave);
+            ContinueToCharacterPage();
         }
 
         public static void ContinueAfterDemotion()
         {
             LandMissionCompleteState.Clear();
-            ContinueToResearchOrCharacter(CharacterSessionState.ActiveSave);
+            ContinueToCharacterPage();
+        }
+
+        public static void ContinueToCharacterPage()
+        {
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(GameScenes.CharacterPage);
         }
 
         public static void ContinueToResearchOrCharacter(CharacterSaveData save)

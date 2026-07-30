@@ -17,12 +17,28 @@ namespace F89.LandCombat
                 return 0;
             }
 
-            if (item.DefinitionId == TechZeroDefinitionId)
+            if (item.DefinitionId == TechZeroDefinitionId
+                || IsBasicLoadoutItem(item))
             {
                 return 0;
             }
 
             return GetTechLevel(item.Rarity);
+        }
+
+        /// <summary>Basic Loadout tray gear — tech level 0, distinct from TL 1 UR loot.</summary>
+        public static bool IsBasicLoadoutItem(LandGearInstance item)
+        {
+            if (!LandLoadoutSlots.IsValidItem(item))
+            {
+                return false;
+            }
+
+            var id = item.DefinitionId;
+            return id == LandUsWeaponCatalog.BasicLoadoutDefinitionId
+                || id == LandUsGearCatalog.BasicHelmetId
+                || id == LandUsGearCatalog.BasicVestId
+                || id == LandUsGearCatalog.BasicBootsId;
         }
     }
 }

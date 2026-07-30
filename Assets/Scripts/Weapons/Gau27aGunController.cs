@@ -1,3 +1,4 @@
+using F89.Audio;
 using F89.Core;
 using F89.Flight;
 using UnityEngine;
@@ -14,6 +15,7 @@ namespace F89.Weapons
         private float fireCooldown;
         private int roundsRemaining;
         private bool unlimitedAmmo;
+        private Gau27FireSound fireSound;
 
         public float CrosshairDistanceMiles => crosshairDistanceMiles;
         public int RoundsRemaining => roundsRemaining;
@@ -26,9 +28,9 @@ namespace F89.Weapons
             config = weaponConfig;
             aircraft = aircraftController;
             aimCamera = camera;
-            crosshairDistanceMiles = config != null ? config.maxRangeMiles : 2f;
+            fireSound = GetComponent<Gau27FireSound>();
             roundsRemaining = config != null ? config.startingRounds : 0;
-            UpdateCrosshairPosition();
+            ResetCrosshairDistance();
         }
 
         public void SetRounds(int rounds)
@@ -47,21 +49,54 @@ namespace F89.Weapons
 
         public void ResetCrosshairDistance()
         {
-            if (config != null)
-            {
-                crosshairDistanceMiles = config.maxRangeMiles;
-            }
-        }
-
-        public void SetCrosshairDistanceMiles(float miles)
-        {
-            if (config == null)
+            if (config == null || aircraft == null)
             {
                 return;
             }
 
-            crosshairDistanceMiles = Mathf.Clamp(miles, config.minCrosshairMiles, config.maxRangeMiles);
-            UpdateCrosshairPosition();
+            var ticSize = aircraft.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
+            var forward = GetHorizontalForward();
+            var defaultWorld = aircraft.transform.position
+                + forward * MilesToWorldDistance(config.maxRangeMiles, ticSize);
+            SetCrosshairToWorldPoint(defaultWorld);
+        }
+
+        public void SetCrosshairToWorldPoint(Vector3 worldPoint)
+        {
+            if (config == null || aircraft == null)
+            {
+                return;
+            }
+
+            var profile = aircraft.Profile;
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            CrosshairWorldPoint = Gau27aOgiveEnvelope.ClampToOgive(
+                aircraft.transform.position,
+                GetHorizontalForward(),
+                worldPoint,
+                config,
+                aircraft.WorldMap,
+                ticSize);
+            crosshairDistanceMiles = CombatThreatRange.DistanceMiles(
+                aircraft.transform.position,
+                CrosshairWorldPoint,
+                aircraft.WorldMap,
+                ticSize);
+            UpdateCrosshairScreenPoint();
+        }
+
+        public void SetCrosshairDistanceMiles(float miles)
+        {
+            if (config == null || aircraft == null)
+            {
+                return;
+            }
+
+            miles = Mathf.Clamp(miles, config.minCrosshairMiles, config.ogiveMaxRangeMiles);
+            var ticSize = aircraft.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
+            var forward = GetHorizontalForward();
+            SetCrosshairToWorldPoint(
+                aircraft.transform.position + forward * MilesToWorldDistance(miles, ticSize));
         }
 
         public void UpdateCrosshairFromMouse(Vector2 screenPosition)
@@ -77,34 +112,29 @@ namespace F89.Weapons
                 return;
             }
 
-            var ticSize = aircraft.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
-            var forward = GetHorizontalForward();
-            var origin = aircraft.transform.position;
-
-            var minWorld = MilesToWorldDistance(config.minCrosshairMiles, ticSize);
-            var maxWorld = MilesToWorldDistance(config.maxRangeMiles, ticSize);
-
-            var nearPoint = origin + forward * minWorld;
-            var farPoint = origin + forward * maxWorld;
-            nearPoint.y = 0.5f;
-            farPoint.y = 0.5f;
-
-            var nearScreen = camera.WorldToScreenPoint(nearPoint);
-            var farScreen = camera.WorldToScreenPoint(farPoint);
-            if (nearScreen.z < 0f && farScreen.z < 0f)
+            var profile = aircraft.Profile;
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            if (!Gau27aOgiveEnvelope.TryResolveFromScreen(
+                    camera,
+                    screenPosition,
+                    aircraft.transform.position,
+                    GetHorizontalForward(),
+                    config,
+                    aircraft.WorldMap,
+                    ticSize,
+                    out var worldPoint))
             {
-                UpdateCrosshairPosition();
+                UpdateCrosshairScreenPoint();
                 return;
             }
 
-            var lineStart = new Vector2(nearScreen.x, nearScreen.y);
-            var lineEnd = new Vector2(farScreen.x, farScreen.y);
-            var slideT = ProjectOntoLineSegment(screenPosition, lineStart, lineEnd);
-            crosshairDistanceMiles = Mathf.Lerp(
-                config.minCrosshairMiles,
-                config.maxRangeMiles,
-                slideT);
-            UpdateCrosshairPosition();
+            CrosshairWorldPoint = worldPoint;
+            crosshairDistanceMiles = CombatThreatRange.DistanceMiles(
+                aircraft.transform.position,
+                CrosshairWorldPoint,
+                aircraft.WorldMap,
+                ticSize);
+            UpdateCrosshairScreenPoint();
         }
 
         public void UpdateCrosshairPosition()
@@ -114,30 +144,34 @@ namespace F89.Weapons
                 return;
             }
 
-            var ticSize = aircraft.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
-            var distanceWorld = MilesToWorldDistance(crosshairDistanceMiles, ticSize);
-
-            var forward = GetHorizontalForward();
-            var crosshairWorld = aircraft.transform.position + forward * distanceWorld;
-            crosshairWorld.y = 0.5f;
-            CrosshairWorldPoint = crosshairWorld;
-
-            var camera = aimCamera != null ? aimCamera : Camera.main;
-            if (camera != null)
-            {
-                CrosshairScreenPoint = camera.WorldToScreenPoint(CrosshairWorldPoint);
-            }
+            var profile = aircraft.Profile;
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            CrosshairWorldPoint = Gau27aOgiveEnvelope.ClampToOgive(
+                aircraft.transform.position,
+                GetHorizontalForward(),
+                CrosshairWorldPoint,
+                config,
+                aircraft.WorldMap,
+                ticSize);
+            crosshairDistanceMiles = CombatThreatRange.DistanceMiles(
+                aircraft.transform.position,
+                CrosshairWorldPoint,
+                aircraft.WorldMap,
+                ticSize);
+            UpdateCrosshairScreenPoint();
         }
 
         public void TryFire(float accuracyMultiplier, bool fireHeld)
         {
             if (!fireHeld || config == null || aircraft == null)
             {
+                fireSound?.NotifyFireReleased();
                 return;
             }
 
             if (!unlimitedAmmo && roundsRemaining <= 0)
             {
+                fireSound?.NotifyFireReleased();
                 return;
             }
 
@@ -159,14 +193,24 @@ namespace F89.Weapons
 
             var spawnPoint = aircraft.transform.position + GetHorizontalForward() * 0.6f;
             spawnPoint.y = 0.5f;
+            var profile = aircraft.Profile;
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            var fireDestination = Gau27aOgiveEnvelope.ClampFireDestination(
+                spawnPoint,
+                CrosshairWorldPoint,
+                config,
+                aircraft.WorldMap,
+                ticSize);
 
             GauRound.Fire(
                 config,
                 aircraft.Profile,
                 aircraft.WorldMap,
                 spawnPoint,
-                CrosshairWorldPoint,
+                fireDestination,
                 GetHorizontalForward() * aircraft.CurrentSpeed);
+
+            fireSound?.OnRoundFired();
         }
 
         public LockableTarget GetTargetUnderCrosshair()
@@ -181,8 +225,17 @@ namespace F89.Weapons
             var aimPoint = CrosshairWorldPoint;
             aimPoint.y = 0f;
 
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
             return DirectFireTargetRules.FindGau27TargetUnderCrosshairDot(aimPoint, dotRadius, targets);
+        }
+
+        private void UpdateCrosshairScreenPoint()
+        {
+            var camera = aimCamera != null ? aimCamera : Camera.main;
+            if (camera != null)
+            {
+                CrosshairScreenPoint = camera.WorldToScreenPoint(CrosshairWorldPoint);
+            }
         }
 
         private Vector3 GetHorizontalForward()
@@ -200,19 +253,6 @@ namespace F89.Weapons
         private float MilesToWorldDistance(float miles, float ticSize)
         {
             return WorldMapConfig.RangeMilesToWorldUnits(miles, aircraft.WorldMap, ticSize);
-        }
-
-        private static float ProjectOntoLineSegment(Vector2 point, Vector2 segmentStart, Vector2 segmentEnd)
-        {
-            var segment = segmentEnd - segmentStart;
-            var lengthSquared = segment.sqrMagnitude;
-            if (lengthSquared < 0.0001f)
-            {
-                return 0f;
-            }
-
-            var t = Vector2.Dot(point - segmentStart, segment) / lengthSquared;
-            return Mathf.Clamp01(t);
         }
     }
 }

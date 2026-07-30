@@ -60,26 +60,17 @@ namespace F89.UI
         {
             LandCombatHud.Draw(LandGroundMissionExit.Leave);
             LandLootBagUi.Draw();
-            DrawTakeOffDialog();
+            DrawRunwayDeckOrTakeOffDialog();
         }
 
-        private static void DrawTakeOffDialog()
+        private static void DrawRunwayDeckOrTakeOffDialog()
         {
             if (!LandLandedPlane.IsTakeOffPromptPending)
             {
                 return;
             }
 
-            var result = TakeOffConfirmDialog.Draw(true);
-            if (result == TakeOffConfirmDialog.Result.Confirmed)
-            {
-                LandLandedPlane.CancelTakeOffPrompt();
-                LandGroundMissionExit.Leave();
-            }
-            else if (result == TakeOffConfirmDialog.Result.Cancelled)
-            {
-                LandLandedPlane.CancelTakeOffPrompt();
-            }
+            GroundRunwayDeckMenu.Draw();
         }
     }
 }

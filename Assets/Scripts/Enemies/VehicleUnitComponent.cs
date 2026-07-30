@@ -54,7 +54,38 @@ namespace F89.Enemies
 
             var ticSize = ResolveTicSizeWorldUnits();
             var footprint = OutpostGroundRules.FootprintWorld(ticSize);
-            target.SetHitRadiusWorld(footprint * 0.55f);
+            var hitRadius = definition.isTroop ? footprint * 0.25f : footprint * 0.55f;
+            target.SetHitRadiusWorld(hitRadius);
+        }
+
+        public void SetPersistentTargetLabel(string slotLabel)
+        {
+            if (definition == null || string.IsNullOrWhiteSpace(slotLabel))
+            {
+                return;
+            }
+
+            var target = GetComponent<LockableTarget>();
+            if (target == null)
+            {
+                return;
+            }
+
+            target.Configure(
+                slotLabel,
+                definition.ToLockableTargetKind(),
+                definition.ToTargetAffiliation(),
+                definition.ToTargetUnitClass());
+
+            if (!definition.isTroop)
+            {
+                target.SetMaxGroundHitPoints(definition.ghp);
+            }
+
+            var ticSize = ResolveTicSizeWorldUnits();
+            var footprint = OutpostGroundRules.FootprintWorld(ticSize);
+            var hitRadius = definition.isTroop ? footprint * 0.25f : footprint * 0.55f;
+            target.SetHitRadiusWorld(hitRadius);
         }
 
         private static float ResolveTicSizeWorldUnits()

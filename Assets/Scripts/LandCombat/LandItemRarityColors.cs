@@ -5,6 +5,18 @@ namespace F89.LandCombat
     /// <summary>MTAU rarity tile colors — White (tech 1) through Gold (tech 10).</summary>
     public static class LandItemRarityColors
     {
+        public static Color GetBasicLoadoutTile() => new Color(161f / 255f, 174f / 255f, 177f / 255f);
+
+        public static Color GetTile(LandGearInstance item)
+        {
+            if (LandTechLevelRules.IsBasicLoadoutItem(item))
+            {
+                return GetBasicLoadoutTile();
+            }
+
+            return GetTile(item.Rarity);
+        }
+
         public static Color GetTile(LandItemRarity rarity)
         {
             return rarity switch

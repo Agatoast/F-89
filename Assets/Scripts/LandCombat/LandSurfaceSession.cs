@@ -77,9 +77,7 @@ namespace F89.LandCombat
         {
             livingEnemies.Clear();
             planePosition = Vector2.zero;
-            var bunkerRange = (LandGameConstants.BunkerEntranceMinRangeLandUnits
-                               + LandGameConstants.BunkerEntranceMaxRangeLandUnits) * 0.5f;
-            bunkerPosition = Vector2.right * LandUnits.ToWorld(bunkerRange);
+            bunkerPosition = LandOutpostSurfaceLayout.BunkerPositionFromPlane(planePosition);
             hasSnapshot = true;
         }
 

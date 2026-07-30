@@ -7,7 +7,8 @@ namespace F89.CameraSystems
 {
     public class TopDownFollowCamera : MonoBehaviour
     {
-        private const float ShiftedPlaneViewportY = 0.25f;
+        private const float DefaultPlaneViewportY = 0.25f;
+        private const float CenterPlaneViewportY = 0.5f;
 
         [SerializeField] private Transform target;
         [SerializeField] private AircraftController aircraft;
@@ -20,7 +21,7 @@ namespace F89.CameraSystems
         [SerializeField] private float maxZoomOffsetScaleFallback = 4.5f;
 
         private Vector3 velocity;
-        private bool isViewShifted;
+        private bool isViewShifted = true;
         private float currentViewShift;
         private float viewShiftVelocity;
         private float zoomLevel;
@@ -66,7 +67,7 @@ namespace F89.CameraSystems
             target = followTarget;
             aircraft = aircraftController;
             velocity = Vector3.zero;
-            isViewShifted = false;
+            isViewShifted = true;
             currentViewShift = 0f;
             viewShiftVelocity = 0f;
             zoomLevel = 0f;
@@ -108,12 +109,11 @@ namespace F89.CameraSystems
             var zoomScale = Mathf.Lerp(1f, maxOffsetScale, zoomLevel);
             var worldOffset = target.rotation * (offset * zoomScale);
 
-            if (isViewShifted || currentViewShift > 0.01f)
-            {
-                computedViewShiftDistance = ComputeViewShiftForwardDistance(zoomScale, worldOffset);
-            }
+            computedViewShiftDistance = ComputeViewShiftForwardDistance(
+                isViewShifted ? DefaultPlaneViewportY : CenterPlaneViewportY,
+                worldOffset);
 
-            var viewShiftTarget = isViewShifted ? computedViewShiftDistance : 0f;
+            var viewShiftTarget = computedViewShiftDistance;
             currentViewShift = Mathf.SmoothDamp(
                 currentViewShift,
                 viewShiftTarget,
@@ -131,17 +131,20 @@ namespace F89.CameraSystems
             }
             else
             {
+                var smoothTime = AutopilotController.Instance != null && AutopilotController.Instance.IsFlying
+                    ? 0.04f
+                    : followSmoothTime;
                 transform.position = Vector3.SmoothDamp(
                     transform.position,
                     desiredPosition,
                     ref velocity,
-                    followSmoothTime);
+                    smoothTime);
             }
 
             transform.LookAt(focusPoint);
         }
 
-        private float ComputeViewShiftForwardDistance(float zoomScale, Vector3 worldOffset)
+        private float ComputeViewShiftForwardDistance(float targetViewportY, Vector3 worldOffset)
         {
             var camera = GetComponent<Camera>();
             if (camera == null || target == null)
@@ -160,7 +163,7 @@ namespace F89.CameraSystems
             {
                 ApplyCameraPose(planePos + forward * high, worldOffset);
                 var viewport = camera.WorldToViewportPoint(planePos);
-                if (viewport.z > 0f && viewport.y <= ShiftedPlaneViewportY)
+                if (viewport.z > 0f && viewport.y <= targetViewportY)
                 {
                     break;
                 }
@@ -173,7 +176,7 @@ namespace F89.CameraSystems
                 var mid = (low + high) * 0.5f;
                 ApplyCameraPose(planePos + forward * mid, worldOffset);
                 var viewport = camera.WorldToViewportPoint(planePos);
-                if (viewport.y > ShiftedPlaneViewportY)
+                if (viewport.y > targetViewportY)
                 {
                     low = mid;
                 }
@@ -214,8 +217,15 @@ namespace F89.CameraSystems
                 return;
             }
 
-            var focusPoint = target.position;
-            transform.position = focusPoint + target.rotation * offset;
+            var zoomScale = 1f;
+            var worldOffset = target.rotation * (offset * zoomScale);
+            computedViewShiftDistance = ComputeViewShiftForwardDistance(
+                isViewShifted ? DefaultPlaneViewportY : CenterPlaneViewportY,
+                worldOffset);
+            currentViewShift = computedViewShiftDistance;
+
+            var focusPoint = target.position + GetHorizontalForward() * currentViewShift;
+            transform.position = focusPoint + worldOffset;
             transform.LookAt(focusPoint);
         }
 

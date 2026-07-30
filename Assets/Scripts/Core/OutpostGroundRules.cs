@@ -16,10 +16,16 @@ namespace F89.Core
         public const float MinType3SeparationTacs = 10f;
 
         public const int Type3CountMin = 1;
-        public const int Type3CountMax = 2;
+        public const int Type3CountMax = 1;
 
-        public const int OtherBuildingCountMin = 30;
-        public const int OtherBuildingCountMax = 40;
+        /// <summary>Type-1/2 buildings placed around the cluster (type-3, bunker, runway are extra).</summary>
+        public const int OtherBuildingCountMin = 10;
+        public const int OtherBuildingCountMax = 15;
+
+        public const int MinVehicleCountPerSide = 5;
+        public const int MaxVehicleCountPerSide = 10;
+        public const int MinTroopCount = 1;
+        public const int MaxTroopCount = 3;
 
         /// <summary>
         /// Vehicles and troops must stay outside this radius from the building-cluster

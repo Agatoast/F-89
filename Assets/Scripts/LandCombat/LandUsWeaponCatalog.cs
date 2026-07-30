@@ -2,7 +2,7 @@ namespace F89.LandCombat
 {
     /// <summary>
     /// US Basic Loadout / R&amp;D weapon ladder.
-    /// Level 1 (M-4) is Basic Loadout; levels 2–10 (X-4…X-12) are earned through R&amp;D.
+    /// M-4 is Basic Loadout (tech level 0); levels 1–10 in the R&amp;D ladder map to X-4…X-12 unlocks.
     /// </summary>
     public static class LandUsWeaponCatalog
     {

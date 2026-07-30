@@ -12,6 +12,7 @@ namespace F89.Core
 
         public static void PrepareNextMission(CharacterSaveData save)
         {
+            MissionScoreState.Reset();
             F89.LandCombat.LandBossMissionAssignment.PrepareNextAssignment(save);
             MissionObjective = F89.LandCombat.LandBossMissionAssignment.BuildMissionObjective(save);
         }

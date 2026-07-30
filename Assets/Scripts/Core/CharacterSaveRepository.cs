@@ -202,7 +202,8 @@ namespace F89.Core
             }
 
             EnsureLoaded();
-            save.TotalScore = Mathf.Max(0, save.TotalScore - penalty);
+            save.CareerScoreModifier -= penalty;
+            ReconcileTotalScore(save);
             WriteToDisk();
         }
 
@@ -215,9 +216,69 @@ namespace F89.Core
             }
 
             EnsureLoaded();
+            ReconcileTotalScore(save);
             var kept = Mathf.Clamp01(fractionKept);
-            save.TotalScore = Mathf.Max(0, Mathf.RoundToInt(save.TotalScore * kept));
+            var newTotal = Mathf.Max(0, Mathf.RoundToInt(save.TotalScore * kept));
+            var folderScore = PilotScoreService.ComputeTotalDestroyScore(save);
+            save.CareerScoreModifier = newTotal - folderScore;
+            save.TotalScore = newTotal;
             WriteToDisk();
+        }
+
+        /// <summary>Total score = kill-folder destroy points plus career modifiers (penalties).</summary>
+        public static void ReconcileTotalScore(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            var folderScore = PilotScoreService.ComputeTotalDestroyScore(save);
+            if (save.CareerScoreModifier == 0
+                && save.UrKillCreditBackfilled
+                && save.TotalScore != folderScore)
+            {
+                save.CareerScoreModifier = save.TotalScore - folderScore;
+            }
+
+            save.TotalScore = Mathf.Max(0, folderScore + save.CareerScoreModifier);
+        }
+
+        public static void MarkKilledInAction(CharacterSaveData save)
+        {
+            if (save == null || save.IsKilledInAction)
+            {
+                return;
+            }
+
+            EnsureLoaded();
+            save.IsKilledInAction = true;
+            save.KilledInActionUtc = DateTime.UtcNow.ToString("o");
+            ReconcileTotalScore(save);
+            WriteToDisk();
+
+            if (CharacterSessionState.ActiveSave != null && CharacterSessionState.ActiveSave.Id == save.Id)
+            {
+                CharacterSessionState.ActiveSave = null;
+                CharacterGearSession.Bind(null);
+                AircraftLoadoutState.ResetForNewSortie();
+                LandMissionHandoffState.Clear();
+            }
+        }
+
+        public static IReadOnlyList<CharacterSaveData> GetKilledInActionSaves()
+        {
+            EnsureLoaded();
+            var results = new List<CharacterSaveData>();
+            foreach (var save in cachedSaves)
+            {
+                if (save != null && save.IsKilledInAction)
+                {
+                    results.Add(save);
+                }
+            }
+
+            return results;
         }
 
         /// <summary>Syncs vehicle/troop kill totals from per-level UR kill folders.</summary>
@@ -303,15 +364,24 @@ namespace F89.Core
                 save.UrTroopKillsByLevel = new int[UrKillCredit.LevelCount];
             }
 
-            if (UrKillCredit.Sum(save.UrVehicleKillsByLevel) == 0
-                && UrKillCredit.Sum(save.UrTroopKillsByLevel) == 0
-                && save.DestroyedWorldTargetIds is { Length: > 0 })
+            if (!save.UrKillCreditBackfilled)
             {
-                BackfillUrKillArraysFromDestroyedTargets(save);
+                var folderKillCount = UrKillCredit.Sum(save.UrVehicleKillsByLevel)
+                    + UrKillCredit.Sum(save.UrTroopKillsByLevel);
+                if (folderKillCount > 0)
+                {
+                    save.UrKillCreditBackfilled = true;
+                }
+                else if (save.DestroyedWorldTargetIds is { Length: > 0 })
+                {
+                    BackfillUrKillArraysFromDestroyedTargets(save);
+                    save.UrKillCreditBackfilled = true;
+                }
             }
 
             save.EnemyVehiclesKilled = UrKillCredit.Sum(save.UrVehicleKillsByLevel);
             save.EnemyTroopsKilled = UrKillCredit.Sum(save.UrTroopKillsByLevel);
+            ReconcileTotalScore(save);
         }
 
         private static void BackfillUrKillArraysFromDestroyedTargets(CharacterSaveData save)
@@ -348,6 +418,8 @@ namespace F89.Core
                     save.UrVehicleKillsByLevel[index]++;
                 }
             }
+
+            ReconcileTotalScore(save);
         }
 
         public static void EnsureBossMissionInitialized(CharacterSaveData save)
@@ -361,6 +433,51 @@ namespace F89.Core
             if (save.BossMissionOutpostNames == null || save.BossMissionOutpostNames.Length != bossSlotCount)
             {
                 save.BossMissionOutpostNames = new string[bossSlotCount];
+            }
+
+            MigrateBoss1Outpost(save);
+            MigrateBoss2Outpost(save);
+        }
+
+        private static void MigrateBoss1Outpost(CharacterSaveData save)
+        {
+            if (save.BossMissionOutpostNames.Length == 0)
+            {
+                return;
+            }
+
+            var linked = save.BossMissionOutpostNames[0];
+            if (string.IsNullOrWhiteSpace(linked) || linked == LandBossMissionAssignment.LegacyBoss1OutpostName)
+            {
+                save.BossMissionOutpostNames[0] = LandBossMissionAssignment.Boss1OutpostName;
+            }
+
+            if (save.AssignedBossNumber == 1
+                && (string.IsNullOrWhiteSpace(save.AssignedBossOutpostName)
+                    || save.AssignedBossOutpostName == LandBossMissionAssignment.LegacyBoss1OutpostName))
+            {
+                save.AssignedBossOutpostName = LandBossMissionAssignment.Boss1OutpostName;
+            }
+        }
+
+        private static void MigrateBoss2Outpost(CharacterSaveData save)
+        {
+            if (save.BossMissionOutpostNames.Length < 2)
+            {
+                return;
+            }
+
+            var linked = save.BossMissionOutpostNames[1];
+            if (string.IsNullOrWhiteSpace(linked) || linked == LandBossMissionAssignment.LegacyBoss2OutpostName)
+            {
+                save.BossMissionOutpostNames[1] = LandBossMissionAssignment.Boss2OutpostName;
+            }
+
+            if (save.AssignedBossNumber == 2
+                && (string.IsNullOrWhiteSpace(save.AssignedBossOutpostName)
+                    || save.AssignedBossOutpostName == LandBossMissionAssignment.LegacyBoss2OutpostName))
+            {
+                save.AssignedBossOutpostName = LandBossMissionAssignment.Boss2OutpostName;
             }
         }
 
@@ -434,20 +551,6 @@ namespace F89.Core
             }
 
             EnsureLoaded();
-            if (result.TroopsKilled > 0)
-            {
-                save.EnemyTroopsKilled += result.TroopsKilled;
-            }
-
-            if (result.ScoreEarned > 0)
-            {
-                save.TotalScore += result.ScoreEarned;
-                if (result.ScoreEarned > save.BestMissionScore)
-                {
-                    save.BestMissionScore = result.ScoreEarned;
-                }
-            }
-
             WriteToDisk();
         }
 

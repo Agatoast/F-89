@@ -5,12 +5,12 @@ using UnityEngine;
 namespace F89.Core
 {
     /// <summary>
-    /// Spawns permanent outpost buildings (1–2 type-3, 30–40 type-1/2, optional bunker cube)
+    /// Spawns permanent outpost buildings (1 type-3, 10–15 type-1/2, optional bunker cube, runway)
     /// and registers the vehicle/troop keep-out zone around the cluster.
     /// </summary>
     public static class OutpostBuildingClusterSpawner
     {
-        private const string ClusterRootName = "BuildingCluster";
+        public const string ClusterRootName = "BuildingCluster";
 
         public static void EnsureAllLandOutpostClusters(float worldUnitsPerMile, float ticSizeWorldUnits = 1f)
         {
@@ -39,12 +39,31 @@ namespace F89.Core
                     Object.Destroy(existing.gameObject);
                 }
 
+                var runway = baseSite.transform.Find(OutpostRunwayVisual.RunwayObjectName);
+                if (runway != null)
+                {
+                    Object.Destroy(runway.gameObject);
+                }
+
                 return;
             }
 
             if (existing != null)
             {
                 EnsureBuildingLockableTargets(existing, ticSizeWorldUnits);
+                EnsureSurfaceBunkerPads(existing, ticSizeWorldUnits);
+                ApplySavedBuildingDestruction(baseSite, existing);
+                var clusterCenter = existing.position;
+                clusterCenter.y = 0f;
+                EnsureRunway(
+                    baseSite,
+                    clusterCenter,
+                    OutpostGroundRules.KeepOutRadiusWorld(ticSizeWorldUnits),
+                    ticSizeWorldUnits,
+                    new System.Random(StableSeed(baseSite) + 9137));
+                OutpostRunwayVisual.ApplySavedTowerDestruction(baseSite);
+                OutpostRunwayVisual.ApplySavedBunkerDestruction(baseSite, ticSizeWorldUnits);
+                RemoveLegacyClusterBunker(existing);
                 return;
             }
 
@@ -69,19 +88,26 @@ namespace F89.Core
                 }
 
                 var lockable = building.GetComponent<LockableTarget>();
+                var label = lockable != null ? lockable.TargetLabel : building.BuildingType.ToString();
+                var affiliation = OutpostPrimaryObjective.AffiliationForBuilding(building.BuildingType, label);
                 if (lockable == null)
                 {
                     lockable = building.gameObject.AddComponent<LockableTarget>();
-                    var label = building.BuildingType == OutpostBuildingType.Bunker
-                        ? "Bunker"
-                        : building.BuildingType.ToString();
                     lockable.Configure(
                         label,
                         LockableTargetKind.Ground,
-                        TargetAffiliation.Hostile,
+                        affiliation,
                         TargetUnitClass.Building);
                     lockable.SetMaxGroundHitPoints(OutpostBuildingGhp.ForType(building.BuildingType));
                     lockable.SetHitRadiusWorld(footprint * 0.55f);
+                }
+                else
+                {
+                    lockable.Configure(
+                        label,
+                        LockableTargetKind.Ground,
+                        affiliation,
+                        TargetUnitClass.Building);
                 }
 
                 var collider = building.GetComponent<Collider>();
@@ -92,6 +118,29 @@ namespace F89.Core
             }
         }
 
+        private static void EnsureSurfaceBunkerPads(Transform clusterRoot, float ticSizeWorldUnits)
+        {
+            if (clusterRoot == null)
+            {
+                return;
+            }
+
+            var footprint = OutpostGroundRules.FootprintWorld(ticSizeWorldUnits);
+            var buildings = clusterRoot.GetComponentsInChildren<OutpostBuilding>(true);
+            for (var i = 0; i < buildings.Length; i++)
+            {
+                var building = buildings[i];
+                if (building == null || building.BuildingType != OutpostBuildingType.Bunker || !building.IsDestroyed)
+                {
+                    continue;
+                }
+
+                var groundPosition = building.transform.position;
+                groundPosition.y = 0f;
+                OutpostSurfaceBunkerPad.EnsureAt(clusterRoot, groundPosition, footprint);
+            }
+        }
+
         private static void SpawnCluster(
             AntarcticaBase baseSite,
             float worldUnitsPerMile,
@@ -99,7 +148,6 @@ namespace F89.Core
         {
             var footprint = OutpostGroundRules.FootprintWorld(ticSizeWorldUnits);
             var minCenterSep = OutpostGroundRules.MinCenterSeparationWorld(ticSizeWorldUnits);
-            var type3Sep = TacScale.TacsToWorld(OutpostGroundRules.MinType3SeparationTacs, ticSizeWorldUnits);
             var keepOut = OutpostGroundRules.KeepOutRadiusWorld(ticSizeWorldUnits);
             var packRadius = keepOut * 0.9f;
 
@@ -117,41 +165,6 @@ namespace F89.Core
             cluster.Configure(center, keepOut, hasBunker);
 
             var placed = new List<Vector3>(48);
-            var type3Centers = new List<Vector3>(2);
-
-            if (hasBunker)
-            {
-                // Slight offset so the bunker sits near — not exactly on — the geometric middle.
-                var bunkerOffset = new Vector3(
-                    ((float)rng.NextDouble() * 2f - 1f) * footprint * 0.35f,
-                    0f,
-                    ((float)rng.NextDouble() * 2f - 1f) * footprint * 0.35f);
-                var bunkerPos = center + bunkerOffset;
-                CreateBuilding(root.transform, OutpostBuildingType.Bunker, bunkerPos, footprint, ticSizeWorldUnits);
-                placed.Add(bunkerPos);
-            }
-
-            var type3Count = rng.Next(OutpostGroundRules.Type3CountMin, OutpostGroundRules.Type3CountMax + 1);
-            for (var i = 0; i < type3Count; i++)
-            {
-                if (!TryPlace(
-                        rng,
-                        center,
-                        packRadius,
-                        minCenterSep,
-                        placed,
-                        type3Centers,
-                        type3Sep,
-                        requireType3Separation: true,
-                        out var pos))
-                {
-                    break;
-                }
-
-                CreateBuilding(root.transform, OutpostBuildingType.Type3, pos, footprint, ticSizeWorldUnits);
-                placed.Add(pos);
-                type3Centers.Add(pos);
-            }
 
             var otherCount = rng.Next(
                 OutpostGroundRules.OtherBuildingCountMin,
@@ -169,7 +182,8 @@ namespace F89.Core
                 minCenterSep,
                 placed,
                 footprint,
-                ticSizeWorldUnits);
+                ticSizeWorldUnits,
+                baseSite);
             PlaceMany(
                 root.transform,
                 OutpostBuildingType.Type2,
@@ -180,7 +194,43 @@ namespace F89.Core
                 minCenterSep,
                 placed,
                 footprint,
-                ticSizeWorldUnits);
+                ticSizeWorldUnits,
+                baseSite);
+
+            EnsureRunway(baseSite, center, keepOut, ticSizeWorldUnits, rng);
+            OutpostRunwayVisual.ApplySavedTowerDestruction(baseSite);
+            OutpostRunwayVisual.ApplySavedBunkerDestruction(baseSite, ticSizeWorldUnits);
+            RemoveLegacyClusterBunker(root.transform);
+        }
+
+        private static void RemoveLegacyClusterBunker(Transform clusterRoot)
+        {
+            if (clusterRoot == null)
+            {
+                return;
+            }
+
+            var buildings = clusterRoot.GetComponentsInChildren<OutpostBuilding>(true);
+            for (var i = 0; i < buildings.Length; i++)
+            {
+                var building = buildings[i];
+                if (building == null || building.BuildingType != OutpostBuildingType.Bunker)
+                {
+                    continue;
+                }
+
+                Object.Destroy(building.gameObject);
+            }
+        }
+
+        private static void EnsureRunway(
+            AntarcticaBase baseSite,
+            Vector3 clusterCenter,
+            float keepOutRadiusWorld,
+            float ticSizeWorldUnits,
+            System.Random rng)
+        {
+            OutpostRunwayVisual.EnsureAt(baseSite, clusterCenter, keepOutRadiusWorld, ticSizeWorldUnits, rng);
         }
 
         private static void PlaceMany(
@@ -193,7 +243,8 @@ namespace F89.Core
             float minCenterSep,
             List<Vector3> placed,
             float footprint,
-            float ticSizeWorldUnits)
+            float ticSizeWorldUnits,
+            AntarcticaBase baseSite)
         {
             for (var i = 0; i < count; i++)
             {
@@ -211,8 +262,42 @@ namespace F89.Core
                     continue;
                 }
 
-                CreateBuilding(parent, type, pos, footprint, ticSizeWorldUnits);
+                CreateBuilding(
+                    parent,
+                    type,
+                    pos,
+                    footprint,
+                    ticSizeWorldUnits,
+                    baseSite,
+                    $"{type}-{i}");
                 placed.Add(pos);
+            }
+        }
+
+        private static void ApplySavedBuildingDestruction(AntarcticaBase baseSite, Transform clusterRoot)
+        {
+            if (baseSite == null || clusterRoot == null)
+            {
+                return;
+            }
+
+            var buildings = clusterRoot.GetComponentsInChildren<OutpostBuilding>(true);
+            for (var i = 0; i < buildings.Length; i++)
+            {
+                var building = buildings[i];
+                if (building == null || building.IsDestroyed)
+                {
+                    continue;
+                }
+
+                var lockable = building.GetComponent<LockableTarget>();
+                var label = lockable != null ? lockable.TargetLabel : building.BuildingType.ToString();
+                if (!AntarcticaOutpostState.IsTargetDestroyed(baseSite.BaseName, label))
+                {
+                    continue;
+                }
+
+                building.MarkDestroyed();
             }
         }
 
@@ -275,8 +360,16 @@ namespace F89.Core
             OutpostBuildingType type,
             Vector3 worldPosition,
             float footprint,
-            float ticSizeWorldUnits)
+            float ticSizeWorldUnits,
+            AntarcticaBase baseSite,
+            string stableLabel)
         {
+            if (baseSite != null
+                && AntarcticaOutpostState.IsTargetDestroyed(baseSite.BaseName, stableLabel))
+            {
+                return;
+            }
+
             var heightTacs = type switch
             {
                 OutpostBuildingType.Type2 => 0.5f,
@@ -298,11 +391,10 @@ namespace F89.Core
             component.Configure(type);
 
             var lockable = building.AddComponent<LockableTarget>();
-            var label = type == OutpostBuildingType.Bunker ? "Bunker" : type.ToString();
             lockable.Configure(
-                label,
+                stableLabel,
                 LockableTargetKind.Ground,
-                TargetAffiliation.Hostile,
+                OutpostPrimaryObjective.AffiliationForBuilding(type, stableLabel),
                 TargetUnitClass.Building);
             lockable.SetMaxGroundHitPoints(OutpostBuildingGhp.ForType(type));
             lockable.SetHitRadiusWorld(footprint * 0.55f);

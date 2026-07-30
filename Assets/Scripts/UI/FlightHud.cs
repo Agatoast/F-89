@@ -56,7 +56,7 @@ namespace F89.UI
 
         private void Update()
         {
-            if (GamePauseController.IsPaused || AntarcticaMapOverlay.IsOpen)
+            if (GamePauseController.IsPaused || AntarcticaMapOverlay.IsOpen || AircraftLandingController.IsParkedAtRunway)
             {
                 return;
             }
@@ -69,6 +69,7 @@ namespace F89.UI
             if (GameKeyBindings.WasPressed(GameKeyBindingIds.Land)
                 && aircraft != null
                 && !AircraftLandingController.IsCarrierApproachPromptVisible
+                && !AircraftLandingController.IsRunwayRefuelPromptVisible
                 && AircraftLanding.CanLand(aircraft.CurrentSpeedMph))
             {
                 AircraftLanding.TryLand(aircraft);
@@ -80,6 +81,7 @@ namespace F89.UI
             if (Event.current == null
                 || GamePauseController.IsPaused
                 || AntarcticaMapOverlay.IsOpen
+                || AircraftLandingController.IsRunwayRefuelPromptVisible
                 || aircraft == null)
             {
                 return;
@@ -103,7 +105,9 @@ namespace F89.UI
         {
             if (aircraft == null
                 || AircraftLandingController.IsCarrierApproachPromptVisible
-                || !AircraftLanding.CanLand(aircraft.CurrentSpeedMph))
+                || AircraftLandingController.IsRunwayRefuelPromptVisible
+                || AircraftLandingController.IsParkedAtRunway
+                || !AircraftLanding.CanShowLandPrompt(aircraft))
             {
                 return;
             }

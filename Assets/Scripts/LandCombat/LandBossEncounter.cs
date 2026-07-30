@@ -56,8 +56,59 @@ namespace F89.LandCombat
 
         public static bool IsGuardCleared(int bossNumber)
         {
-            // Surface guards respawn on every landing until the boss is defeated.
-            return IsDefeated(bossNumber);
+            bossNumber = ClampBossNumber(bossNumber);
+            var save = CharacterSessionState.ActiveSave;
+            return save != null
+                ? (save.BossGuardClearedMask & (1 << (bossNumber - 1))) != 0
+                : false;
+        }
+
+        public static void MarkGuardsCleared(int bossNumber)
+        {
+            bossNumber = ClampBossNumber(bossNumber);
+            var save = CharacterSessionState.ActiveSave;
+            if (save == null || IsGuardCleared(bossNumber))
+            {
+                return;
+            }
+
+            save.BossGuardClearedMask |= 1 << (bossNumber - 1);
+            CharacterSaveRepository.WriteBossProgress(save);
+        }
+
+        /// <summary>Full-health reset for undefeated bosses when the player rearms at CV or a friendly base.</summary>
+        public static void ResetUndefeatedBossHealthOnRearm()
+        {
+            var save = CharacterSessionState.ActiveSave;
+            if (save == null)
+            {
+                return;
+            }
+
+            CharacterSaveRepository.EnsureGearInitialized(save);
+            var changed = false;
+            for (var bossNumber = FirstBossNumber; bossNumber <= LastBossNumber; bossNumber++)
+            {
+                if (IsDefeated(bossNumber))
+                {
+                    continue;
+                }
+
+                for (var enemyIndex = 0; enemyIndex < GetEnemyCount(bossNumber); enemyIndex++)
+                {
+                    var slots = enemyIndex == 0 ? save.BossPrimaryHitPoints : save.BossSecondaryHitPoints;
+                    if (slots[bossNumber] > -0.5f)
+                    {
+                        slots[bossNumber] = -1f;
+                        changed = true;
+                    }
+                }
+            }
+
+            if (changed)
+            {
+                CharacterSaveRepository.WriteBossProgress(save);
+            }
         }
 
         public static int GetEnemyCount(int bossNumber) =>

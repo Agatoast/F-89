@@ -69,8 +69,10 @@ namespace F89.Testing
 
             if (LandCombatTestCheats.ResetDestroyedOutpostsOnDevEntry)
             {
-                AntarcticaOutpostState.ResetAllDestroyedOutposts();
+                CampaignWorldReset.ResetMapForFreshPlay();
             }
+
+            AntarcticaOutpostState.ApplyFriendlyControlToAllBases();
 
             var existing = GameObject.Find(RootName);
             var mapSizeMiles = worldMap != null ? worldMap.antarcticaSizeMiles : 3000f;
@@ -87,6 +89,7 @@ namespace F89.Testing
                     ApplyLockedCampaignLayout(existing.transform, worldUnitsPerMile);
                     SyncAllLandBaseWorldState(worldUnitsPerMile);
                     EnsureOutpostBuildingClusters(worldUnitsPerMile, profile);
+                    AntarcticaOutpostState.ApplyFriendlyControlToAllBases();
                     LogCarrierReadyState();
                     LogOutpostSiteIdSystem();
                     EnsureOpSouthPlatoonIfPlayerPresent();
@@ -113,14 +116,42 @@ namespace F89.Testing
             EnsureCarrierAtLockedPosition(worldUnitsPerMile, carrierPositionMiles);
             SyncAllLandBaseWorldState(worldUnitsPerMile);
             EnsureOutpostBuildingClusters(worldUnitsPerMile, profile);
+            AntarcticaOutpostState.ApplyFriendlyControlToAllBases();
             LogCarrierReadyState();
             LogOutpostSiteIdSystem();
             EnsureOpSouthPlatoonIfPlayerPresent();
         }
 
-        private static void EnsureOpSouthPlatoonIfPlayerPresent()
+        public static void EnsureMissionPlatoonsIfNeeded(AircraftController player)
         {
-            var player = Object.FindAnyObjectByType<AircraftController>();
+            EnsureOpSouthPlatoonIfPlayerPresent(player);
+        }
+
+        private static void EnsureOpSouthPlatoonIfPlayerPresent(AircraftController preferredPlayer = null)
+        {
+            if (FlightGroundReturnService.ShouldSkipCarrierSpawn()
+                || LandMissionHandoffState.IsRunwayDeckSortie())
+            {
+                return;
+            }
+
+            var outposts = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            for (var i = 0; i < outposts.Length; i++)
+            {
+                var outpost = outposts[i];
+                if (outpost != null
+                    && string.Equals(
+                        outpost.SiteCode,
+                        OutpostVehicleSpawner.OpSouthSiteCode,
+                        System.StringComparison.OrdinalIgnoreCase)
+                    && OutpostFlightPlatoonState.ShouldSkipPlatoonRespawn(outpost))
+                {
+                    OutpostVehicleSpawner.EnsureEmptyPlatoonMarker(outpost);
+                    return;
+                }
+            }
+
+            var player = preferredPlayer ?? Object.FindAnyObjectByType<AircraftController>();
             if (player != null)
             {
                 OutpostVehicleSpawner.EnsureOpSouthEnemyPlatoon(player);
@@ -310,6 +341,27 @@ namespace F89.Testing
                         BaseSiteKind.Land);
                 }
             }
+        }
+
+        public static bool TryMovePlayerToOutpostRunway(Transform playerTransform, string outpostName)
+        {
+            if (playerTransform == null
+                || !OutpostRunwayLanding.TryGetRunwaySpawn(outpostName, out var spawnPosition, out var spawnRotation))
+            {
+                return false;
+            }
+
+            playerTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
+            var body = playerTransform.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.position = spawnPosition;
+                body.rotation = spawnRotation;
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+
+            return true;
         }
 
         public static bool TryMovePlayerToCarrier(Transform playerTransform)

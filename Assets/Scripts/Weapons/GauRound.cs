@@ -124,7 +124,7 @@ namespace F89.Weapons
 
         private LockableTarget FindTargetUnderCrosshairDot()
         {
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
             return DirectFireTargetRules.FindGau27TargetUnderCrosshairDot(aimPoint, dotRadiusWorld, targets);
         }
     }

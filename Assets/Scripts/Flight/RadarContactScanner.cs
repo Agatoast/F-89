@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using F89.Core;
+using F89.Enemies;
 using F89.LandCombat;
 using F89.Weapons;
 using UnityEngine;
@@ -25,8 +26,12 @@ namespace F89.Flight
         public const float RangeMiles = 150f;
         public const float MidRangeBandMiles = 100f;
         public const float HostileDetectionMiles = 50f;
-        public const float ShortRangeMiles = 25f;
-        public const float ShortRangeBandMiles = 5f;
+        public const float ShortRangeMiles = 20f;
+        public const float ShortRangeBandMiles = 10f;
+
+        private static float nextPlatoonEnsureTime;
+
+        private const float PlatoonEnsureIntervalSeconds = 5f;
 
         public static void CollectVisibleContacts(
             Vector3 observerPosition,
@@ -50,8 +55,35 @@ namespace F89.Flight
                 return;
             }
 
+            TryEnsureNearbyHostilePlatoons(observerPosition, worldMap, ticSizeWorldUnits, rangeCapMiles);
             CollectLockableTargets(observerPosition, worldMap, ticSizeWorldUnits, rangeCapMiles, results);
             CollectBases(observerPosition, worldMap, ticSizeWorldUnits, rangeCapMiles, results);
+        }
+
+        private static void TryEnsureNearbyHostilePlatoons(
+            Vector3 observerPosition,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits,
+            float? rangeCapMiles)
+        {
+            if (Time.unscaledTime < nextPlatoonEnsureTime)
+            {
+                return;
+            }
+
+            nextPlatoonEnsureTime = Time.unscaledTime + PlatoonEnsureIntervalSeconds;
+            var player = AircraftController.Player;
+            if (player == null)
+            {
+                return;
+            }
+
+            OutpostVehicleSpawner.EnsureNearestHostilePlatoonWithinMiles(
+                observerPosition,
+                HostileDetectionMiles,
+                worldMap,
+                ticSizeWorldUnits,
+                player);
         }
 
         private static void CollectLockableTargets(
@@ -61,13 +93,14 @@ namespace F89.Flight
             float? rangeCapMiles,
             List<RadarContact> results)
         {
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
             foreach (var target in targets)
             {
                 if (target == null
                     || !target.IsAlive
                     || target.IsPlayerAircraft
                     || target.IsFlareDecoy
+                    || target.IsNeutral
                     || target.GetComponent<AntarcticaBase>() != null)
                 {
                     continue;
@@ -93,7 +126,7 @@ namespace F89.Flight
                 {
                     WorldPosition = target.transform.position,
                     DistanceMiles = distanceMiles,
-                    IsHostile = !target.IsFriendly,
+                    IsHostile = target.Affiliation == TargetAffiliation.Hostile,
                     IsBase = false,
                     IsDestroyed = false,
                     HasBunker = false,
@@ -112,7 +145,7 @@ namespace F89.Flight
             float? rangeCapMiles,
             List<RadarContact> results)
         {
-            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            var bases = CombatThreatRange.GetCachedAntarcticaBases();
             foreach (var baseSite in bases)
             {
                 if (baseSite == null || !baseSite.IsActive)
@@ -138,9 +171,10 @@ namespace F89.Flight
                 }
 
                 var hasRevealedBunker = baseSite.SiteKind == BaseSiteKind.Land
-                    && LandBossMissionAssignment.IsBunkerRevealedAtOutpost(
-                        CharacterSessionState.ActiveSave,
-                        baseSite.BaseName);
+                    && (LandBossMissionAssignment.IsBunkerRevealedAtOutpost(
+                            CharacterSessionState.ActiveSave,
+                            baseSite.BaseName)
+                        || OutpostSurfaceBunkerPad.IsRevealedAtOutpost(baseSite));
                 results.Add(new RadarContact
                 {
                     WorldPosition = baseSite.transform.position,

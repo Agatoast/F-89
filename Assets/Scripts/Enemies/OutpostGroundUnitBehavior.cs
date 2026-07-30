@@ -15,6 +15,9 @@ namespace F89.Enemies
             new(128);
 
         private static int separationCacheFrame = -1;
+        private static int nextUpdateBucket;
+
+        private int updateBucket;
 
         private VehicleUnitDefinition definition;
         private WorldMapConfig worldMap;
@@ -63,6 +66,8 @@ namespace F89.Enemies
 
         private void OnEnable()
         {
+            updateBucket = nextUpdateBucket & 3;
+            nextUpdateBucket++;
             if (!ActiveUnits.Contains(this))
             {
                 ActiveUnits.Add(this);
@@ -79,7 +84,8 @@ namespace F89.Enemies
             if (definition == null
                 || worldMap == null
                 || flightProfile == null
-                || GamePauseController.IsPaused)
+                || GamePauseController.IsPaused
+                || ShouldSkipFrameUpdate())
             {
                 return;
             }
@@ -167,11 +173,15 @@ namespace F89.Enemies
                 return;
             }
 
+            ResolvePlayerTargetIfNeeded();
+
             var target = SelectCombatTarget(out var useAirCombat);
             if (target == null)
             {
                 return;
             }
+
+            FaceCombatTarget(target);
 
             if (useAirCombat)
             {
@@ -217,30 +227,87 @@ namespace F89.Enemies
         private LockableTarget AcquireNewCombatTarget(out bool useAirCombat)
         {
             useAirCombat = false;
+            ResolvePlayerTargetIfNeeded();
 
             if (playerTarget != null
                 && playerTarget.IsAlive
+                && IsValidAirCombatTarget(playerTarget)
+                && IsWithinAirRange(playerTarget)
                 && definition.planeVsOtherTargetChance > 0f
-                && Random.value <= definition.planeVsOtherTargetChance
-                && IsWithinAirRange(playerTarget))
+                && Random.value <= definition.planeVsOtherTargetChance)
             {
                 useAirCombat = true;
                 return playerTarget;
+            }
+
+            var airTarget = FindClosestAirTarget();
+            if (airTarget != null)
+            {
+                useAirCombat = true;
+                return airTarget;
             }
 
             var groundTarget = FindClosestGroundTarget();
             if (groundTarget != null)
             {
+                useAirCombat = false;
                 return groundTarget;
             }
 
-            if (playerTarget != null && playerTarget.IsAlive && IsWithinAirRange(playerTarget))
+            return null;
+        }
+
+        private void FaceCombatTarget(LockableTarget target)
+        {
+            if (target == null)
             {
-                useAirCombat = true;
-                return playerTarget;
+                return;
             }
 
-            return null;
+            var toTarget = target.transform.position - transform.position;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+
+            transform.rotation = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
+        }
+
+        private bool IsOpposingCombatTarget(LockableTarget target)
+        {
+            if (target == null || !target.IsAlive || target.IsFlareDecoy || definition == null)
+            {
+                return false;
+            }
+
+            if (target == GetComponent<LockableTarget>())
+            {
+                return false;
+            }
+
+            if (target.IsPlayerAircraft)
+            {
+                return definition.IsHostile;
+            }
+
+            if (target.GetComponent<AntarcticaBase>() != null)
+            {
+                return definition.IsHostile && target.IsFriendly;
+            }
+
+            var otherUnit = target.GetComponent<VehicleUnitComponent>();
+            if (otherUnit != null && otherUnit.Definition != null)
+            {
+                return otherUnit.Definition.designation != definition.designation;
+            }
+
+            if (definition.IsHostile)
+            {
+                return target.IsFriendly;
+            }
+
+            return target.Affiliation == TargetAffiliation.Hostile;
         }
 
         private void ClearCombatLock()
@@ -271,25 +338,14 @@ namespace F89.Enemies
 
         private bool IsValidAirCombatTarget(LockableTarget target)
         {
-            if (target == null
-                || !target.IsAlive
-                || target.IsFlareDecoy
-                || target.GetComponent<AntarcticaBase>() != null)
+            if (!IsOpposingCombatTarget(target))
             {
                 return false;
             }
 
-            if (definition.IsHostile)
-            {
-                return target.IsPlayerAircraft
-                    || ((target.Affiliation == TargetAffiliation.Hostile || target.IsNeutral)
-                        && (target.TargetKind == LockableTargetKind.Air || target.IsFlier));
-            }
-
-            return target.Affiliation == TargetAffiliation.Hostile
-                && (target.TargetKind == LockableTargetKind.Air
-                    || target.IsFlier
-                    || target.IsPlayerAircraft);
+            return target.IsPlayerAircraft
+                || target.TargetKind == LockableTargetKind.Air
+                || target.IsFlier;
         }
 
         private bool IsWithinGroundRange(LockableTarget target)
@@ -340,6 +396,37 @@ namespace F89.Enemies
             target.ApplyGroundDamage(damage, definition.abbreviation, wasLockedShot: false);
         }
 
+        private LockableTarget FindClosestAirTarget()
+        {
+            if (definition.airRangeTics <= 0f)
+            {
+                return null;
+            }
+
+            LockableTarget closest = null;
+            var closestDistance = float.MaxValue;
+            var targets = CombatThreatRange.GetCachedLockableTargets();
+            for (var i = 0; i < targets.Length; i++)
+            {
+                var target = targets[i];
+                if (!IsValidAirCombatTarget(target))
+                {
+                    continue;
+                }
+
+                var distanceTics = AirCombatDistanceTics(transform.position, target);
+                if (distanceTics > definition.airRangeTics || distanceTics >= closestDistance)
+                {
+                    continue;
+                }
+
+                closestDistance = distanceTics;
+                closest = target;
+            }
+
+            return closest;
+        }
+
         private LockableTarget FindClosestGroundTarget()
         {
             if (definition.groundRangeTics <= 0f)
@@ -349,7 +436,7 @@ namespace F89.Enemies
 
             LockableTarget closest = null;
             var closestDistance = float.MaxValue;
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
             for (var i = 0; i < targets.Length; i++)
             {
                 var target = targets[i];
@@ -373,16 +460,7 @@ namespace F89.Enemies
 
         private bool IsValidGroundCombatTarget(LockableTarget target)
         {
-            if (target == null
-                || !target.IsAlive
-                || target.IsPlayerAircraft
-                || target.IsFlareDecoy
-                || target.GetComponent<AntarcticaBase>() != null)
-            {
-                return false;
-            }
-
-            if (target.IsFriendly || target.IsNeutral)
+            if (!IsOpposingCombatTarget(target))
             {
                 return false;
             }
@@ -399,7 +477,30 @@ namespace F89.Enemies
                 return false;
             }
 
-            return AirDistanceTics(transform.position, target.transform.position) <= definition.airRangeTics;
+            return AirCombatDistanceTics(transform.position, target) <= definition.airRangeTics;
+        }
+
+        private float AirCombatDistanceTics(Vector3 from, LockableTarget target)
+        {
+            var to = target.transform.position;
+            if (target.IsPlayerAircraft || target.TargetKind == LockableTargetKind.Air || target.IsFlier)
+            {
+                from.y = 0f;
+                to.y = 0f;
+            }
+
+            return AirDistanceTics(from, to);
+        }
+
+        private void ResolvePlayerTargetIfNeeded()
+        {
+            if (playerTarget != null && playerTarget.IsAlive)
+            {
+                return;
+            }
+
+            var player = AircraftController.Player;
+            playerTarget = player != null ? player.GetComponent<LockableTarget>() : null;
         }
 
         private float HorizontalDistanceTics(Vector3 a, Vector3 b)
@@ -425,6 +526,7 @@ namespace F89.Enemies
 
             var ticSize = flightProfile != null ? flightProfile.ticSizeWorldUnits : 1f;
             var separationWorld = OutpostGroundRules.MinCenterSeparationWorld(ticSize);
+            var maxSepSqr = separationWorld * separationWorld;
             RefreshActiveUnitCache();
 
             var separation = Vector3.zero;
@@ -448,8 +550,14 @@ namespace F89.Enemies
                 var otherPos = other.transform.position;
                 otherPos.y = 0f;
                 var away = selfPosition - otherPos;
-                var distance = away.magnitude;
-                if (distance < 0.01f || distance >= separationWorld)
+                var distSqr = (away.x * away.x) + (away.z * away.z);
+                if (distSqr >= maxSepSqr)
+                {
+                    continue;
+                }
+
+                var distance = Mathf.Sqrt(distSqr);
+                if (distance < 0.01f)
                 {
                     continue;
                 }
@@ -575,6 +683,47 @@ namespace F89.Enemies
             var dx = a.x - b.x;
             var dz = a.z - b.z;
             return (dx * dx) + (dz * dz);
+        }
+
+        private bool ShouldSkipFrameUpdate()
+        {
+            if (ShouldSkipDuringAutopilotTransit())
+            {
+                return true;
+            }
+
+            ResolvePlayerTargetIfNeeded();
+            if (playerTarget == null || worldUnitsPerMile <= 0f)
+            {
+                return false;
+            }
+
+            const float nearPlayerMiles = 35f;
+            var nearRadiusWorld = nearPlayerMiles * worldUnitsPerMile;
+            if (FlatDistanceSqr(transform.position, playerTarget.transform.position)
+                <= nearRadiusWorld * nearRadiusWorld)
+            {
+                return false;
+            }
+
+            // Distant units tick at ~15 Hz to cut separation / roam cost.
+            var bucket = updateBucket;
+            return ((Time.frameCount + bucket) & 3) != 0;
+        }
+
+        private bool ShouldSkipDuringAutopilotTransit()
+        {
+            var autopilot = AutopilotController.Instance;
+            if (autopilot == null || !autopilot.IsFlying || playerTarget == null || worldUnitsPerMile <= 0f)
+            {
+                return false;
+            }
+
+            const float skipBeyondMiles = 55f;
+            var skipRadiusWorld = skipBeyondMiles * worldUnitsPerMile;
+            var delta = transform.position - playerTarget.transform.position;
+            delta.y = 0f;
+            return delta.sqrMagnitude > skipRadiusWorld * skipRadiusWorld;
         }
     }
 }

@@ -6,6 +6,23 @@ namespace F89.Flight
 {
     public static class CombatThreatRange
     {
+        private const float TargetCacheRefreshSeconds = 1.5f;
+
+        private static LockableTarget[] cachedTargets = System.Array.Empty<LockableTarget>();
+        private static AntarcticaBase[] cachedBases = System.Array.Empty<AntarcticaBase>();
+        private static float nextTargetCacheRefreshTime;
+        private static float nextBaseCacheRefreshTime;
+
+        public static void InvalidateCaches()
+        {
+            nextTargetCacheRefreshTime = 0f;
+            nextBaseCacheRefreshTime = 0f;
+        }
+
+        public static LockableTarget[] GetCachedLockableTargets() => GetCachedTargets();
+
+        public static AntarcticaBase[] GetCachedAntarcticaBases() => GetCachedBases();
+
         public static bool HasHostileContact(
             Vector3 worldPosition,
             WorldMapConfig worldMap,
@@ -23,26 +40,65 @@ namespace F89.Flight
                     ticSizeWorldUnits);
         }
 
+        /// <summary>
+        /// Hostile units that should disengage autopilot: vehicles, troops, and bunkers — not generic buildings.
+        /// </summary>
+        public static bool HasHostileAutopilotContact(
+            Vector3 worldPosition,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits)
+        {
+            if (HasHostileBaseWithinMiles(
+                    worldPosition,
+                    AutopilotController.HostileBaseContactMiles,
+                    worldMap,
+                    ticSizeWorldUnits))
+            {
+                return true;
+            }
+
+            return HasHostileUnitWithinMiles(
+                worldPosition,
+                AutopilotController.HostileUnitContactMiles,
+                worldMap,
+                ticSizeWorldUnits,
+                autopilotRelevantOnly: true);
+        }
+
         public static bool HasHostileUnitWithinMiles(
             Vector3 worldPosition,
             float rangeMiles,
             WorldMapConfig worldMap,
-            float ticSizeWorldUnits)
+            float ticSizeWorldUnits,
+            bool autopilotRelevantOnly = false)
         {
             if (worldMap == null || rangeMiles <= 0f)
             {
                 return false;
             }
 
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = GetCachedTargets();
             foreach (var target in targets)
             {
-                // Static outposts/buildings have a LockableTarget for radar identity,
-                // but are not mobile enemies and must never block a landing.
                 if (target == null
                     || !target.IsAlive
                     || target.IsFriendly
+                    || target.IsNeutral
                     || target.GetComponent<AntarcticaBase>() != null)
+                {
+                    continue;
+                }
+
+                var building = target.GetComponent<OutpostBuilding>();
+                if (building != null
+                    && !OutpostPrimaryObjective.IsMissionHostileBuilding(
+                        building.BuildingType,
+                        target.TargetLabel))
+                {
+                    continue;
+                }
+
+                if (autopilotRelevantOnly && !IsAutopilotRelevantHostileUnit(target))
                 {
                     continue;
                 }
@@ -56,6 +112,31 @@ namespace F89.Flight
             return false;
         }
 
+        private static bool IsAutopilotRelevantHostileUnit(LockableTarget target)
+        {
+            if (target == null
+                || !target.IsAlive
+                || target.IsFriendly
+                || target.IsFlareDecoy
+                || target.IsPlayerAircraft)
+            {
+                return false;
+            }
+
+            if (target.GetComponent<AntarcticaBase>() != null)
+            {
+                return false;
+            }
+
+            var building = target.GetComponent<OutpostBuilding>();
+            if (building != null)
+            {
+                return building.BuildingType == OutpostBuildingType.Bunker && !building.IsDestroyed;
+            }
+
+            return true;
+        }
+
         public static bool HasHostileBaseWithinMiles(
             Vector3 worldPosition,
             float rangeMiles,
@@ -67,7 +148,7 @@ namespace F89.Flight
                 return false;
             }
 
-            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            var bases = GetCachedBases();
             foreach (var baseSite in bases)
             {
                 if (baseSite == null || !baseSite.IsActive || baseSite.IsDestroyed)
@@ -119,6 +200,28 @@ namespace F89.Flight
             var delta = a - b;
             delta.y = 0f;
             return delta.magnitude / worldUnitsPerMile;
+        }
+
+        private static LockableTarget[] GetCachedTargets()
+        {
+            if (Time.unscaledTime >= nextTargetCacheRefreshTime)
+            {
+                cachedTargets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+                nextTargetCacheRefreshTime = Time.unscaledTime + TargetCacheRefreshSeconds;
+            }
+
+            return cachedTargets;
+        }
+
+        private static AntarcticaBase[] GetCachedBases()
+        {
+            if (Time.unscaledTime >= nextBaseCacheRefreshTime)
+            {
+                cachedBases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+                nextBaseCacheRefreshTime = Time.unscaledTime + TargetCacheRefreshSeconds;
+            }
+
+            return cachedBases;
         }
 
         private static bool IsWithinMiles(

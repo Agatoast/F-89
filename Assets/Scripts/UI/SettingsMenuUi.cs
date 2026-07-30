@@ -36,6 +36,21 @@ namespace F89.UI
             EnsureStyles();
             DrawDarkBackground();
 
+            if (GameKeyBindings.HasPendingConflict)
+            {
+                var conflictResult = KeymapConflictConfirmDialog.Draw(true);
+                if (conflictResult == KeymapConflictConfirmDialog.Result.Confirmed)
+                {
+                    GameKeyBindings.ConfirmPendingConflict();
+                }
+                else if (conflictResult == KeymapConflictConfirmDialog.Result.Cancelled)
+                {
+                    GameKeyBindings.CancelPendingConflict();
+                }
+
+                return view;
+            }
+
             if (GameKeyBindings.TryHandleListenEvent(Event.current))
             {
                 return view;
@@ -74,7 +89,7 @@ namespace F89.UI
 
             var volumeBottom = DrawVolumeSliders();
 
-            const int buttonCount = 5;
+            const int buttonCount = 4;
             var stackHeight = buttonCount * buttonHeight + (buttonCount - 1) * buttonSpacing;
             var availableTop = volumeBottom + UiFitCanvas.Px(18f);
             var availableBottom = backRect.y - UiFitCanvas.Px(16f);
@@ -95,15 +110,6 @@ namespace F89.UI
                 {
                     onExitSettings?.Invoke();
                 }
-            }
-
-            buttonY += buttonHeight + buttonSpacing;
-            if (StartPageMenuStyles.DrawMenuButton(
-                    new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
-                    GameSettings.MissileSoundsLabel.ToUpperInvariant(),
-                    fontSize: RootButtonFontSize))
-            {
-                GameSettings.ToggleMissileSounds();
             }
 
             buttonY += buttonHeight + buttonSpacing;
@@ -280,12 +286,12 @@ namespace F89.UI
             if (StartPageMenuStyles.DrawMenuButton(defaultsRect, "RESTORE DEFAULTS", fontSize: 22))
             {
                 GameKeyBindings.ResetToDefaults();
-                GameKeyBindings.CancelListening();
+                GameKeyBindings.ClearRebindState();
             }
 
             if (StartPageMenuStyles.DrawMenuButton(backRect, "BACK", fontSize: 28))
             {
-                GameKeyBindings.CancelListening();
+                GameKeyBindings.ClearRebindState();
                 return true;
             }
 

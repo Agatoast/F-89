@@ -14,17 +14,80 @@ namespace F89.Enemies
         public const string OpSouthSiteCode = "OP-SOUTH";
 
         private const string PlatoonRootName = "VehiclePlatoon";
-        private const int MinVehicleCount = 20;
-        private const int MaxVehicleCount = 30;
-        private const int MinTroopCount = 10;
-        private const int MaxTroopCount = 15;
         private const float SpawnMinRadiusMiles = 0.38f;
         private const float SpawnMaxRadiusMiles = 0.95f;
 
         public static void EnsureOpSouthEnemyPlatoon(AircraftController player)
         {
-            RemovePlatoonsAtOtherSites(OpSouthSiteCode);
             EnsureSiteEnemyPlatoon(OpSouthSiteCode, player);
+        }
+
+        /// <summary>
+        /// Spawns at most one UR platoon per call — the nearest hostile outpost in range that lacks a platoon.
+        /// </summary>
+        public static void EnsureNearestHostilePlatoonWithinMiles(
+            Vector3 worldPosition,
+            float rangeMiles,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits,
+            AircraftController player)
+        {
+            if (player == null || worldMap == null || rangeMiles <= 0f)
+            {
+                return;
+            }
+
+            var outposts = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            AntarcticaBase nearest = null;
+            var nearestDistance = float.MaxValue;
+
+            for (var i = 0; i < outposts.Length; i++)
+            {
+                var outpost = outposts[i];
+                if (outpost == null
+                    || !outpost.IsActive
+                    || outpost.IsDestroyed
+                    || outpost.SiteKind != BaseSiteKind.Land
+                    || outpost.Control != BaseControl.Hostile
+                    || string.IsNullOrWhiteSpace(outpost.SiteCode))
+                {
+                    continue;
+                }
+
+                var platoon = outpost.transform.Find(PlatoonRootName);
+                if (OutpostFlightPlatoonState.ShouldSkipPlatoonRespawn(outpost))
+                {
+                    if (platoon == null)
+                    {
+                        EnsureEmptyPlatoonMarker(outpost);
+                    }
+
+                    continue;
+                }
+
+                if (platoon != null)
+                {
+                    continue;
+                }
+
+                var distanceMiles = CombatThreatRange.DistanceMiles(
+                    worldPosition,
+                    outpost.transform.position,
+                    worldMap,
+                    ticSizeWorldUnits);
+                if (distanceMiles > rangeMiles || distanceMiles >= nearestDistance)
+                {
+                    continue;
+                }
+
+                nearestDistance = distanceMiles;
+                nearest = outpost;
+            }
+
+            if (nearest != null)
+            {
+                EnsureSiteEnemyPlatoon(nearest.SiteCode, player);
+            }
         }
 
         public static void EnsureSiteEnemyPlatoon(string siteCode, AircraftController player)
@@ -39,6 +102,19 @@ namespace F89.Enemies
             {
                 Debug.LogWarning($"F-89: No outpost found for SiteCode {siteCode} — vehicle platoon skipped.");
                 LogLandOutpostDiagnostics();
+                return;
+            }
+
+            if (outpost.Control != BaseControl.Hostile
+                || AntarcticaOutpostState.IsFriendlyOccupied(outpost.BaseName))
+            {
+                EnsureEmptyPlatoonMarker(outpost);
+                return;
+            }
+
+            if (OutpostFlightPlatoonState.ShouldSkipPlatoonRespawn(outpost))
+            {
+                EnsureEmptyPlatoonMarker(outpost);
                 return;
             }
 
@@ -61,86 +137,193 @@ namespace F89.Enemies
             var existingPlatoon = outpost.transform.Find(PlatoonRootName);
             if (existingPlatoon != null)
             {
-                if (existingPlatoon.childCount > 0)
+                if (HasLivingPlatoonUnits(existingPlatoon))
                 {
                     return;
                 }
 
+                if (AreAllPlatoonSlotsDestroyed(outpost))
+                {
+                    return;
+                }
+
+                MarkAllPlatoonSlotsDestroyed(outpost);
                 Object.Destroy(existingPlatoon.gameObject);
             }
 
-            var urUnits = CollectHostileCatalogUnits(includeTroops: false);
+            if (AreAllPlatoonSlotsDestroyed(outpost))
+            {
+                EnsureEmptyPlatoonMarker(outpost);
+                Debug.Log(
+                    $"F-89: {outpost.SiteCode} ({outpost.BaseName}) platoon remains cleared — no respawn.");
+                return;
+            }
+
+            var urUnits = CollectCatalogUnits(VehicleUnitDesignation.UR, includeTroops: false);
             if (urUnits.Count == 0)
             {
                 Debug.LogWarning($"F-89: No UR vehicles in catalog — platoon skipped for {siteCode}.");
                 return;
             }
 
-            var urTroops = CollectHostileCatalogUnits(includeTroops: true, troopsOnly: true);
-            var vehicleCount = ResolveSpawnCount(outpost, MinVehicleCount, MaxVehicleCount);
-            var troopCount = urTroops.Count > 0
-                ? ResolveSpawnCount(outpost, MinTroopCount, MaxTroopCount, salt: 7919)
+            var usUnits = CollectCatalogUnits(VehicleUnitDesignation.US, includeTroops: false);
+            var urTroops = CollectCatalogUnits(VehicleUnitDesignation.UR, includeTroops: true, troopsOnly: true);
+            var urVehicleCount = ResolveSpawnCount(
+                outpost,
+                OutpostGroundRules.MinVehicleCountPerSide,
+                OutpostGroundRules.MaxVehicleCountPerSide);
+            var usVehicleCount = usUnits.Count > 0
+                ? ResolveSpawnCount(
+                    outpost,
+                    OutpostGroundRules.MinVehicleCountPerSide,
+                    OutpostGroundRules.MaxVehicleCountPerSide,
+                    salt: 5101)
+                : 0;
+            var urTroopCount = urTroops.Count > 0
+                ? ResolveSpawnCount(
+                    outpost,
+                    OutpostGroundRules.MinTroopCount,
+                    OutpostGroundRules.MaxTroopCount,
+                    salt: 7919)
                 : 0;
             var playerTarget = player != null ? player.GetComponent<LockableTarget>() : null;
             var platoonRoot = new GameObject(PlatoonRootName);
             platoonRoot.transform.SetParent(outpost.transform, false);
+            platoonRoot.AddComponent<OutpostPlatoonRoot>();
 
+            var totalSlots = urVehicleCount + usVehicleCount + urTroopCount;
             var spawned = 0;
-            for (var i = 0; i < vehicleCount; i++)
-            {
-                var definition = urUnits[i % urUnits.Count];
-                var spawnPos = ResolveSpawnWorldPosition(
-                    outpost.transform.position,
-                    i,
-                    vehicleCount,
-                    worldUnitsPerMile,
-                    worldMap,
-                    definition,
-                    ticSize);
-                if (!SpawnGroundUnit(
-                        platoonRoot.transform,
-                        definition,
-                        spawnPos,
-                        worldMap,
-                        profile,
-                        worldUnitsPerMile,
-                        playerTarget))
-                {
-                    continue;
-                }
-
-                spawned++;
-            }
-
-            for (var i = 0; i < troopCount; i++)
-            {
-                var definition = urTroops[i % urTroops.Count];
-                var spawnPos = ResolveSpawnWorldPosition(
-                    outpost.transform.position,
-                    vehicleCount + i,
-                    vehicleCount + troopCount,
-                    worldUnitsPerMile,
-                    worldMap,
-                    definition,
-                    ticSize);
-                if (!SpawnGroundUnit(
-                        platoonRoot.transform,
-                        definition,
-                        spawnPos,
-                        worldMap,
-                        profile,
-                        worldUnitsPerMile,
-                        playerTarget))
-                {
-                    continue;
-                }
-
-                spawned++;
-            }
+            spawned += SpawnPlatoonSide(
+                platoonRoot.transform,
+                urUnits,
+                urVehicleCount,
+                angleOffset: 0f,
+                startIndex: 0,
+                totalSlots: totalSlots,
+                outpost,
+                worldMap,
+                profile,
+                worldUnitsPerMile,
+                ticSize,
+                playerTarget);
+            spawned += SpawnPlatoonSide(
+                platoonRoot.transform,
+                usUnits,
+                usVehicleCount,
+                angleOffset: Mathf.PI,
+                startIndex: urVehicleCount,
+                totalSlots: totalSlots,
+                outpost,
+                worldMap,
+                profile,
+                worldUnitsPerMile,
+                ticSize,
+                playerTarget);
+            spawned += SpawnPlatoonSide(
+                platoonRoot.transform,
+                urTroops,
+                urTroopCount,
+                angleOffset: 0f,
+                startIndex: urVehicleCount + usVehicleCount,
+                totalSlots: totalSlots,
+                outpost,
+                worldMap,
+                profile,
+                worldUnitsPerMile,
+                ticSize,
+                playerTarget);
 
             Debug.Log(
-                $"F-89: Spawned {spawned} UR ground unit(s) ({vehicleCount} vehicles, {troopCount} troops) "
-                + $"at {outpost.SiteCode} ({outpost.BaseName}). Building cluster present.");
+                $"F-89: Spawned {spawned} ground unit(s) at {outpost.SiteCode} ({outpost.BaseName}) — "
+                + $"UR {urVehicleCount}v/{urTroopCount}t, US {usVehicleCount}v. Building cluster present.");
+
+            if (spawned == 0 && AreAllPlatoonSlotsDestroyed(outpost))
+            {
+                Debug.Log(
+                    $"F-89: {outpost.SiteCode} ({outpost.BaseName}) platoon remains cleared — no respawn.");
+            }
+        }
+
+        private static bool HasLivingPlatoonUnits(Transform platoonRoot)
+        {
+            return PlatoonHasLivingUnits(platoonRoot);
+        }
+
+        public static bool PlatoonHasLivingUnits(Transform platoonRoot)
+        {
+            if (platoonRoot == null)
+            {
+                return false;
+            }
+
+            var targets = platoonRoot.GetComponentsInChildren<LockableTarget>(true);
+            for (var i = 0; i < targets.Length; i++)
+            {
+                var target = targets[i];
+                if (target != null && target.IsAlive)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static int SpawnPlatoonSide(
+            Transform platoonRoot,
+            List<VehicleUnitDefinition> catalog,
+            int count,
+            float angleOffset,
+            int startIndex,
+            int totalSlots,
+            AntarcticaBase outpost,
+            WorldMapConfig worldMap,
+            FlightProfile profile,
+            float worldUnitsPerMile,
+            float ticSize,
+            LockableTarget playerTarget)
+        {
+            if (catalog == null || catalog.Count == 0 || count <= 0)
+            {
+                return 0;
+            }
+
+            var spawned = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var definition = catalog[i % catalog.Count];
+                var slotLabel = BuildUnitSlotLabel(definition, startIndex + i);
+                if (AntarcticaOutpostState.IsTargetDestroyed(outpost.BaseName, slotLabel))
+                {
+                    continue;
+                }
+
+                var spawnPos = ResolveSpawnWorldPosition(
+                    outpost.transform.position,
+                    startIndex + i,
+                    totalSlots,
+                    worldUnitsPerMile,
+                    worldMap,
+                    definition,
+                    ticSize,
+                    angleOffset);
+                if (!SpawnGroundUnit(
+                        platoonRoot,
+                        definition,
+                        slotLabel,
+                        spawnPos,
+                        worldMap,
+                        profile,
+                        worldUnitsPerMile,
+                        playerTarget))
+                {
+                    continue;
+                }
+
+                spawned++;
+            }
+
+            return spawned;
         }
 
         public static void RemoveAllPlatoons()
@@ -153,6 +336,139 @@ namespace F89.Enemies
                 {
                     Object.Destroy(platoon.gameObject);
                 }
+            }
+        }
+
+        /// <summary>
+        /// True when every platoon slot for this outpost is marked destroyed in the save
+        /// (no living units should respawn).
+        /// </summary>
+        public static bool AreAllPlatoonSlotsDestroyed(AntarcticaBase outpost)
+        {
+            if (outpost == null)
+            {
+                return false;
+            }
+
+            if (OutpostFlightPlatoonState.IsPlatoonClearedInSave(outpost.BaseName))
+            {
+                return true;
+            }
+
+            BuildExpectedPlatoonSlotLabels(
+                outpost,
+                out var labels,
+                out var livingCount);
+            if (livingCount <= 0)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < labels.Count; i++)
+            {
+                if (!AntarcticaOutpostState.IsTargetDestroyed(outpost.BaseName, labels[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>Persist platoon clearance so scene reloads never refill killed units.</summary>
+        public static void MarkAllPlatoonSlotsDestroyed(AntarcticaBase outpost)
+        {
+            if (outpost == null)
+            {
+                return;
+            }
+
+            BuildExpectedPlatoonSlotLabels(
+                outpost,
+                out var labels,
+                out _);
+            for (var i = 0; i < labels.Count; i++)
+            {
+                AntarcticaOutpostState.MarkTargetDestroyed(outpost.BaseName, labels[i]);
+            }
+
+            OutpostFlightPlatoonState.MarkPlatoonCleared(outpost.BaseName);
+        }
+
+        public static void EnsureEmptyPlatoonMarker(AntarcticaBase outpost)
+        {
+            if (outpost == null)
+            {
+                return;
+            }
+
+            var existingPlatoon = outpost.transform.Find(PlatoonRootName);
+            if (existingPlatoon != null)
+            {
+                return;
+            }
+
+            var clearedRoot = new GameObject(PlatoonRootName);
+            clearedRoot.transform.SetParent(outpost.transform, false);
+            clearedRoot.AddComponent<OutpostPlatoonRoot>();
+        }
+
+        private static void BuildExpectedPlatoonSlotLabels(
+            AntarcticaBase outpost,
+            out List<string> labels,
+            out int livingCount)
+        {
+            labels = new List<string>(32);
+            livingCount = 0;
+
+            var urUnits = CollectCatalogUnits(VehicleUnitDesignation.UR, includeTroops: false);
+            var usUnits = CollectCatalogUnits(VehicleUnitDesignation.US, includeTroops: false);
+            var urTroops = CollectCatalogUnits(VehicleUnitDesignation.UR, includeTroops: true, troopsOnly: true);
+            if (urUnits.Count == 0)
+            {
+                return;
+            }
+
+            var urVehicleCount = ResolveSpawnCount(
+                outpost,
+                OutpostGroundRules.MinVehicleCountPerSide,
+                OutpostGroundRules.MaxVehicleCountPerSide);
+            var usVehicleCount = usUnits.Count > 0
+                ? ResolveSpawnCount(
+                    outpost,
+                    OutpostGroundRules.MinVehicleCountPerSide,
+                    OutpostGroundRules.MaxVehicleCountPerSide,
+                    salt: 5101)
+                : 0;
+            var urTroopCount = urTroops.Count > 0
+                ? ResolveSpawnCount(
+                    outpost,
+                    OutpostGroundRules.MinTroopCount,
+                    OutpostGroundRules.MaxTroopCount,
+                    salt: 7919)
+                : 0;
+
+            AppendSlotLabels(labels, urUnits, urVehicleCount, 0);
+            AppendSlotLabels(labels, usUnits, usVehicleCount, urVehicleCount);
+            AppendSlotLabels(labels, urTroops, urTroopCount, urVehicleCount + usVehicleCount);
+            livingCount = urVehicleCount + usVehicleCount + urTroopCount;
+        }
+
+        private static void AppendSlotLabels(
+            List<string> labels,
+            List<VehicleUnitDefinition> catalog,
+            int count,
+            int startIndex)
+        {
+            if (catalog == null || catalog.Count == 0 || count <= 0)
+            {
+                return;
+            }
+
+            for (var i = 0; i < count; i++)
+            {
+                var definition = catalog[i % catalog.Count];
+                labels.Add(BuildUnitSlotLabel(definition, startIndex + i));
             }
         }
 
@@ -181,9 +497,17 @@ namespace F89.Enemies
             }
         }
 
+        private static string BuildUnitSlotLabel(VehicleUnitDefinition definition, int slotIndex)
+        {
+            var designation = definition != null ? definition.designation.ToString() : "UR";
+            var abbrev = definition != null ? definition.abbreviation : "UNIT";
+            return $"{designation}-{abbrev}-{slotIndex}";
+        }
+
         private static bool SpawnGroundUnit(
             Transform parent,
             VehicleUnitDefinition definition,
+            string slotLabel,
             Vector3 worldPosition,
             WorldMapConfig worldMap,
             FlightProfile profile,
@@ -195,12 +519,13 @@ namespace F89.Enemies
                 return false;
             }
 
-            var unitObject = new GameObject(definition.abbreviation);
+            var unitObject = new GameObject(slotLabel);
             unitObject.transform.SetParent(parent, true);
             unitObject.transform.position = worldPosition;
 
             var unit = unitObject.AddComponent<VehicleUnitComponent>();
             unit.Configure(definition);
+            unit.SetPersistentTargetLabel(slotLabel);
 
             VehicleUnitVisual.Attach(unitObject.transform, definition, profile);
 
@@ -209,7 +534,8 @@ namespace F89.Enemies
             return true;
         }
 
-        private static List<VehicleUnitDefinition> CollectHostileCatalogUnits(
+        private static List<VehicleUnitDefinition> CollectCatalogUnits(
+            VehicleUnitDesignation designation,
             bool includeTroops = true,
             bool troopsOnly = false)
         {
@@ -223,7 +549,7 @@ namespace F89.Enemies
             for (var i = 0; i < catalog.units.Length; i++)
             {
                 var unit = catalog.units[i];
-                if (unit == null || unit.designation != VehicleUnitDesignation.UR)
+                if (unit == null || unit.designation != designation)
                 {
                     continue;
                 }
@@ -262,7 +588,8 @@ namespace F89.Enemies
             float worldUnitsPerMile,
             WorldMapConfig worldMap,
             VehicleUnitDefinition definition,
-            float ticSizeWorldUnits)
+            float ticSizeWorldUnits,
+            float angleOffsetRadians = 0f)
         {
             var isFlier = definition != null && definition.isFlier;
             var fliesOverGround = definition != null && definition.fliesOverGroundUnits;
@@ -276,7 +603,7 @@ namespace F89.Enemies
             var goldenAngle = 2.399963f;
             for (var attempt = 0; attempt < 24; attempt++)
             {
-                var angle = (index * goldenAngle) + (attempt * 0.31f);
+                var angle = angleOffsetRadians + (index * goldenAngle) + (attempt * 0.31f);
                 var t = totalCount > 1 ? index / (float)(totalCount - 1) : 0.5f;
                 var radiusMiles = Mathf.Lerp(minRadiusMiles, SpawnMaxRadiusMiles, t) * (1f - attempt * 0.025f);
                 var candidate = outpostWorld + new Vector3(

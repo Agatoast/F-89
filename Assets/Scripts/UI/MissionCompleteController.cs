@@ -183,6 +183,7 @@ namespace F89.UI
             isLeaving = true;
             CharacterGearSession.PersistActive();
             LandMissionHealthState.Clear();
+            LandBossMissionAssignment.ClearMissionLaunchOutpost(CharacterSessionState.ActiveSave);
             CarrierResupplyState.Begin();
             CharacterLoadoutNavState.MarkEnteredFromMissionBrief();
             LandMissionCompleteState.Clear();
@@ -191,10 +192,7 @@ namespace F89.UI
 
         private void RequestEndMission()
         {
-            var save = CharacterSessionState.ActiveSave;
-            var primaryIncomplete = GamePlayModeState.IsCampaign
-                && !LandBossMissionAssignment.IsPrimaryMissionComplete(save);
-            if (primaryIncomplete)
+            if (CampaignMissionEndFlow.RequiresFailureConfirm)
             {
                 carrierPhase = CarrierPhase.FailureConfirm;
                 return;
@@ -205,44 +203,15 @@ namespace F89.UI
 
         private void FinishEndMission(bool applyCampaignFailurePenalty)
         {
-            var save = CharacterSessionState.ActiveSave;
-            CharacterGearSession.PersistActive();
-            CharacterSaveRepository.SyncVehicleKillCredit(save);
-
-            if (applyCampaignFailurePenalty && GamePlayModeState.IsCampaign && save != null)
+            var result = CampaignMissionEndFlow.FinishEndMission(null, applyCampaignFailurePenalty);
+            if (result == CampaignMissionEndFlow.FinishResult.ShowDemotion)
             {
-                CharacterSaveRepository.ApplyTotalScoreFractionPenalty(save, 0.5f);
-                LandBossMissionAssignment.ResolveAssignedMissionWithoutVictory(save);
-                if (PilotCareerRanks.TryDemoteToScoreFloor(save, out var previousRank, out var newRank))
-                {
-                    CharacterSaveRepository.WriteBossProgress(save);
-                    DemotionState.Begin(previousRank, newRank);
-                    LandMissionHealthState.Clear();
-                    LandMissionCompleteState.Clear();
-                    carrierPhase = CarrierPhase.Demotion;
-                    return;
-                }
-            }
-            else if (GamePlayModeState.IsCampaign
-                     && save != null
-                     && LandBossMissionAssignment.HasActiveAssignment(save)
-                     && LandBossMissionAssignment.IsPrimaryMissionComplete(save))
-            {
-                // Victory already marked the boss; advance assignment for the next briefing.
-                LandBossMissionAssignment.PrepareNextAssignment(save);
+                carrierPhase = CarrierPhase.Demotion;
+                return;
             }
 
-            GoToCharacterPage();
-        }
-
-        private void GoToCharacterPage()
-        {
             isLeaving = true;
-            LandMissionHealthState.Clear();
-            LandMissionCompleteState.Clear();
-            CarrierResupplyState.Clear();
             DemotionState.Clear();
-            SceneManager.LoadScene(GameScenes.CharacterPage);
         }
     }
 }

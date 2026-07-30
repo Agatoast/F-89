@@ -116,7 +116,13 @@ namespace F89.LandCombat
             var enemies = Object.FindObjectsByType<LandGroundEnemy>(FindObjectsSortMode.None);
             for (var i = 0; i < enemies.Length; i++)
             {
-                if (enemies[i] != null && enemies[i].IsAlive)
+                var enemy = enemies[i];
+                if (enemy == null || !enemy.IsAlive)
+                {
+                    continue;
+                }
+
+                if (enemy.GetComponent<LandOutpostGuardMarker>() != null)
                 {
                     return true;
                 }

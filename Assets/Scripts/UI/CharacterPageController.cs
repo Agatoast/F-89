@@ -48,47 +48,91 @@ namespace F89.UI
             }
 
             var save = CharacterSessionState.ActiveSave;
-            LandResearchTestSetup.ApplyCleanupOnceForSession(save);
-            CharacterGearSession.Bind(save, forceReload: true);
+            if (save != null)
+            {
+                CharacterSaveRepository.EnsureUrKillArrays(save);
+            }
+
+            CharacterGearSession.Bind(save, forceReload: save == null || !save.IsKilledInAction);
         }
 
         private void OnGUI()
         {
             MilitaryAwardTooltipUi.BeginFrame();
             LandItemTooltipUi.BeginFrame();
-            CharacterGearSession.Bind(CharacterSessionState.ActiveSave);
-            DrawPageBackground();
 
             var save = CharacterSessionState.ActiveSave;
+            var isKiaMemorial = save != null && save.IsKilledInAction;
+            if (!isKiaMemorial)
+            {
+                CharacterGearSession.Bind(save);
+            }
+
+            DrawPageBackground();
             DrawFootlockerHeader();
-            DrawResearchAndDevelopment();
-            CharacterPageGearUi.HandleGearDragAndDrop(
-                index => CharacterPageLayout.GetEquipmentSlotRect(index, 4),
-                CharacterPageLayout.GetInventoryGridRect(),
-                CharacterPageLayout.GetFootlockerGridRect(),
-                footlockerTopAlign: false,
-                getBasicRect: null,
-                allowResearchDrop: true);
-            CharacterPageGearUi.DrawEquipmentSlots();
-            CharacterPageGearUi.DrawInventory(CharacterPageLayout.GetInventoryGridRect());
+
+            if (!isKiaMemorial)
+            {
+                DrawResearchAndDevelopment();
+                CharacterPageGearUi.HandleGearDragAndDrop(
+                    index => CharacterPageLayout.GetEquipmentSlotRect(index, 4),
+                    CharacterPageLayout.GetInventoryGridRect(),
+                    CharacterPageLayout.GetFootlockerGridRect(),
+                    footlockerTopAlign: false,
+                    getBasicRect: null,
+                    allowResearchDrop: true);
+                CharacterPageGearUi.DrawEquipmentSlots();
+                CharacterPageGearUi.DrawInventory(CharacterPageLayout.GetInventoryGridRect());
+            }
+
             DrawPaperdoll();
-            LandPaperdollDrUi.DrawOnPaperdoll(CharacterPageLayout.GetPaperdollRect(), offsetX: -2f);
+            if (!isKiaMemorial)
+            {
+                LandPaperdollDrUi.DrawOnPaperdoll(CharacterPageLayout.GetPaperdollRect(), offsetX: -2f);
+            }
+
             DrawLeftColumn(save);
-            CharacterPageGearUi.DrawFootlocker(CharacterPageLayout.GetFootlockerGridRect());
+            if (!isKiaMemorial)
+            {
+                CharacterPageGearUi.DrawFootlocker(CharacterPageLayout.GetFootlockerGridRect());
+            }
+
             DrawPortrait(save);
             DrawScoreRows(save);
             DrawKillFolderLabels();
-            DrawSaveAntarcticaLogo();
-            DrawCharacterLoadoutButton();
-            DrawMissionBriefButton();
-            CharacterPageGearUi.DrawDragOverlay();
-            DrawResearchConfirmDialog();
-            DrawGearDeleteConfirmDialog();
-            DrawResearchTechTooLowDialog();
-            DrawResearchWrongCategoryDialog();
-            DrawBasicLoadoutSlotOccupiedDialog();
+
+            if (isKiaMemorial)
+            {
+                DrawReturnToSavePageButton();
+            }
+            else
+            {
+                DrawSaveAntarcticaLogo();
+                DrawCharacterLoadoutButton();
+                DrawMissionBriefButton();
+                CharacterPageGearUi.DrawDragOverlay();
+                DrawResearchConfirmDialog();
+                DrawGearDeleteConfirmDialog();
+                DrawResearchTechTooLowDialog();
+                DrawResearchWrongCategoryDialog();
+                DrawBasicLoadoutSlotOccupiedDialog();
+                LandItemTooltipUi.Draw(LandItemTooltipUi.Placement.AboveCursor);
+            }
+
             MilitaryAwardTooltipUi.Draw();
-            LandItemTooltipUi.Draw(LandItemTooltipUi.Placement.AboveCursor);
+        }
+
+        private static void DrawReturnToSavePageButton()
+        {
+            var rect = CharacterPageLayout.GetMissionBriefButtonRect();
+            if (!StartPageMenuStyles.DrawMenuButton(rect, "RETURN TO SAVE PAGE"))
+            {
+                return;
+            }
+
+            CharacterSessionState.ActiveSave = null;
+            CharacterGearSession.Bind(null);
+            SceneManager.LoadScene(GameScenes.SelectionPage);
         }
 
         private static void DrawBasicLoadoutSlotOccupiedDialog()

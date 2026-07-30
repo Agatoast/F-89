@@ -34,6 +34,11 @@ namespace F89.Flight
 
             if (LandMissionHandoffState.TryConsumeReturnToFlight(out var returnSnapshot, out _))
             {
+                if (ShouldReturnToRunwayDeck(returnSnapshot))
+                {
+                    return ApplyReturnToRunwayDeck(player, returnSnapshot);
+                }
+
                 return ApplyReturnTakeoff(player, returnSnapshot);
             }
 
@@ -43,15 +48,27 @@ namespace F89.Flight
                 // Scene bootstrap and AircraftController.Start both run during the same
                 // return. The first restores the grid square and starts VTOL; the second
                 // must not reset that sequence or re-position the aircraft.
-                if (AircraftLandingController.IsTakeoffActive)
+                if (AircraftLandingController.IsTakeoffActive
+                    || AircraftLandingController.IsParkedAtRunway)
                 {
                     return true;
                 }
 
-                return ApplyReturnTakeoff(player, LandMissionHandoffState.GetStoredFlightSnapshot());
+                var stored = LandMissionHandoffState.GetStoredFlightSnapshot();
+                if (ShouldReturnToRunwayDeck(stored))
+                {
+                    return ApplyReturnToRunwayDeck(player, stored);
+                }
+
+                return ApplyReturnTakeoff(player, stored);
             }
 
             return false;
+        }
+
+        private static bool ShouldReturnToRunwayDeck(LandSortieSnapshot snapshot)
+        {
+            return snapshot.ReturnToRunwayDeck;
         }
 
         public static bool ApplyReturnTakeoff(GameObject player, LandSortieSnapshot snapshot)
@@ -96,6 +113,45 @@ namespace F89.Flight
                 ? $"landing grid {snapshot.LandingGridCellX},{snapshot.LandingGridCellZ}"
                 : $"landing spot {snapshot.AircraftWorldPosition}";
             Debug.Log($"[LandCombat] Restored flight at {locationLabel} (fuel {snapshot.FuelNormalized:P0}).");
+            return true;
+        }
+
+        public static bool ApplyReturnToRunwayDeck(GameObject player, LandSortieSnapshot snapshot)
+        {
+            if (player == null || !snapshot.IsValid)
+            {
+                Debug.LogWarning("[LandCombat] Runway deck return skipped — landing snapshot was invalid.");
+                return false;
+            }
+
+            NormalizeLegacyGridLabel(player, ref snapshot);
+            var returnPosition = snapshot.HasLandingGridCell
+                ? snapshot.LandingGridWorldCenter
+                : snapshot.AircraftWorldPosition;
+            player.transform.SetPositionAndRotation(returnPosition, snapshot.AircraftWorldRotation);
+
+            var body = player.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+
+            RestoreAircraftState(player, snapshot);
+
+            var landing = player.GetComponent<AircraftLandingController>();
+            if (landing == null)
+            {
+                landing = player.AddComponent<AircraftLandingController>();
+            }
+
+            landing.RestoreRunwayDeckParked(snapshot);
+            EnsureApplier(player);
+            LandMissionHandoffState.ClearPersistedReturnAfterApplication();
+
+            Debug.Log(
+                $"[LandCombat] Restored parked runway deck at {snapshot.OutpostName} "
+                + $"(fuel {snapshot.FuelNormalized:P0}).");
             return true;
         }
 

@@ -100,16 +100,14 @@ namespace F89.UI
             out string label,
             out bool useAutopilotTimeWarp)
         {
-            var activeAutopilot = AutopilotController.Instance;
-            if (mapRoute.Count > 0
-                && activeAutopilot != null
-                && activeAutopilot.IsFlying)
+            if (mapRoute.Count > 0)
             {
                 var waypoint = mapRoute[0];
                 worldTarget = waypoint.World;
                 label = waypoint.Label;
+                var activeAutopilot = AutopilotController.Instance;
                 useAutopilotTimeWarp = activeMapBearingUseAutopilotWarp
-                    || activeAutopilot.IsFlying;
+                    || (activeAutopilot != null && activeAutopilot.IsFlying);
                 return true;
             }
 
@@ -310,6 +308,13 @@ namespace F89.UI
                     SetMapHudBearing(world, label, useAutopilotTimeWarp: true);
                     return;
                 }
+            }
+
+            if (mapRoute.Count > 0)
+            {
+                var next = mapRoute[0];
+                SetMapHudBearing(next.World, next.Label, useAutopilotTimeWarp: false);
+                return;
             }
 
             ClearHudBearing();
@@ -966,6 +971,8 @@ namespace F89.UI
 
         private static readonly Color LandOutpostColor = new Color(0.9f, 0.18f, 0.12f);
         private static readonly Color ClearedOutpostFillColor = new Color(0.96f, 0.96f, 0.96f, 1f);
+        private static readonly Color FriendlyOutpostFillColor = new Color(0.18f, 0.72f, 0.22f, 1f);
+        private static readonly Color FriendlyOutpostBorderColor = Color.black;
         private static readonly Color CarrierLabelColor = new Color(0.95f, 0.85f, 0.1f);
         private const float LandOutpostBorderPixels = 1f;
         private const float CarrierMarkerScale = 1f;
@@ -1005,12 +1012,20 @@ namespace F89.UI
                     continue;
                 }
 
-                var bunkerCleared = IsOutpostBunkerCleared(baseSite);
-                if (baseSite.IsDestroyed || bunkerCleared)
+                if (ShouldDrawFriendlyOutpostMapMarker(baseSite))
                 {
-                    var fill = bunkerCleared ? ClearedOutpostFillColor : LandOutpostColor;
-                    DrawMapBorderedDot(guiPoint, dotSize, fill, LandOutpostBorderPixels);
-                    DrawMapX(guiPoint, dotSize);
+                    DrawMapBorderedDot(
+                        guiPoint,
+                        dotSize,
+                        FriendlyOutpostFillColor,
+                        LandOutpostBorderPixels,
+                        FriendlyOutpostBorderColor);
+                    continue;
+                }
+
+                if (ShouldDrawClearedOutpostMapMarker(baseSite))
+                {
+                    DrawMapBorderedDot(guiPoint, dotSize, ClearedOutpostFillColor, LandOutpostBorderPixels);
                     continue;
                 }
 
@@ -1018,20 +1033,40 @@ namespace F89.UI
             }
         }
 
-        private static bool IsOutpostBunkerCleared(AntarcticaBase baseSite)
+        private static bool ShouldDrawFriendlyOutpostMapMarker(AntarcticaBase baseSite)
+        {
+            if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Land || baseSite.IsDestroyed)
+            {
+                return false;
+            }
+
+            return AntarcticaOutpostState.IsFriendlyBase(baseSite.BaseName);
+        }
+
+        private static bool ShouldDrawClearedOutpostMapMarker(AntarcticaBase baseSite)
         {
             if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Land)
             {
                 return false;
             }
 
-            var save = CharacterSessionState.ActiveSave;
-            if (!LandBossMissionAssignment.TryGetBossForOutpost(save, baseSite.BaseName, out var bossNumber))
+            if (AntarcticaOutpostState.IsFriendlyBase(baseSite.BaseName))
             {
                 return false;
             }
 
-            return LandBossEncounter.IsDefeated(bossNumber);
+            if (baseSite.IsDestroyed || AntarcticaOutpostState.IsBunkerCleared(baseSite.BaseName))
+            {
+                return true;
+            }
+
+            if (OutpostSurfaceBunkerPad.IsRevealedAtOutpost(baseSite))
+            {
+                return true;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            return LandBossMissionAssignment.IsBunkerRevealedAtOutpost(save, baseSite.BaseName);
         }
 
         private void DrawMapBaseNameLabels(Rect mapRect)
@@ -1426,7 +1461,8 @@ namespace F89.UI
             Vector2 center,
             float size,
             Color fillColor,
-            float borderPixels = 1f)
+            float borderPixels = 1f,
+            Color? borderColor = null)
         {
             var outerRect = new Rect(center.x - size * 0.5f, center.y - size * 0.5f, size, size);
             var inset = borderPixels;
@@ -1436,7 +1472,7 @@ namespace F89.UI
                 outerRect.width - inset * 2f,
                 outerRect.height - inset * 2f);
 
-            GUI.color = Color.black;
+            GUI.color = borderColor ?? Color.black;
             GUI.DrawTexture(outerRect, Texture2D.whiteTexture);
             if (innerRect.width > 0f && innerRect.height > 0f)
             {
@@ -1458,49 +1494,6 @@ namespace F89.UI
             GUI.DrawTexture(new Rect(rect.x, rect.y, border, rect.height), Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(rect.xMax - border, rect.y, border, rect.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
-        }
-
-        private static void DrawMapX(Vector2 center, float size)
-        {
-            if (Event.current == null || Event.current.type != EventType.Repaint)
-            {
-                return;
-            }
-
-            // Diagonals meet the outer black frame corners (same rect as DrawMapBorderedDot).
-            const float lineThickness = 2f;
-            var half = size * 0.5f;
-            var topLeft = new Vector2(center.x - half, center.y - half);
-            var topRight = new Vector2(center.x + half, center.y - half);
-            var bottomLeft = new Vector2(center.x - half, center.y + half);
-            var bottomRight = new Vector2(center.x + half, center.y + half);
-
-            var previous = GUI.color;
-            GUI.color = Color.black;
-            DrawMapDiagonalLine(topLeft, bottomRight, lineThickness);
-            DrawMapDiagonalLine(topRight, bottomLeft, lineThickness);
-            GUI.color = previous;
-        }
-
-        private static void DrawMapDiagonalLine(Vector2 start, Vector2 end, float thickness)
-        {
-            var delta = end - start;
-            var length = delta.magnitude;
-            if (length < 0.5f)
-            {
-                return;
-            }
-
-            var angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
-            var midpoint = (start + end) * 0.5f;
-            var rect = new Rect(
-                midpoint.x - length * 0.5f,
-                midpoint.y - thickness * 0.5f,
-                length,
-                thickness);
-            GUIUtility.RotateAroundPivot(angle, midpoint);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUIUtility.RotateAroundPivot(-angle, midpoint);
         }
 
         private static void DrawMapOutlinedDot(Vector2 center, float size, Color fillColor, float outlinePixels = 2f)
@@ -2124,8 +2117,11 @@ namespace F89.UI
                 legs[i] = new AutopilotController.RouteLeg(mapRoute[i].World, mapRoute[i].Label);
             }
 
-            activeAutopilot.CommitRoute(legs);
-            SyncHudBearingToCurrentTarget();
+            if (activeAutopilot.CommitRoute(legs))
+            {
+                SyncHudBearingToCurrentTarget();
+                HideMapForAutopilotHud();
+            }
         }
 
         private bool TryPickBaseAtGuiPoint(Rect mapRect, Vector2 guiPoint, out AntarcticaBase baseSite)

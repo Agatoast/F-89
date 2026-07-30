@@ -39,6 +39,10 @@ namespace F89.Flight
         private float currentTimeWarpScale = DefaultTimeWarpScale;
         private readonly List<RouteLeg> routeQueue = new List<RouteLeg>(8);
         private int suspendInputFrame = -1;
+        private float nextHostileContactCheckTime;
+
+        private const float HostileContactCheckIntervalSeconds = 0.5f;
+        private const float MaxSimDeltaSeconds = 0.1f;
 
         public bool IsFlying { get; private set; }
         public bool IsSelectingDestination { get; private set; }
@@ -122,6 +126,7 @@ namespace F89.Flight
 
             IsSelectingDestination = false;
             IsFlying = true;
+            PrepareHostileDetectionForFlight();
             aircraft?.ApplyAutopilotState(
                 aircraft.Profile != null ? aircraft.Profile.AutopilotCruiseSpeedWorld(aircraft.WorldMap) : 0f,
                 true);
@@ -131,10 +136,25 @@ namespace F89.Flight
                 mapOverlay.BeginAutopilotFlight();
             }
 
-            Time.timeScale = currentTimeWarpScale;
+            ApplyAutopilotTimeWarp();
             ShowToast(destinationLabel);
             Debug.Log(
                 $"F-89: Autopilot resumed — {destinationLabel} at {currentTimeWarpScale:0}x speed.");
+        }
+
+        private void PrepareHostileDetectionForFlight()
+        {
+            nextHostileContactCheckTime = 0f;
+            CombatThreatRange.InvalidateCaches();
+        }
+
+        private void ApplyAutopilotTimeWarp()
+        {
+            // Warp speed is sim-only (Update + TimeWarpScale). Keep rendering/physics at 1x.
+            if (IsFlying && !GamePauseController.IsPaused)
+            {
+                Time.timeScale = 1f;
+            }
         }
 
         /// <summary>Clears destination-select state when the map is closed without engaging.</summary>
@@ -202,7 +222,60 @@ namespace F89.Flight
 
             if (IsFlying && !GamePauseController.IsPaused)
             {
-                Time.timeScale = currentTimeWarpScale;
+                TickAutopilotFlight();
+            }
+        }
+
+        private void TickAutopilotFlight()
+        {
+            if (aircraft == null || body == null || !hasDestination)
+            {
+                return;
+            }
+
+            var frameDt = Mathf.Min(Time.unscaledDeltaTime, 0.05f);
+            var simDt = Mathf.Min(frameDt * currentTimeWarpScale, MaxSimDeltaSeconds);
+            if (simDt <= 0f)
+            {
+                return;
+            }
+
+            FlyTowardDestination(simDt);
+            aircraft.UpdateAutopilotFuel(frameDt * currentTimeWarpScale);
+
+            var profile = aircraft.Profile;
+            var worldMap = aircraft.WorldMap;
+            if (profile != null && worldMap != null
+                && Time.unscaledTime >= nextHostileContactCheckTime)
+            {
+                nextHostileContactCheckTime = Time.unscaledTime + HostileContactCheckIntervalSeconds;
+                if (CombatThreatRange.HasHostileAutopilotContact(
+                        transform.position,
+                        worldMap,
+                        profile.ticSizeWorldUnits))
+                {
+                    Disengage("Hostile contact within 40 MI — autopilot off.", closeMap: false);
+                    ShowToast("Hostile contact — autopilot disengaged.");
+                    return;
+                }
+            }
+
+            DestinationDistanceMiles = CombatThreatRange.DistanceMiles(
+                transform.position,
+                destinationWorld,
+                aircraft.WorldMap,
+                aircraft.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f);
+
+            if (DestinationDistanceMiles <= ArrivalThresholdMiles)
+            {
+                if (HasPendingRouteLegs)
+                {
+                    AdvanceToNextRouteLeg();
+                }
+                else
+                {
+                    Disengage($"Arrived at {destinationLabel}.", closeMap: true);
+                }
             }
         }
 
@@ -233,46 +306,8 @@ namespace F89.Flight
             }
 
             currentTimeWarpScale = next;
-            if (IsFlying && !GamePauseController.IsPaused)
-            {
-                Time.timeScale = currentTimeWarpScale;
-            }
-
             ShowToast($"Autopilot {currentTimeWarpScale:0}X");
             Debug.Log($"F-89: Autopilot speed set to {currentTimeWarpScale:0}x.");
-        }
-
-        private void FixedUpdate()
-        {
-            if (GamePauseController.IsPaused)
-            {
-                return;
-            }
-
-            if (!IsFlying || aircraft == null || body == null || !hasDestination)
-            {
-                return;
-            }
-
-            FlyTowardDestination();
-
-            DestinationDistanceMiles = CombatThreatRange.DistanceMiles(
-                transform.position,
-                destinationWorld,
-                aircraft.WorldMap,
-                aircraft.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f);
-
-            if (DestinationDistanceMiles <= ArrivalThresholdMiles)
-            {
-                if (HasPendingRouteLegs)
-                {
-                    AdvanceToNextRouteLeg();
-                }
-                else
-                {
-                    Disengage($"Arrived at {destinationLabel}.", closeMap: true);
-                }
-            }
         }
 
         private void AdvanceToNextRouteLeg()
@@ -285,6 +320,12 @@ namespace F89.Flight
             mapOverlay?.SetAutopilotHudBearing(next.World, next.Label);
             ShowToast(next.Label);
             Debug.Log($"F-89: Autopilot — next leg {next.Label} ({routeQueue.Count} remaining).");
+        }
+
+        private void ShowToast(string message)
+        {
+            StatusToast = message;
+            StatusToastUntil = Time.unscaledTime + 2.5f;
         }
 
         private void HandleAutopilotKey()
@@ -398,11 +439,12 @@ namespace F89.Flight
 
             IsSelectingDestination = false;
             IsFlying = true;
+            PrepareHostileDetectionForFlight();
             aircraft?.ApplyAutopilotState(
                 aircraft.Profile != null ? aircraft.Profile.AutopilotCruiseSpeedWorld(aircraft.WorldMap) : 0f,
                 true);
             mapOverlay?.BeginAutopilotFlight();
-            Time.timeScale = currentTimeWarpScale;
+            ApplyAutopilotTimeWarp();
             var routeHint = routeQueue.Count > 0 ? $" ({legs.Count} legs)" : string.Empty;
             ShowToast(destinationLabel);
             Debug.Log(
@@ -433,14 +475,7 @@ namespace F89.Flight
             hasDestination = true;
         }
 
-        private void ShowToast(string message)
-        {
-            StatusToast = message;
-            StatusToastUntil = Time.unscaledTime + 2.5f;
-        }
-
-
-        private void FlyTowardDestination()
+        private void FlyTowardDestination(float simDt)
         {
             var profile = aircraft.Profile;
             if (profile == null)
@@ -471,13 +506,19 @@ namespace F89.Flight
 
             var signedAngle = Vector3.SignedAngle(forward, targetDirection, Vector3.up);
             var turnInput = Mathf.Clamp(signedAngle / 45f, -1f, 1f);
-            transform.Rotate(0f, turnInput * profile.turnRate * Time.fixedDeltaTime, 0f, Space.World);
+            var nextRotation = transform.rotation * Quaternion.AngleAxis(
+                turnInput * profile.turnRate * simDt,
+                Vector3.up);
 
-            forward = transform.forward;
+            forward = (nextRotation * Vector3.forward);
             forward.y = 0f;
             forward.Normalize();
             var speed = profile.AutopilotCruiseSpeedWorld(aircraft.WorldMap);
-            body.linearVelocity = forward * speed;
+            var nextPosition = body.position + forward * (speed * simDt);
+            nextPosition.y = body.position.y;
+            body.MoveRotation(nextRotation);
+            body.MovePosition(nextPosition);
+            body.linearVelocity = Vector3.zero;
             aircraft.ApplyAutopilotState(speed, true);
         }
 

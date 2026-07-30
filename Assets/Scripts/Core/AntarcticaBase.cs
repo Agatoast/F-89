@@ -56,6 +56,10 @@ namespace F89.Core
             isMissionObjective = missionObjective;
             isActive = active;
             isDestroyed = kind == BaseSiteKind.Land && AntarcticaOutpostState.IsDestroyed(name);
+            if (kind == BaseSiteKind.Land && AntarcticaOutpostState.IsFriendlyBase(name))
+            {
+                control = BaseControl.Friendly;
+            }
             positionMiles = miles;
             ApplyWorldPosition(worldUnitsPerMile);
             ApplyDestroyedState();
@@ -85,6 +89,9 @@ namespace F89.Core
             if (siteKind == BaseSiteKind.Land)
             {
                 isDestroyed = AntarcticaOutpostState.IsDestroyed(baseName);
+                control = AntarcticaOutpostState.IsFriendlyBase(baseName)
+                    ? BaseControl.Friendly
+                    : BaseControl.Hostile;
             }
 
             ApplyWorldPosition(worldUnitsPerMile);

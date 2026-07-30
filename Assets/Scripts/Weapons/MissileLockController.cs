@@ -12,7 +12,8 @@ namespace F89.Weapons
         [SerializeField] private Camera lockCamera;
 
         private ILockCapableWeapon lockWeapon;
-        private AudioSource audioSource;
+        private AudioSource lockToneSource;
+        private AudioSource beepSource;
         private AudioClip beepClip;
         private AudioClip lockToneClip;
         private AudioClip iffFriendClip;
@@ -20,6 +21,10 @@ namespace F89.Weapons
         private float beepTimer;
         private float iffDisplayTimer;
         private bool lockTonePlaying;
+        private LockableTarget iffPendingFriendly;
+        private LockableTarget friendlyEngagementAuthorized;
+        private System.Func<LockableTarget, bool> clickSelectFilter;
+        private System.Func<LockableTarget, int> clickSelectPriority;
 
         public MissileLockState LockState { get; private set; } = MissileLockState.None;
         public LockableTarget SelectedTarget { get; private set; }
@@ -38,7 +43,7 @@ namespace F89.Weapons
             SelectedTarget != null
             && lockWeapon != null
             && !SelectedTarget.IsFriendly
-            && !SelectedTarget.MatchesWeapon(lockWeapon.ValidTargetKind);
+            && !MatchesActiveWeaponTarget(SelectedTarget);
 
         public void SetActiveWeapon(ILockCapableWeapon weapon)
         {
@@ -48,6 +53,20 @@ namespace F89.Weapons
             }
 
             lockWeapon = weapon;
+            if (SelectedTarget == null || !SelectedTarget.IsAlive)
+            {
+                RestartLockProgressForSelection();
+                return;
+            }
+
+            if (LockState == MissileLockState.Locked
+                && lockWeapon != null
+                && CanWeaponLockTarget(SelectedTarget))
+            {
+                TargetOutOfRange = !IsTargetInWeaponRange(SelectedTarget);
+                return;
+            }
+
             RestartLockProgressForSelection();
         }
 
@@ -57,6 +76,14 @@ namespace F89.Weapons
             lockCamera = camera;
             EnsureAudio();
             ClearSelection();
+        }
+
+        public void SetClickSelectionRules(
+            System.Func<LockableTarget, bool> filter,
+            System.Func<LockableTarget, int> prioritySelector)
+        {
+            clickSelectFilter = filter;
+            clickSelectPriority = prioritySelector;
         }
 
         public void UpdateLockProgress(bool weaponActive)
@@ -88,15 +115,15 @@ namespace F89.Weapons
                 return;
             }
 
-            if (!CanWeaponLockTarget(SelectedTarget))
+            if (lockWeapon == null)
             {
                 StopLockProgressOnly();
                 return;
             }
 
-            if (ShouldDropSelectionForForwardArcLoss())
+            if (!CanWeaponLockTarget(SelectedTarget))
             {
-                ClearSelection();
+                StopLockProgressOnly();
                 return;
             }
 
@@ -104,12 +131,7 @@ namespace F89.Weapons
 
             if (LockState == MissileLockState.Locked)
             {
-                if (!IsTargetLockable(SelectedTarget))
-                {
-                    ClearSelection();
-                    return;
-                }
-
+                PlayLockToneIfNeeded();
                 return;
             }
 
@@ -145,39 +167,22 @@ namespace F89.Weapons
             }
 
             var candidate = FindTargetUnderCursor(screenPosition);
-            if (candidate == null)
+            if (candidate == null || !candidate.IsAlive)
             {
                 return false;
             }
 
-            if (TryRejectFriendlyWithIff(candidate))
-            {
-                return true;
-            }
-
-            if (lockWeapon != null && !IsSelectableTarget(candidate))
+            if (!TryAuthorizeFriendlySelection(candidate))
             {
                 return true;
             }
 
             if (SelectedTarget == candidate)
             {
-                if (lockWeapon != null && CanWeaponLockTarget(candidate))
-                {
-                    TargetOutOfRange = !IsTargetInWeaponRange(candidate);
-                }
-
                 return false;
             }
 
             SelectedTarget = candidate;
-
-            if (lockWeapon != null && candidate.RespondsWithIff && candidate.MatchesWeapon(lockWeapon.ValidTargetKind))
-            {
-                EnsureAudio();
-                TriggerIffFriendResponse(candidate);
-            }
-
             RestartLockProgressForSelection();
             return true;
         }
@@ -189,36 +194,17 @@ namespace F89.Weapons
                 return false;
             }
 
-            if (TryRejectFriendlyWithIff(target))
-            {
-                return true;
-            }
-
-            if (lockWeapon != null && !IsSelectableTarget(target))
+            if (!TryAuthorizeFriendlySelection(target))
             {
                 return true;
             }
 
             if (SelectedTarget == target)
             {
-                if (lockWeapon != null && CanWeaponLockTarget(target))
-                {
-                    TargetOutOfRange = !IsTargetInWeaponRange(target);
-                }
-
                 return false;
             }
 
             SelectedTarget = target;
-
-            if (lockWeapon != null
-                && target.RespondsWithIff
-                && target.MatchesWeapon(lockWeapon.ValidTargetKind))
-            {
-                EnsureAudio();
-                TriggerIffFriendResponse(target);
-            }
-
             RestartLockProgressForSelection();
             return true;
         }
@@ -227,7 +213,8 @@ namespace F89.Weapons
             float rangeMiles,
             WorldMapConfig worldMap,
             float ticSizeWorldUnits,
-            System.Predicate<LockableTarget> includeTarget)
+            System.Predicate<LockableTarget> includeTarget,
+            System.Comparison<LockableTarget> sortComparison = null)
         {
             if (aircraft == null || worldMap == null || rangeMiles <= 0f || includeTarget == null)
             {
@@ -235,7 +222,7 @@ namespace F89.Weapons
             }
 
             var candidates = new List<LockableTarget>();
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
             var observer = aircraft.transform.position;
 
             foreach (var target in targets)
@@ -261,55 +248,71 @@ namespace F89.Weapons
                 return false;
             }
 
-            candidates.Sort((a, b) =>
+            if (sortComparison != null)
             {
-                var distanceA = HorizontalDistanceMeters(observer, a.transform.position);
-                var distanceB = HorizontalDistanceMeters(observer, b.transform.position);
-                return distanceA.CompareTo(distanceB);
-            });
+                candidates.Sort(sortComparison);
+            }
+            else
+            {
+                candidates.Sort((a, b) =>
+                {
+                    var distanceA = HorizontalDistanceMeters(observer, a.transform.position);
+                    var distanceB = HorizontalDistanceMeters(observer, b.transform.position);
+                    return distanceA.CompareTo(distanceB);
+                });
+            }
 
             var currentIndex = SelectedTarget != null ? candidates.IndexOf(SelectedTarget) : -1;
-            for (var step = 0; step < candidates.Count; step++)
+            var nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % candidates.Count;
+            SelectedTarget = candidates[nextIndex];
+            RestartLockProgressForSelection();
+            return true;
+        }
+
+        private bool TryAuthorizeFriendlySelection(LockableTarget candidate)
+        {
+            if (candidate == null || !candidate.IsFriendly)
             {
-                var nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1 + step) % candidates.Count;
-                var nextTarget = candidates[nextIndex];
-                if (TryRejectFriendlyWithIff(nextTarget))
+                iffPendingFriendly = null;
+                if (friendlyEngagementAuthorized != null && friendlyEngagementAuthorized != candidate)
                 {
-                    continue;
+                    friendlyEngagementAuthorized = null;
                 }
 
-                if (lockWeapon != null && !IsSelectableTarget(nextTarget))
-                {
-                    continue;
-                }
-
-                SelectedTarget = nextTarget;
-
-                if (lockWeapon != null
-                    && nextTarget.RespondsWithIff
-                    && nextTarget.MatchesWeapon(lockWeapon.ValidTargetKind))
-                {
-                    EnsureAudio();
-                    TriggerIffFriendResponse(nextTarget);
-                }
-
-                RestartLockProgressForSelection();
                 return true;
             }
 
-            return false;
-        }
-
-        private bool TryRejectFriendlyWithIff(LockableTarget target)
-        {
-            if (target == null || !target.IsFriendly)
+            if (!candidate.RespondsWithIff)
             {
                 return false;
             }
 
+            if (friendlyEngagementAuthorized == candidate)
+            {
+                return true;
+            }
+
+            if (iffPendingFriendly != candidate)
+            {
+                iffPendingFriendly = candidate;
+                NotifyIffIfFriendly(candidate);
+                return false;
+            }
+
+            friendlyEngagementAuthorized = candidate;
+            iffPendingFriendly = null;
+            return true;
+        }
+
+        private void NotifyIffIfFriendly(LockableTarget target)
+        {
+            if (target == null || !target.RespondsWithIff)
+            {
+                return;
+            }
+
             EnsureAudio();
             TriggerIffFriendResponse(target);
-            return true;
         }
 
         private static float HorizontalDistanceMeters(Vector3 observer, Vector3 targetPosition)
@@ -326,35 +329,52 @@ namespace F89.Weapons
                 return null;
             }
 
-            return IsTargetLockable(SelectedTarget) ? SelectedTarget : null;
-        }
-
-        public void ClearLockAfterFire()
-        {
-            PauseLockTracking();
-        }
-
-        private LockableTarget FindTargetUnderCursor(Vector2 screenPosition)
-        {
-            var target = HudTargetSelection.FindTargetAtScreenPosition(lockCamera, screenPosition);
-            if (target == null || lockWeapon == null)
-            {
-                return target;
-            }
-
-            if (lockWeapon.AimMode == WeaponAimMode.ForwardLock
-                && CanWeaponLockTarget(target)
-                && !IsTargetInLockCoverage(target))
+            if (!CanWeaponLockTarget(SelectedTarget))
             {
                 return null;
             }
 
-            return target;
+            return IsTargetInWeaponRange(SelectedTarget) ? SelectedTarget : null;
+        }
+
+        public void ClearLockAfterFire()
+        {
+            // Keep the selected target and lock after firing; only a new selection clears it.
+        }
+
+        private LockableTarget FindTargetUnderCursor(Vector2 screenPosition)
+        {
+            return HudTargetSelection.FindTargetAtScreenPosition(
+                lockCamera,
+                screenPosition,
+                null,
+                clickSelectFilter,
+                clickSelectPriority);
         }
 
         private bool CanWeaponLockTarget(LockableTarget target)
         {
-            if (target == null || !target.IsAlive || lockWeapon == null || target.IsFriendly)
+            if (target == null || !target.IsAlive || lockWeapon == null)
+            {
+                return false;
+            }
+
+            if (target.IsFriendly)
+            {
+                return friendlyEngagementAuthorized == target;
+            }
+
+            if (!MatchesActiveWeaponTarget(target))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool MatchesActiveWeaponTarget(LockableTarget target)
+        {
+            if (target == null || lockWeapon == null)
             {
                 return false;
             }
@@ -364,29 +384,15 @@ namespace F89.Weapons
                 return false;
             }
 
+            if (lockWeapon is Agm114HellfireWeaponConfig || lockWeapon is Agm88jSiawWeaponConfig)
+            {
+                return target.IsGroundVehicle
+                    || target.IsInfantry
+                    || target.IsBuilding
+                    || target.GetComponent<OutpostBuilding>() != null;
+            }
+
             return true;
-        }
-
-        private bool IsSelectableTarget(LockableTarget target)
-        {
-            if (target == null || !target.IsAlive)
-            {
-                return false;
-            }
-
-            var baseSite = target.GetComponent<AntarcticaBase>();
-            if (baseSite != null && baseSite.SiteKind == BaseSiteKind.Land)
-            {
-                // Tab/radar selection can designate outposts even with an air-to-air weapon.
-                return baseSite.IsActive && !baseSite.IsDestroyed;
-            }
-
-            if (lockWeapon == null)
-            {
-                return true;
-            }
-
-            return target.MatchesWeapon(lockWeapon.ValidTargetKind);
         }
 
         public bool ShouldBlockFireForSelection()
@@ -396,12 +402,12 @@ namespace F89.Weapons
                 return false;
             }
 
-            if (SelectedTarget.IsFriendly)
+            if (SelectedTarget.IsFriendly && friendlyEngagementAuthorized != SelectedTarget)
             {
                 return true;
             }
 
-            if (lockWeapon != null && !SelectedTarget.MatchesWeapon(lockWeapon.ValidTargetKind))
+            if (lockWeapon != null && !MatchesActiveWeaponTarget(SelectedTarget))
             {
                 return true;
             }
@@ -417,11 +423,6 @@ namespace F89.Weapons
         public bool ShouldBlockFireWithoutLock()
         {
             return lockWeapon != null && LockState != MissileLockState.Locked;
-        }
-
-        private bool IsTargetLockable(LockableTarget target)
-        {
-            return IsTargetInWeaponRange(target) && IsTargetInLockCoverage(target);
         }
 
         private bool IsTargetInLockCoverage(LockableTarget target)
@@ -477,21 +478,6 @@ namespace F89.Weapons
             beepTimer = 0f;
         }
 
-        private bool ShouldDropSelectionForForwardArcLoss()
-        {
-            if (SelectedTarget == null || lockWeapon == null || aircraft == null)
-            {
-                return false;
-            }
-
-            if (lockWeapon.AimMode != WeaponAimMode.ForwardLock || !CanWeaponLockTarget(SelectedTarget))
-            {
-                return false;
-            }
-
-            return !IsTargetInLockCoverage(SelectedTarget);
-        }
-
         private void StopLockProgressOnly()
         {
             lockProgress = 0f;
@@ -500,15 +486,12 @@ namespace F89.Weapons
             StopLockTone();
         }
 
-        private void PauseLockTracking()
-        {
-            StopLockProgressOnly();
-        }
-
         private void ClearSelection()
         {
             SelectedTarget = null;
-            PauseLockTracking();
+            iffPendingFriendly = null;
+            friendlyEngagementAuthorized = null;
+            StopLockProgressOnly();
         }
 
         private void UpdateBeepAudio()
@@ -519,7 +502,7 @@ namespace F89.Weapons
             }
 
             EnsureAudio();
-            if (audioSource == null)
+            if (beepSource == null || beepClip == null)
             {
                 return;
             }
@@ -534,7 +517,7 @@ namespace F89.Weapons
             }
 
             beepTimer = interval;
-            audioSource.PlayOneShot(beepClip);
+            beepSource.PlayOneShot(beepClip);
         }
 
         private void PlayLockToneIfNeeded()
@@ -546,10 +529,15 @@ namespace F89.Weapons
 
             EnsureAudio();
             SyncSfxVolume();
+            if (lockToneSource == null || lockToneClip == null)
+            {
+                return;
+            }
+
             lockTonePlaying = true;
-            audioSource.loop = true;
-            audioSource.clip = lockToneClip;
-            audioSource.Play();
+            lockToneSource.loop = true;
+            lockToneSource.clip = lockToneClip;
+            lockToneSource.Play();
         }
 
         private void StopLockTone()
@@ -560,8 +548,13 @@ namespace F89.Weapons
             }
 
             lockTonePlaying = false;
-            audioSource.loop = false;
-            audioSource.Stop();
+            if (lockToneSource == null)
+            {
+                return;
+            }
+
+            lockToneSource.loop = false;
+            lockToneSource.Stop();
         }
 
         private void TriggerIffFriendResponse(LockableTarget target)
@@ -575,9 +568,9 @@ namespace F89.Weapons
             }
 
             EnsureAudio();
-            if (audioSource != null && iffFriendClip != null)
+            if (beepSource != null && iffFriendClip != null)
             {
-                audioSource.PlayOneShot(iffFriendClip);
+                beepSource.PlayOneShot(iffFriendClip);
             }
         }
 
@@ -598,25 +591,50 @@ namespace F89.Weapons
 
         private void EnsureAudio()
         {
-            if (audioSource != null)
+            GameSettings.Load();
+            if (beepClip == null)
             {
-                return;
+                beepClip = ProceduralBeepTone.CreateBeep(880f, 0.06f);
             }
 
-            audioSource = gameObject.AddComponent<AudioSource>();
-            audioSource.playOnAwake = false;
-            audioSource.spatialBlend = 0f;
-            audioSource.volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
-            beepClip = ProceduralBeepTone.CreateBeep(880f, 0.06f);
-            lockToneClip = ProceduralBeepTone.CreateLockTone(1320f, 0.6f);
-            iffFriendClip = ProceduralBeepTone.CreateIffFriendTone();
+            if (lockToneClip == null)
+            {
+                lockToneClip = ProceduralBeepTone.CreateLockTone(1320f, 0.6f);
+            }
+
+            if (iffFriendClip == null)
+            {
+                iffFriendClip = ProceduralBeepTone.CreateIffFriendTone();
+            }
+
+            if (beepSource == null)
+            {
+                beepSource = gameObject.AddComponent<AudioSource>();
+                beepSource.playOnAwake = false;
+                beepSource.spatialBlend = 0f;
+                beepSource.volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
+            }
+
+            if (lockToneSource == null)
+            {
+                lockToneSource = gameObject.AddComponent<AudioSource>();
+                lockToneSource.playOnAwake = false;
+                lockToneSource.spatialBlend = 0f;
+                lockToneSource.volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
+            }
         }
 
         private void SyncSfxVolume()
         {
-            if (audioSource != null)
+            var volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
+            if (beepSource != null)
             {
-                audioSource.volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
+                beepSource.volume = volume;
+            }
+
+            if (lockToneSource != null)
+            {
+                lockToneSource.volume = volume;
             }
         }
 

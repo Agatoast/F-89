@@ -224,8 +224,10 @@ namespace F89.Weapons
                 if (parentBase != null)
                 {
                     AntarcticaOutpostState.MarkTargetDestroyed(parentBase.BaseName, targetLabel);
+                    OutpostFlightPlatoonState.TryFinalizePlatoonClearance(parentBase);
                 }
 
+                F89.Flight.CombatThreatRange.InvalidateCaches();
                 TryRegisterUrKillCredit();
                 Debug.Log($"Troop {targetLabel} destroyed by {weaponName} ({hitKind}) — no explosion.");
                 gameObject.SetActive(false);
@@ -237,6 +239,12 @@ namespace F89.Weapons
                 IsAlive = false;
                 currentGroundHitPoints = 0;
                 building.SyncFromLockableTarget(this);
+                var buildingBase = GetComponentInParent<AntarcticaBase>();
+                if (buildingBase != null)
+                {
+                    AntarcticaOutpostState.MarkTargetDestroyed(buildingBase.BaseName, targetLabel);
+                }
+
                 Debug.Log($"Building {targetLabel} destroyed by {weaponName} ({hitKind}).");
                 return;
             }
@@ -263,8 +271,10 @@ namespace F89.Weapons
             if (owningBase != null)
             {
                 AntarcticaOutpostState.MarkTargetDestroyed(owningBase.BaseName, targetLabel);
+                OutpostFlightPlatoonState.TryFinalizePlatoonClearance(owningBase);
             }
 
+            F89.Flight.CombatThreatRange.InvalidateCaches();
             TryRegisterUrKillCredit();
             Debug.Log($"Target {targetLabel} destroyed by {weaponName} ({hitKind}).");
             gameObject.SetActive(false);

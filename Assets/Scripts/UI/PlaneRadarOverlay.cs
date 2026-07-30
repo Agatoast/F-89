@@ -14,12 +14,15 @@ namespace F89.UI
         }
 
         private const float PanelGapFromRadar = 8f * RadarMfdBezelRenderer.LayoutScale;
-        private const float BlipHitRadius = 28f * RadarMfdBezelRenderer.LayoutScale;
+        private const float LongRangeBlipHitRadius = 28f * RadarMfdBezelRenderer.LayoutScale;
+        private const float ShortRangeBlipHitRadius = 14f * RadarMfdBezelRenderer.LayoutScale;
         private const float ContactRefreshSeconds = 0.2f;
-        private const float HostileDotSize = 12f * RadarMfdBezelRenderer.LayoutScale;
-        private const float FriendlyDotSize = 10f * RadarMfdBezelRenderer.LayoutScale;
-        private const float IncomingMissileDotSize = HostileDotSize * 0.25f;
-        private const float SelectedRingSize = 24f * RadarMfdBezelRenderer.LayoutScale;
+        private const float LongRangeHostileDotSize = 12f * RadarMfdBezelRenderer.LayoutScale;
+        private const float ShortRangeHostileDotSize = 6f * RadarMfdBezelRenderer.LayoutScale;
+        private const float LongRangeFriendlyDotSize = 10f * RadarMfdBezelRenderer.LayoutScale;
+        private const float ShortRangeFriendlyDotSize = 5f * RadarMfdBezelRenderer.LayoutScale;
+        private const float LongRangeSelectedRingSize = 24f * RadarMfdBezelRenderer.LayoutScale;
+        private const float ShortRangeSelectedRingSize = 12f * RadarMfdBezelRenderer.LayoutScale;
         private const float OwnshipDotSize = 10f * RadarMfdBezelRenderer.LayoutScale;
 
         private static readonly Color FriendlyDotColor = Color.white;
@@ -177,13 +180,13 @@ namespace F89.UI
             var layout = MfdLayout.From(bezelLayout);
             var center = layout.ScopeCenter;
             var displayRadius = layout.ScopeRadius;
-            EnsureContactsFresh();
-            RebuildBlipLayouts(center, displayRadius);
 
             if (Event.current.type != EventType.Repaint)
             {
                 return;
             }
+
+            RebuildBlipLayouts(center, displayRadius);
 
             EnsureStyles();
             EnsureTextures();
@@ -234,7 +237,7 @@ namespace F89.UI
                     osbLabelStyle);
             }
 
-            var rangeLabel = scopeKind == RadarScopeKind.ShortRange ? "25 MI" : "RDY";
+            var rangeLabel = scopeKind == RadarScopeKind.ShortRange ? "10 MI" : "RDY";
             GUI.Label(new Rect(scopeRect.x, scopeRect.yMax - 18f * s, scopeRect.width, 14f * s), rangeLabel, ringLabelStyle);
 
             for (var i = 0; i < BottomOsbLabels.Length; i++)
@@ -421,13 +424,13 @@ namespace F89.UI
                 var contact = layout.Contact;
                 var guiCenter = layout.GuiCenter;
                 var isSelected = contact.CanBeTargeted && contact.Target != null && contact.Target == activeTarget;
-                var dotSize = contact.IsHostile ? HostileDotSize : FriendlyDotSize;
+                var dotSize = contact.IsHostile ? GetHostileDotSize() : GetFriendlyDotSize();
                 ResolveBlipSymbology(contact, out var dotColor, out var shape);
 
                 if (isSelected)
                 {
                     var hudColor = FlightHudColorPalette.Mfd;
-                    DrawDot(guiCenter, SelectedRingSize, new Color(hudColor.r, hudColor.g, hudColor.b, 0.35f));
+                    DrawDot(guiCenter, GetSelectedRingSize(), new Color(hudColor.r, hudColor.g, hudColor.b, 0.35f));
                     dotSize += 2f;
                 }
 
@@ -477,7 +480,7 @@ namespace F89.UI
             RebuildMissileBlipLayouts(center, displayRadius);
             foreach (var layout in missileBlipLayouts)
             {
-                DrawDot(layout.GuiCenter, IncomingMissileDotSize, HostileDotColor);
+                DrawDot(layout.GuiCenter, GetHostileDotSize() * 0.25f, HostileDotColor);
             }
         }
 
@@ -696,7 +699,7 @@ namespace F89.UI
             }
 
             var layout = MfdLayout.From(GetBezelLayout());
-            if (Vector2.Distance(guiPoint, layout.ScopeCenter) > layout.ScopeRadius + BlipHitRadius)
+            if (Vector2.Distance(guiPoint, layout.ScopeCenter) > layout.ScopeRadius + GetBlipHitRadius())
             {
                 return false;
             }
@@ -737,7 +740,7 @@ namespace F89.UI
             RebuildBlipLayouts(center, displayRadius);
 
             LockableTarget bestTarget = null;
-            var bestDistance = BlipHitRadius;
+            var bestDistance = GetBlipHitRadius();
 
             foreach (var blipLayout in blipLayouts)
             {
@@ -885,6 +888,34 @@ namespace F89.UI
                 : RadarMfdBezelRenderer.ComputeBottomLeftLayout();
         }
 
+        private float GetBlipHitRadius()
+        {
+            return scopeKind == RadarScopeKind.ShortRange
+                ? ShortRangeBlipHitRadius
+                : LongRangeBlipHitRadius;
+        }
+
+        private float GetHostileDotSize()
+        {
+            return scopeKind == RadarScopeKind.ShortRange
+                ? ShortRangeHostileDotSize
+                : LongRangeHostileDotSize;
+        }
+
+        private float GetFriendlyDotSize()
+        {
+            return scopeKind == RadarScopeKind.ShortRange
+                ? ShortRangeFriendlyDotSize
+                : LongRangeFriendlyDotSize;
+        }
+
+        private float GetSelectedRingSize()
+        {
+            return scopeKind == RadarScopeKind.ShortRange
+                ? ShortRangeSelectedRingSize
+                : LongRangeSelectedRingSize;
+        }
+
         private float? GetRangeCapMiles()
         {
             return scopeKind == RadarScopeKind.ShortRange
@@ -903,13 +934,7 @@ namespace F89.UI
         {
             if (scopeKind == RadarScopeKind.ShortRange)
             {
-                return new[]
-                {
-                    RadarContactScanner.ShortRangeBandMiles,
-                    RadarContactScanner.ShortRangeBandMiles * 2f,
-                    RadarContactScanner.ShortRangeBandMiles * 3f,
-                    RadarContactScanner.ShortRangeBandMiles * 4f
-                };
+                return new[] { RadarContactScanner.ShortRangeBandMiles };
             }
 
             return new[]

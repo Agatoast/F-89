@@ -13,11 +13,13 @@ namespace F89.Core
         [SerializeField] private Vector3 centerWorld;
         [SerializeField] private float keepOutRadiusWorld;
         [SerializeField] private bool hasBunker;
+        [SerializeField] private bool bunkerSurfaceRevealed;
         [SerializeField] private bool blocksUnits = true;
 
         public Vector3 CenterWorld => centerWorld;
         public float KeepOutRadiusWorld => keepOutRadiusWorld;
         public bool HasBunker => hasBunker;
+        public bool BunkerSurfaceRevealed => bunkerSurfaceRevealed;
         public bool BlocksUnits => blocksUnits && isActiveAndEnabled && !OutpostIsDestroyed();
 
         public void Configure(Vector3 center, float keepOutRadius, bool bunkerPresent)
@@ -32,6 +34,11 @@ namespace F89.Core
         public void SetBlocksUnits(bool value)
         {
             blocksUnits = value;
+        }
+
+        public void SetBunkerSurfaceRevealed(bool value)
+        {
+            bunkerSurfaceRevealed = value;
         }
 
         private void OnEnable()

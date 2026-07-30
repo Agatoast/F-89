@@ -6,11 +6,16 @@ namespace F89.Weapons
     public class Gau27aWeaponConfig : ScriptableObject
     {
         [Header("Range")]
+        [Tooltip("Maximum travel distance for each round.")]
         public float maxRangeMiles = 2f;
-        public float minCrosshairMiles = 0.5f;
+        [Tooltip("Maximum crosshair distance inside the forward ogive envelope.")]
+        public float ogiveMaxRangeMiles = 2.5f;
+        public float minCrosshairMiles = 0.1f;
+        [Tooltip("Half-angle from the nose. 15° = 30° total cone centered on the aircraft forward axis.")]
+        public float ogiveHalfAngleDegrees = 15f;
 
         [Header("Crosshair")]
-        [Tooltip("Move the mouse along the nose line to set gun range between min and max miles.")]
+        [Tooltip("Move the cursor anywhere inside the ogive envelope to aim the gun.")]
 
         [Header("Firing")]
         public float roundsPerSecond = 10f;
@@ -26,6 +31,6 @@ namespace F89.Weapons
         public int startingRounds = 300;
 
         public string WeaponName => "GAU-27A";
-        public WeaponAimMode AimMode => WeaponAimMode.ForwardOnly;
+        public WeaponAimMode AimMode => WeaponAimMode.OgiveDirect;
     }
 }

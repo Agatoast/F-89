@@ -111,5 +111,19 @@ namespace F89.Weapons
                 hasWarnedAcquisition = false;
             }
         }
+
+        /// <summary>Strip invisible SAM components parented to outpost map pins.</summary>
+        public static void RemoveFromOutpostBases()
+        {
+            var launchers = Object.FindObjectsByType<EnemySamLauncher>(FindObjectsSortMode.None);
+            for (var i = 0; i < launchers.Length; i++)
+            {
+                var launcher = launchers[i];
+                if (launcher != null && launcher.GetComponent<AntarcticaBase>() != null)
+                {
+                    Object.Destroy(launcher);
+                }
+            }
+        }
     }
 }

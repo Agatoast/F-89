@@ -1,4 +1,5 @@
 using F89.Controls;
+using F89.Audio;
 using F89.Core;
 using F89.UI;
 using F89.Weapons;
@@ -63,6 +64,8 @@ namespace F89.Flight
         public bool IsOutOfFuel => TotalFuelGallons <= 0f;
         public bool IsAutopilotActive { get; private set; }
         public bool IsLandingLocked { get; private set; }
+
+        public static AircraftController Player { get; private set; }
 
         public void SetLandingLocked(bool locked)
         {
@@ -150,8 +153,17 @@ namespace F89.Flight
                 weapons = GetComponent<PlayerWeaponController>();
             }
 
+            Player = this;
             ApplyRigidbodySettings();
             InitializeFlightState();
+        }
+
+        private void OnDestroy()
+        {
+            if (Player == this)
+            {
+                Player = null;
+            }
         }
 
         private void Start()
@@ -167,7 +179,42 @@ namespace F89.Flight
                 return;
             }
 
+            TryApplyMissionOutpostLaunch();
             TryApplyMissionCarrierLaunch();
+        }
+
+        public void TryApplyMissionOutpostLaunch()
+        {
+            if (!FlightMissionLaunchState.TryConsumeOutpostLaunch(out var outpostName, out var vtolTakeoff))
+            {
+                return;
+            }
+
+            if (!OutpostRunwayLanding.TryGetRunwaySpawn(outpostName, out var spawnPosition, out var runwayRotation))
+            {
+                Debug.LogWarning($"F-89: Could not spawn at outpost runway '{outpostName}'.");
+                return;
+            }
+
+            transform.SetPositionAndRotation(spawnPosition, runwayRotation);
+            if (body != null)
+            {
+                body.position = spawnPosition;
+                body.rotation = runwayRotation;
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+
+            if (vtolTakeoff)
+            {
+                var landing = GetComponent<AircraftLandingController>()
+                    ?? gameObject.AddComponent<AircraftLandingController>();
+                landing.PrepareForGroundReturn(transform.position);
+                landing.BeginTakeoff();
+                return;
+            }
+
+            ApplyCarrierTakeoffLaunch(FlightMissionLaunchState.CarrierTakeoffSpeedMph);
         }
 
         public void TryApplyMissionCarrierLaunch()
@@ -224,6 +271,8 @@ namespace F89.Flight
 
                 body.linearVelocity = forward.normalized * currentSpeed;
             }
+
+            FlightAudio.SetInFlight(true);
         }
 
         public void ApplyTakeoffSpeed(float speedMph)
@@ -343,7 +392,8 @@ namespace F89.Flight
             var autopilot = AutopilotController.Instance;
             if (IsAutopilotActive && autopilot != null && autopilot.IsFlying)
             {
-                UpdateFuel(dtNormal);
+                // Fuel and motion are driven by AutopilotController with warp sim delta.
+                body.linearVelocity = Vector3.zero;
                 return;
             }
 
@@ -417,6 +467,11 @@ namespace F89.Flight
             }
 
             currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
+        }
+
+        public void UpdateAutopilotFuel(float simDelta)
+        {
+            UpdateFuel(simDelta);
         }
 
         private void UpdateFuel(float dt)

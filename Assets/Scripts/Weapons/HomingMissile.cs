@@ -302,7 +302,7 @@ namespace F89.Weapons
             var ticSize = flightProfile != null ? flightProfile.ticSizeWorldUnits : 1f;
             LockableTarget best = null;
             var bestDistance = float.MaxValue;
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
             foreach (var target in targets)
             {
                 if (target == null || !target.IsAlive || !target.IsFlareDecoy)
@@ -466,7 +466,7 @@ namespace F89.Weapons
                 return;
             }
 
-            var targets = Object.FindObjectsByType<LockableTarget>(FindObjectsSortMode.None);
+            var targets = CombatThreatRange.GetCachedLockableTargets();
             var hits = 0;
 
             foreach (var target in targets)

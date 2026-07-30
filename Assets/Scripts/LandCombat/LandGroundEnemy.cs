@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using F89.Core;
 using F89.UI;
 using UnityEngine;
 
@@ -219,8 +220,10 @@ namespace F89.LandCombat
         {
             phase = CorpsePhase.Dying;
             LandBossEncounter.TryMarkDefeated(gameObject.name);
+            GetComponent<LandOutpostGuardMarker>()?.NotifyDestroyed();
 
             LandGroundSceneController.RegisterKill(level);
+            UrKillCredit.RegisterUrTroopKillByLevel(level);
             if (hitCollider != null)
             {
                 hitCollider.enabled = false;

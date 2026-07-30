@@ -1,3 +1,4 @@
+using F89.Audio;
 using F89.CameraSystems;
 using F89.Controls;
 using F89.Core;
@@ -35,14 +36,20 @@ namespace F89.Testing
                 EnsurePlayerVisuals(existingPlayer);
                 AntarcticaBaseSpawner.SpawnIfNeeded();
                 EnsureWeaponSystems(existingPlayer.gameObject);
-                OutpostVehicleSpawner.EnsureOpSouthEnemyPlatoon(existingPlayer);
+                JetEngineSound.EnsureOn(existingPlayer.gameObject);
+                Gau27FireSound.EnsureOn(existingPlayer.gameObject);
                 WeaponTestTargetSpawner.RemoveIfPresent();
 
                 // Restore landing site after weapon/flare systems init (they refill by default).
                 var restoredFromGround = FlightGroundReturnService.TryApplyPendingReturn(existingPlayer.gameObject);
                 if (!restoredFromGround && !FlightGroundReturnService.ShouldSkipCarrierSpawn())
                 {
-                    AntarcticaBaseSpawner.TryMovePlayerToCarrier(existingPlayer.transform);
+                    if (string.IsNullOrEmpty(FlightMissionLaunchState.LaunchFromOutpostName))
+                    {
+                        AntarcticaBaseSpawner.EnsureMissionPlatoonsIfNeeded(existingPlayer);
+                        AntarcticaBaseSpawner.TryMovePlayerToCarrier(existingPlayer.transform);
+                    }
+
                     ApplyMissionLaunchIfNeeded(existingPlayer);
                 }
 
@@ -90,6 +97,36 @@ namespace F89.Testing
             CreateAntarcticaMapOverlay(player.gameObject);
             EnsureAutopilotController(player.gameObject);
             EnsureLandingController(player.gameObject);
+            EnsureFlightCamera(player);
+        }
+
+        private static void EnsureFlightCamera(AircraftController player)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            var camera = Camera.main;
+            if (camera == null)
+            {
+                var cameraObject = new GameObject("Main Camera");
+                cameraObject.tag = "MainCamera";
+                camera = cameraObject.AddComponent<Camera>();
+                cameraObject.AddComponent<AudioListener>();
+                camera.clearFlags = CameraClearFlags.SolidColor;
+                camera.backgroundColor = Color.white;
+                camera.nearClipPlane = 0.3f;
+                camera.farClipPlane = 5000f;
+            }
+
+            var follow = camera.GetComponent<TopDownFollowCamera>();
+            if (follow == null)
+            {
+                follow = camera.gameObject.AddComponent<TopDownFollowCamera>();
+            }
+
+            follow.Configure(player.transform, player);
         }
 
         public static GameObject Build()
@@ -102,8 +139,7 @@ namespace F89.Testing
             SetupCamera(player);
             CreateWeaponSystems(player);
             EnsureCountermeasureSystems(player);
-            EnsureEnemySamSites(player.GetComponent<AircraftController>());
-            OutpostVehicleSpawner.EnsureOpSouthEnemyPlatoon(player.GetComponent<AircraftController>());
+            RemoveInvisibleOutpostSamLaunchers();
             CreateFlightHud(player);
             CreateAntarcticaMapOverlay(player);
             WeaponTestTargetSpawner.RemoveIfPresent();
@@ -121,8 +157,14 @@ namespace F89.Testing
             var restoredFromGround = FlightGroundReturnService.TryApplyPendingReturn(player);
             if (!restoredFromGround && !FlightGroundReturnService.ShouldSkipCarrierSpawn())
             {
-                AntarcticaBaseSpawner.TryMovePlayerToCarrier(player.transform);
-                ApplyMissionLaunchIfNeeded(player.GetComponent<AircraftController>());
+                var aircraftController = player.GetComponent<AircraftController>();
+                if (string.IsNullOrEmpty(FlightMissionLaunchState.LaunchFromOutpostName))
+                {
+                    AntarcticaBaseSpawner.EnsureMissionPlatoonsIfNeeded(aircraftController);
+                    AntarcticaBaseSpawner.TryMovePlayerToCarrier(player.transform);
+                }
+
+                ApplyMissionLaunchIfNeeded(aircraftController);
             }
 
             Debug.Log("F-89 flight test ready. Launch from USS Martin Van Buren. Mission 1: capture Palmer Station.");
@@ -191,19 +233,6 @@ namespace F89.Testing
 
             config = ScriptableObject.CreateInstance<Agm88jSiawWeaponConfig>();
             Debug.LogWarning("F-89: Using runtime AGM-88J SiAW defaults.");
-            return config;
-        }
-
-        private static EnemySamMissileConfig LoadEnemySamConfig()
-        {
-            var config = Resources.Load<EnemySamMissileConfig>("F89_EnemySamMissileConfig");
-            if (config != null)
-            {
-                return config;
-            }
-
-            config = ScriptableObject.CreateInstance<EnemySamMissileConfig>();
-            Debug.LogWarning("F-89: Using runtime enemy SAM defaults.");
             return config;
         }
 
@@ -311,6 +340,8 @@ namespace F89.Testing
             bankVisual.Configure(controller, visualPivot.transform, aircraftVisual.transform);
 
             EnsurePlayerLockableTarget(player);
+            JetEngineSound.EnsureOn(player);
+            Gau27FireSound.EnsureOn(player);
 
             return player;
         }
@@ -436,9 +467,10 @@ namespace F89.Testing
         {
             CreateWeaponSystems(player);
             EnsureCountermeasureSystems(player);
+            EnsureFuelCrashMonitor(player);
             var controller = player.GetComponent<AircraftController>();
             var weaponController = player.GetComponent<PlayerWeaponController>();
-            EnsureEnemySamSites(controller);
+            RemoveInvisibleOutpostSamLaunchers();
             CreateFlightHud(player);
             if (weaponController != null && controller != null)
             {
@@ -462,45 +494,16 @@ namespace F89.Testing
             flareController.Configure(controller, input, LoadFlareLoadoutConfig());
         }
 
-        private static void EnsureEnemySamSites(AircraftController player)
+        private static void RemoveInvisibleOutpostSamLaunchers()
         {
-            if (player == null || player.Profile == null || player.WorldMap == null)
+            EnemySamLauncher.RemoveFromOutpostBases();
+        }
+
+        private static void EnsureFuelCrashMonitor(GameObject player)
+        {
+            if (player.GetComponent<PlayerAircraftFuelCrashMonitor>() == null)
             {
-                return;
-            }
-
-            var playerTarget = player.GetComponent<LockableTarget>();
-            if (playerTarget == null)
-            {
-                return;
-            }
-
-            var samConfig = LoadEnemySamConfig();
-            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
-            var armed = 0;
-            foreach (var baseSite in bases)
-            {
-                if (baseSite == null
-                    || !baseSite.IsActive
-                    || baseSite.IsDestroyed
-                    || baseSite.Control != BaseControl.Hostile
-                    || baseSite.SiteKind != BaseSiteKind.Land)
-                {
-                    continue;
-                }
-
-                if (baseSite.GetComponent<EnemySamLauncher>() != null)
-                {
-                    continue;
-                }
-
-                var launcher = baseSite.gameObject.AddComponent<EnemySamLauncher>();
-                launcher.Configure(samConfig, player.WorldMap, player.Profile, playerTarget);
-                armed++;
-                if (armed >= 3)
-                {
-                    break;
-                }
+                player.AddComponent<PlayerAircraftFuelCrashMonitor>();
             }
         }
 
@@ -595,29 +598,7 @@ namespace F89.Testing
 
         private static void SetupCamera(GameObject player)
         {
-            var camera = Camera.main;
-            if (camera == null)
-            {
-                var cameraObject = new GameObject("Main Camera");
-                cameraObject.tag = "MainCamera";
-                camera = cameraObject.AddComponent<Camera>();
-                cameraObject.AddComponent<AudioListener>();
-            }
-
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = Color.white;
-            camera.nearClipPlane = 0.3f;
-            camera.farClipPlane = 5000f;
-
-            var follow = camera.GetComponent<TopDownFollowCamera>();
-            if (follow == null)
-            {
-                follow = camera.gameObject.AddComponent<TopDownFollowCamera>();
-            }
-
-            follow.Configure(player.transform, player.GetComponent<AircraftController>());
-            camera.transform.position = new Vector3(0f, 38f, -12f);
-            camera.transform.rotation = Quaternion.Euler(62f, 0f, 0f);
+            EnsureFlightCamera(player.GetComponent<AircraftController>());
         }
 
         private static PlaneRadarOverlay FindLongRangeRadarOverlay()
@@ -636,11 +617,12 @@ namespace F89.Testing
 
         private static void ApplyMissionLaunchIfNeeded(AircraftController aircraft)
         {
-            if (aircraft == null || !FlightMissionLaunchState.LaunchFromCarrier)
+            if (aircraft == null)
             {
                 return;
             }
 
+            aircraft.TryApplyMissionOutpostLaunch();
             aircraft.TryApplyMissionCarrierLaunch();
         }
     }

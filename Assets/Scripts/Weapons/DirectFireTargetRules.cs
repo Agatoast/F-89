@@ -24,7 +24,17 @@ namespace F89.Weapons
             if (target == null
                 || !target.IsAlive
                 || target.IsFlareDecoy
-                || target.IsPlayerAircraft)
+                || target.IsPlayerAircraft
+                || target.IsNeutral)
+            {
+                return false;
+            }
+
+            var outpostBuilding = target.GetComponent<OutpostBuilding>();
+            if (outpostBuilding != null
+                && !OutpostPrimaryObjective.IsMissionHostileBuilding(
+                    outpostBuilding.BuildingType,
+                    target.TargetLabel))
             {
                 return false;
             }

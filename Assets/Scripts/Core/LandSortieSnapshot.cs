@@ -35,6 +35,8 @@ namespace F89.Core
         public Vector3 LandingGridWorldCenter;
         /// <summary>1 means LandingGridCellX/Z use the canonical 1-based southwest-origin map grid.</summary>
         public int GridCoordinateVersion;
+        /// <summary>When true, ground exit restores the parked runway deck menu instead of auto takeoff.</summary>
+        public bool ReturnToRunwayDeck;
 
         public static LandSortieSnapshot Empty => new LandSortieSnapshot { ReturnSceneName = GameScenes.FlightTest };
     }
