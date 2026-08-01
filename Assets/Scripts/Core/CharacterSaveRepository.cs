@@ -358,6 +358,37 @@ namespace F89.Core
                 UrKillCredit.Sum(save.UrTroopKillsByLevel));
         }
 
+        private static bool TryResolveUrDefinitionFromTargetLabel(
+            VehicleUnitCatalog catalog,
+            string label,
+            out VehicleUnitDefinition definition)
+        {
+            definition = null;
+            if (catalog == null || string.IsNullOrWhiteSpace(label))
+            {
+                return false;
+            }
+
+            if (Enemies.OutpostVehicleSpawner.TryParseUnitSlotLabel(
+                    label,
+                    out var designation,
+                    out var abbreviation,
+                    out _))
+            {
+                if (designation != VehicleUnitDesignation.UR)
+                {
+                    return false;
+                }
+
+                return catalog.TryGetByAbbreviation(
+                    abbreviation,
+                    VehicleUnitDesignation.UR,
+                    out definition);
+            }
+
+            return catalog.TryGetByAbbreviation(label, VehicleUnitDesignation.UR, out definition);
+        }
+
         private static void BackfillUrKillArraysFromDestroyedTargets(CharacterSaveData save)
         {
             var catalog = Enemies.VehicleUnitCatalog.LoadOrDefault();
@@ -376,7 +407,7 @@ namespace F89.Core
                 }
 
                 var label = targetId.Substring(separator + 2).Trim();
-                if (!catalog.TryGetByAbbreviation(label, VehicleUnitDesignation.UR, out var definition)
+                if (!TryResolveUrDefinitionFromTargetLabel(catalog, label, out var definition)
                     || definition == null)
                 {
                     continue;
@@ -632,7 +663,36 @@ namespace F89.Core
 
         private static void NormalizeLoadedScores()
         {
-            // Intentionally empty — character scores are owned by gameplay / explicit resets.
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null)
+                {
+                    continue;
+                }
+
+                if (!save.HasAchievedFirstRank
+                    && (PilotCareerRanks.GetRankIndex(save.Rank) >= PilotCareerRanks.FirstRankIndex
+                        || save.TotalScore >= PilotCareerRanks.GetMinTotalScoreForRankIndex(PilotCareerRanks.FirstRankIndex)))
+                {
+                    save.HasAchievedFirstRank = true;
+                    changed = true;
+                }
+
+                if (!save.IsCourtMartialed
+                    && !save.IsKilledInAction
+                    && PilotCareerRanks.ShouldImprisonForNegativeTotal(save))
+                {
+                    save.IsCourtMartialed = true;
+                    save.CourtMartialedUtc = DateTime.UtcNow.ToString("o");
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                WriteToDisk();
+            }
         }
 
         private static void NormalizeLoadedRibbons()

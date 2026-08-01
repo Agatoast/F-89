@@ -89,31 +89,22 @@ namespace F89.UI
             var content = new GUIContent(message ?? string.Empty);
             var isStory = title == StoryPageContent.Title;
             var textWidth = isStory ? messageArea.width : messageArea.width - 24f;
-            var contentHeight = Mathf.Max(
-                messageArea.height,
-                subpageMessageStyle.CalcHeight(content, textWidth) + 16f);
-            var viewRect = new Rect(0f, 0f, textWidth, contentHeight);
 
             if (isStory)
             {
-                subpageScroll = GUI.BeginScrollView(
-                    messageArea,
-                    subpageScroll,
-                    viewRect,
-                    GUIStyle.none,
-                    GUIStyle.none);
+                FitStoryMessageStyle(content, textWidth, messageArea.height);
+                GUI.Label(new Rect(messageArea.x, messageArea.y, textWidth, messageArea.height), content, subpageMessageStyle);
+                DrawStoryFlag(message, messageArea, textWidth, scrollOffsetY: 0f);
             }
             else
             {
+                var contentHeight = Mathf.Max(
+                    messageArea.height,
+                    subpageMessageStyle.CalcHeight(content, textWidth) + 16f);
+                var viewRect = new Rect(0f, 0f, textWidth, contentHeight);
                 subpageScroll = GUI.BeginScrollView(messageArea, subpageScroll, viewRect, false, true);
-            }
-
-            GUI.Label(viewRect, content, subpageMessageStyle);
-            GUI.EndScrollView();
-
-            if (isStory)
-            {
-                DrawStoryFlag(message, messageArea, textWidth);
+                GUI.Label(viewRect, content, subpageMessageStyle);
+                GUI.EndScrollView();
             }
 
             if (DrawMenuButton(backRect, "BACK", fontSize: 28))
@@ -137,8 +128,7 @@ namespace F89.UI
             }
 
             var aspect = saveAntarcticaLogoTexture.height / (float)Mathf.Max(1, saveAntarcticaLogoTexture.width);
-            // Keep the layout slot unchanged so story text / flag / back stay put.
-            var layoutWidth = UiFitCanvas.Rect.width * 0.42f * 0.5f;
+            var layoutWidth = UiFitCanvas.Rect.width * 0.21f;
             var layoutHeight = layoutWidth * aspect;
             var layoutRect = new Rect(
                 UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - layoutWidth) * 0.5f - UiFitCanvas.Px(100f),
@@ -146,24 +136,33 @@ namespace F89.UI
                 layoutWidth,
                 layoutHeight);
 
-            // Fill the header band as large as possible, bottom-aligned to the layout slot.
-            var topMargin = UiFitCanvas.Px(4f);
-            var sideMargin = UiFitCanvas.Px(10f);
-            var maxHeight = Mathf.Max(layoutHeight, layoutRect.yMax - topMargin);
-            var maxWidth = maxHeight / aspect;
-            maxWidth = Mathf.Min(maxWidth, UiFitCanvas.Rect.width - sideMargin * 2f);
-            maxHeight = maxWidth * aspect;
-
-            var drawX = UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - maxWidth) * 0.5f - UiFitCanvas.Px(100f);
-            drawX = Mathf.Clamp(drawX, UiFitCanvas.Rect.x + sideMargin, UiFitCanvas.Rect.xMax - maxWidth - sideMargin);
-            var drawRect = new Rect(drawX, layoutRect.yMax - maxHeight, maxWidth, maxHeight);
-
             GUI.color = Color.white;
-            GUI.DrawTexture(drawRect, saveAntarcticaLogoTexture, ScaleMode.ScaleToFit, true);
+            GUI.DrawTexture(layoutRect, saveAntarcticaLogoTexture, ScaleMode.ScaleToFit, true);
             return layoutRect;
         }
 
-        private static void DrawStoryFlag(string message, Rect messageArea, float textWidth)
+        private static void FitStoryMessageStyle(GUIContent content, float textWidth, float maxHeight)
+        {
+            EnsureStyles();
+            var minSize = Mathf.RoundToInt(UiFitCanvas.Px(14f));
+            var maxSize = Mathf.RoundToInt(UiFitCanvas.Px(22f));
+            var bestSize = minSize;
+
+            for (var size = maxSize; size >= minSize; size--)
+            {
+                subpageMessageStyle.fontSize = size;
+                if (subpageMessageStyle.CalcHeight(content, textWidth) <= maxHeight)
+                {
+                    bestSize = size;
+                    break;
+                }
+            }
+
+            subpageMessageStyle.fontSize = bestSize;
+            subpageMessageStyle.normal.textColor = Color.white;
+        }
+
+        private static void DrawStoryFlag(string message, Rect messageArea, float textWidth, float scrollOffsetY)
         {
             if (storyFlagTexture == null)
             {
@@ -195,7 +194,7 @@ namespace F89.UI
             var flagWidth = flagHeight * aspect;
 
             var flagX = UiFitCanvas.Rect.xMax - UiFitCanvas.Px(300f) - flagWidth;
-            var flagY = messageArea.y + lineY - subpageScroll.y - UiFitCanvas.Px(58f);
+            var flagY = messageArea.y + lineY - scrollOffsetY - UiFitCanvas.Px(58f);
 
             var flagRect = new Rect(flagX, flagY, flagWidth, flagHeight);
             if (flagRect.width <= 0f || flagRect.height <= 0f)
@@ -360,15 +359,15 @@ namespace F89.UI
             if (subpageMessageStyle == null)
             {
                 subpageMessageStyle = HudStyleFactory.CreateLabel(
-                    36,
+                    Mathf.RoundToInt(UiFitCanvas.Px(20f)),
                     FontStyle.Normal,
                     TextAnchor.UpperLeft,
                     Color.white,
                     wordWrap: true);
             }
-            else
+            else if (MenuNavigationState.SubpageTitle != StoryPageContent.Title)
             {
-                subpageMessageStyle.fontSize = 28;
+                subpageMessageStyle.fontSize = Mathf.RoundToInt(UiFitCanvas.Px(20f));
                 subpageMessageStyle.normal.textColor = Color.white;
             }
         }

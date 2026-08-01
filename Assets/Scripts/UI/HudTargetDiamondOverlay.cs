@@ -14,7 +14,7 @@ namespace F89.UI
         [SerializeField] private float diamondSize = HudTargetMarkerLayout.DiamondSize;
 
         private static readonly Color FriendlyMarkerColor = new Color(0.25f, 0.78f, 0.35f, 1f);
-        private static readonly Color HostileSelectedDiamondColor = new Color(0.95f, 0.15f, 0.1f, 1f);
+        private static readonly Color HostileMarkerColor = new Color(0.92f, 0.15f, 0.1f, 1f);
 
         private Texture2D squareTexture;
         private Texture2D diamondTexture;
@@ -56,7 +56,6 @@ namespace F89.UI
 
             EnsureTextures();
 
-            var hudColor = FlightHudColorPalette.Current;
             var squareHalf = squareSize * 0.5f;
             var diamondDrawSize = HudTargetMarkerLayout.DiamondSize;
             var diamondHalf = diamondDrawSize * 0.5f;
@@ -106,7 +105,7 @@ namespace F89.UI
                     continue;
                 }
 
-                var markerColor = target.IsFriendly ? FriendlyMarkerColor : hudColor;
+                var markerColor = target.IsFriendly ? FriendlyMarkerColor : HostileMarkerColor;
                 DrawMarker(guiCenter, squareHalf, squareSize, markerColor, squareTexture);
             }
 
@@ -115,7 +114,7 @@ namespace F89.UI
                 && !IsCarrierTarget(activeTarget)
                 && IsTargetOnScreen(activeTarget, out var activeCenter))
             {
-                var diamondColor = activeTarget.IsFriendly ? FriendlyMarkerColor : HostileSelectedDiamondColor;
+                var diamondColor = activeTarget.IsFriendly ? FriendlyMarkerColor : HostileMarkerColor;
                 DrawMarker(activeCenter, diamondHalf, diamondDrawSize, diamondColor, diamondTexture);
             }
         }

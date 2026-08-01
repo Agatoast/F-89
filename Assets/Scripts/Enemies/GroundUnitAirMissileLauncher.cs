@@ -27,6 +27,12 @@ namespace F89.Enemies
                 return;
             }
 
+            if (!definition.IsHostile
+                && (airTarget.IsPlayerAircraft || airTarget.IsFriendly))
+            {
+                return;
+            }
+
             var config = GroundUnitAirMissileConfig.FromDefinition(definition, worldMap, profile);
             LaunchWithConfig(config, launchTransform, airTarget, worldMap, profile, ResolveBodyColor(definition));
         }

@@ -1,5 +1,6 @@
 using F89.Core;
 using F89.Flight;
+using F89.LandCombat;
 using UnityEngine;
 
 namespace F89.Enemies
@@ -16,6 +17,13 @@ namespace F89.Enemies
             var isFlier = definition != null && definition.isFlier;
             var isTroop = definition != null && definition.isTroop;
 
+            if (isTroop && TryGetTroopSprite(definition, out var troopSprite))
+            {
+                var troopSize = footprint * 0.5f;
+                AttachSideSpriteVisual(parent, troopSprite, troopSize);
+                return;
+            }
+
             if (isFlier
                 && definition != null
                 && definition.IsHostile
@@ -29,16 +37,49 @@ namespace F89.Enemies
                 return;
             }
 
-            if (!isTroop
-                && !isFlier
-                && definition != null
-                && TryGetVehicleSprite(definition, out var sprite))
+            if (!isTroop && TryGetVehicleSprite(definition, out var sprite))
             {
                 AttachSideSpriteVisual(parent, sprite, footprint);
                 return;
             }
 
             AttachPrimitiveVisual(parent, definition, footprint, isFlier, isTroop);
+        }
+
+        private static bool TryGetTroopSprite(VehicleUnitDefinition definition, out Sprite sprite)
+        {
+            sprite = null;
+            if (definition == null || !definition.isTroop)
+            {
+                return false;
+            }
+
+            if (definition.IsHostile)
+            {
+                return TryGetIdleClipSprite(LandEnemySpriteSheet.GetClip(LandEnemySpriteSheet.Clip.Idle), out sprite);
+            }
+
+            return TryGetIdleClipSprite(LandPlayerSpriteSheet.GetClip(LandPlayerSpriteSheet.Clip.Idle), out sprite);
+        }
+
+        private static bool TryGetIdleClipSprite(Sprite[] clip, out Sprite sprite)
+        {
+            sprite = null;
+            if (clip == null || clip.Length == 0)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < clip.Length; i++)
+            {
+                if (clip[i] != null)
+                {
+                    sprite = clip[i];
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool TryGetVehicleSprite(VehicleUnitDefinition definition, out Sprite sprite)
@@ -51,10 +92,21 @@ namespace F89.Enemies
 
             if (definition.IsHostile)
             {
-                return UrVehicleSpriteSheet.TryGetSideSprite(definition.abbreviation, out sprite);
+                if (UrVehicleSpriteSheet.TryGetSideSprite(definition.abbreviation, out sprite))
+                {
+                    return true;
+                }
+
+                return UrVehicleSpriteSheet.TryGetSideSprite("FW", out sprite);
             }
 
-            return UsVehicleSpriteSheet.TryGetSideSprite(definition.abbreviation, out sprite);
+            if (UsVehicleSpriteSheet.TryGetSideSprite(definition.abbreviation, out sprite))
+            {
+                return true;
+            }
+
+            // US AH-64 and other fliers without dedicated art reuse the UR attack-helicopter side view.
+            return UrVehicleSpriteSheet.TryGetSideSprite("AH", out sprite);
         }
 
         private static void AttachSideSpriteVisual(Transform parent, Sprite sprite, float footprint)

@@ -23,7 +23,8 @@ namespace F89.Enemies
                 { "FW", new Vector4(369, 305, 111, 71) },
                 { "VHS", new Vector4(881, 292, 111, 91) },
                 { "HAR", new Vector4(369, 416, 110, 82) },
-                { "MC", new Vector4(881, 422, 111, 82) }
+                { "MC", new Vector4(881, 422, 111, 82) },
+                { "ARW", new Vector4(369, 305, 111, 71) }
             };
 
         private static readonly Dictionary<string, Sprite> sprites =

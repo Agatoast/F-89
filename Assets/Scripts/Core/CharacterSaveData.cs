@@ -18,7 +18,12 @@ namespace F89.Core
         public int[] UrTroopKillsByLevel = new int[UrKillCredit.LevelCount];
         public int BestMissionScore;
         public int TotalScore;
-        /// <summary>Character ended by court-martial after excessive friendly fire on a mission.</summary>
+        /// <summary>
+        /// Sticky once the pilot reaches 1st LT (or 500 total score). Never cleared on demotion;
+        /// enables GCMP when total score falls below zero.
+        /// </summary>
+        public bool HasAchievedFirstRank;
+        /// <summary>Character imprisoned after total mission score fell below zero post-promotion.</summary>
         public bool IsCourtMartialed;
         public string CourtMartialedUtc = string.Empty;
         /// <summary>Character died in action and can no longer be flown.</summary>
@@ -92,7 +97,7 @@ namespace F89.Core
             {
                 if (IsCourtMartialed)
                 {
-                    return $"(COURT-MARTIAL) {DisplayRank} {Name}";
+                    return $"(GCMP) {DisplayRank} {Name}";
                 }
 
                 return IsKilledInAction ? $"(KIA) {DisplayRank} {Name}" : $"{DisplayRank} {Name}";

@@ -31,6 +31,7 @@ namespace F89.Core
             CharacterGearSession.PersistActive();
             CharacterSaveRepository.SyncVehicleKillCredit(save);
 
+            var rankBeforeEnd = save != null ? save.Rank : PilotCareerRanks.LowestRank;
             var scoreResult = MissionScoreState.FinalizeMissionEnd(save);
             MissionEndReportState.Begin(
                 scoreResult.MissionScore,
@@ -40,21 +41,23 @@ namespace F89.Core
             if (scoreResult.RequiresCourtMartial && save != null)
             {
                 CharacterSaveRepository.MarkCourtMartialed(save);
+                ClearMissionSessionState();
+                PostMissionContinuation.ContinueToResearchOrCharacter(save);
+                return FinishResult.CourtMartialed;
             }
 
             if (applyCampaignFailurePenalty && GamePlayModeState.IsCampaign && save != null)
             {
                 LandBossMissionAssignment.ResolveAssignedMissionWithoutVictory(save);
-                if (PilotCareerRanks.TryDemoteToScoreFloor(save, out var previousRank, out var newRank))
+                if (rankBeforeEnd != save.Rank)
                 {
                     CharacterSaveRepository.WriteBossProgress(save);
-                    DemotionState.Begin(previousRank, newRank);
+                    DemotionState.Begin(rankBeforeEnd, save.Rank);
                     ClearMissionSessionState();
                     return FinishResult.ShowDemotion;
                 }
             }
-            else if (!scoreResult.RequiresCourtMartial
-                     && GamePlayModeState.IsCampaign
+            else if (GamePlayModeState.IsCampaign
                      && save != null
                      && LandBossMissionAssignment.HasActiveAssignment(save)
                      && LandBossMissionAssignment.IsPrimaryMissionComplete(save))
@@ -64,9 +67,7 @@ namespace F89.Core
 
             ClearMissionSessionState();
             PostMissionContinuation.ContinueToResearchOrCharacter(save);
-            return scoreResult.RequiresCourtMartial
-                ? FinishResult.CourtMartialed
-                : FinishResult.LeftForResearch;
+            return FinishResult.LeftForResearch;
         }
 
         public static void LoadDemotionScene()

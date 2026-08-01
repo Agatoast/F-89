@@ -2,9 +2,12 @@ using UnityEngine;
 
 namespace F89.Core
 {
-    /// <summary>Rank ladder gated by TotalScore. Used for demotion after career penalties.</summary>
+    /// <summary>Rank ladder gated by TotalScore. Used for promotion, demotion, and GCMP imprisonment.</summary>
     public static class PilotCareerRanks
     {
+        /// <summary>Index of 1st LT — first rank above starting 2nd LT.</summary>
+        public const int FirstRankIndex = 1;
+
         private static readonly string[] Ranks =
         {
             "2nd LT",
@@ -26,6 +29,16 @@ namespace F89.Core
         };
 
         public static string LowestRank => Ranks[0];
+
+        public static int GetMinTotalScoreForRankIndex(int rankIndex)
+        {
+            if (rankIndex < 0 || rankIndex >= MinTotalScore.Length)
+            {
+                return 0;
+            }
+
+            return MinTotalScore[rankIndex];
+        }
 
         public static int GetRankIndex(string rank)
         {
@@ -59,6 +72,49 @@ namespace F89.Core
             }
 
             return best;
+        }
+
+        /// <summary>
+        /// Syncs rank to the total-score floor (promote or demote). Records first-rank achievement once.
+        /// Demotion does not clear <see cref="CharacterSaveData.HasAchievedFirstRank"/> — a demoted 2nd LT
+        /// who once reached 1st LT remains eligible for GCMP when total score is negative.
+        /// </summary>
+        public static void SyncCareerRankProgress(CharacterSaveData save)
+        {
+            if (save == null || save.IsCourtMartialed || save.IsKilledInAction)
+            {
+                return;
+            }
+
+            var allowedIndex = GetHighestRankIndexForScore(save.TotalScore);
+            var currentIndex = GetRankIndex(save.Rank);
+            if (allowedIndex != currentIndex)
+            {
+                save.Rank = Ranks[allowedIndex];
+            }
+
+            if (save.HasAchievedFirstRank)
+            {
+                return;
+            }
+
+            if (GetRankIndex(save.Rank) >= FirstRankIndex
+                || save.TotalScore >= GetMinTotalScoreForRankIndex(FirstRankIndex))
+            {
+                save.HasAchievedFirstRank = true;
+            }
+        }
+
+        /// <summary>
+        /// Once the pilot has reached 1st LT, negative total score triggers GCMP — even if demoted to 2nd LT.
+        /// </summary>
+        public static bool ShouldImprisonForNegativeTotal(CharacterSaveData save)
+        {
+            return save != null
+                && !save.IsCourtMartialed
+                && !save.IsKilledInAction
+                && save.HasAchievedFirstRank
+                && save.TotalScore < 0;
         }
 
         /// <summary>

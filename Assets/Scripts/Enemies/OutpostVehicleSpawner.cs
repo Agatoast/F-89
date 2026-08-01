@@ -148,7 +148,7 @@ namespace F89.Enemies
                 }
 
                 MarkAllPlatoonSlotsDestroyed(outpost);
-                Object.Destroy(existingPlatoon.gameObject);
+                GameObject.Destroy(existingPlatoon.gameObject);
             }
 
             if (AreAllPlatoonSlotsDestroyed(outpost))
@@ -336,7 +336,7 @@ namespace F89.Enemies
                 var platoon = outposts[i].transform.Find(PlatoonRootName);
                 if (platoon != null)
                 {
-                    Object.Destroy(platoon.gameObject);
+                    GameObject.Destroy(platoon.gameObject);
                 }
             }
         }
@@ -494,7 +494,7 @@ namespace F89.Enemies
                 var platoon = outpost.transform.Find(PlatoonRootName);
                 if (platoon != null)
                 {
-                    Object.Destroy(platoon.gameObject);
+                    GameObject.Destroy(platoon.gameObject);
                 }
             }
         }
@@ -504,6 +504,41 @@ namespace F89.Enemies
             var designation = definition != null ? definition.designation.ToString() : "UR";
             var abbrev = definition != null ? definition.abbreviation : "UNIT";
             return $"{designation}-{abbrev}-{slotIndex}";
+        }
+
+        /// <summary>Parses platoon slot labels such as UR-MBT-3 or US-AH-64-5.</summary>
+        public static bool TryParseUnitSlotLabel(
+            string slotLabel,
+            out VehicleUnitDesignation designation,
+            out string abbreviation,
+            out int slotIndex)
+        {
+            designation = default;
+            abbreviation = null;
+            slotIndex = -1;
+            if (string.IsNullOrWhiteSpace(slotLabel))
+            {
+                return false;
+            }
+
+            var parts = slotLabel.Trim().Split('-');
+            if (parts.Length < 3)
+            {
+                return false;
+            }
+
+            if (!System.Enum.TryParse(parts[0], true, out designation))
+            {
+                return false;
+            }
+
+            if (!int.TryParse(parts[parts.Length - 1], out slotIndex))
+            {
+                return false;
+            }
+
+            abbreviation = string.Join("-", parts, 1, parts.Length - 2);
+            return !string.IsNullOrEmpty(abbreviation);
         }
 
         private const float VehicleRoamRadiusMiles = 2f;

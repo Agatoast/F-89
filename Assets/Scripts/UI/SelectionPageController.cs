@@ -225,6 +225,7 @@ namespace F89.UI
                 return;
             }
 
+            CharacterSaveRepository.EnsureUrKillArrays(save);
             DrawDossierHighestAward(save);
             SelectionPageStyles.DrawDossierName(
                 SelectionPageLayout.GetDossierNameRect(),

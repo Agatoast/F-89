@@ -47,7 +47,6 @@ namespace F89.Flight
         private const float MaxSimDeltaSeconds = 0.1f;
 
         public bool IsFlying { get; private set; }
-        public bool IsSelectingDestination { get; private set; }
         public bool HasDestination => hasDestination;
         public bool HasPendingRouteLegs => routeQueue.Count > 0;
         public int PendingRouteLegCount => routeQueue.Count;
@@ -131,7 +130,6 @@ namespace F89.Flight
                 mapOverlay = Object.FindAnyObjectByType<AntarcticaMapOverlay>();
             }
 
-            IsSelectingDestination = false;
             IsFlying = true;
             PrepareHostileDetectionForFlight();
             aircraft?.ApplyAutopilotState(
@@ -162,12 +160,6 @@ namespace F89.Flight
             {
                 Time.timeScale = 1f;
             }
-        }
-
-        /// <summary>Clears destination-select state when the map is closed without engaging.</summary>
-        public void NotifyMapClosed()
-        {
-            IsSelectingDestination = false;
         }
 
         public void Configure(AntarcticaMapOverlay map)
@@ -288,7 +280,7 @@ namespace F89.Flight
 
         private void HandleTimeWarpInput()
         {
-            if (!IsFlying && !IsSelectingDestination)
+            if (!IsFlying)
             {
                 return;
             }
@@ -367,37 +359,30 @@ namespace F89.Flight
                 return;
             }
 
-            // New map waypoints / selection only when there is no paused route.
+            // Radar-selected base takes priority over a stale map waypoint.
+            if (HasRadarSelectedBase(out _))
+            {
+                if (TryEngageAutopilotToRadarTarget())
+                {
+                    return;
+                }
+            }
+
+            // Map waypoint staged via M → click (plan on map, then P).
             if (mapOverlay != null && mapOverlay.HasAutopilotMapTarget)
             {
-                IsSelectingDestination = false;
                 if (mapOverlay.TryEngageAutopilotToMapTarget())
                 {
                     return;
                 }
             }
 
-            if (IsSelectingDestination)
-            {
-                if (mapOverlay != null && mapOverlay.TryEngageAutopilotToMapTarget())
-                {
-                    return;
-                }
-
-                CancelDestinationSelection();
-                return;
-            }
-
-            if (TryEngageAutopilotToRadarTarget())
-            {
-                return;
-            }
-
-            BeginDestinationSelection();
+            ShowToast("Set a map waypoint or select a radar base.");
         }
 
-        private bool TryEngageAutopilotToRadarTarget()
+        private bool HasRadarSelectedBase(out AntarcticaBase baseSite)
         {
+            baseSite = null;
             var lockController = GetComponent<MissileLockController>();
             if (lockController?.SelectedTarget == null || !lockController.SelectedTarget.IsAlive)
             {
@@ -405,18 +390,25 @@ namespace F89.Flight
             }
 
             var target = lockController.SelectedTarget;
-            var baseSite = target.GetComponent<AntarcticaBase>() ?? target.GetComponentInParent<AntarcticaBase>();
-            if (baseSite == null)
+            baseSite = target.GetComponent<AntarcticaBase>() ?? target.GetComponentInParent<AntarcticaBase>();
+            return baseSite != null;
+        }
+
+        private bool TryEngageAutopilotToRadarTarget()
+        {
+            if (!HasRadarSelectedBase(out var baseSite))
             {
                 return false;
             }
 
+            // Hostile outposts: block radar autopilot (fly via map waypoint instead).
             if (baseSite.SiteKind == BaseSiteKind.Land
                 && baseSite.Control == BaseControl.Hostile
                 && !AntarcticaOutpostState.IsNeutralOutpost(baseSite.BaseName)
                 && !AntarcticaOutpostState.IsFriendlyOccupied(baseSite.BaseName))
             {
-                return false;
+                ShowToast("Hostile outpost — autopilot blocked.");
+                return true;
             }
 
             if (aircraft?.WorldMap == null || aircraft.Profile == null)
@@ -444,7 +436,17 @@ namespace F89.Flight
             }
 
             mapOverlay?.StageAutopilotTarget(world, label);
-            return CommitDestination(world, label);
+            if (!CommitRoute(new[] { new RouteLeg(world, label) }))
+            {
+                return false;
+            }
+
+            if (mapOverlay != null && AntarcticaMapOverlay.IsOpen)
+            {
+                mapOverlay.HideMapForAutopilotHud();
+            }
+
+            return true;
         }
 
         private static string FormatRouteWaypointLabel(Vector2 miles, int routeIndex, string placeName = null)
@@ -455,23 +457,6 @@ namespace F89.Flight
             }
 
             return $"WP {routeIndex + 1}";
-        }
-
-        public void BeginDestinationSelection()
-        {
-            if (mapOverlay == null)
-            {
-                mapOverlay = Object.FindAnyObjectByType<AntarcticaMapOverlay>();
-            }
-
-            IsSelectingDestination = true;
-            mapOverlay?.OpenAutopilotSelection();
-        }
-
-        public void CancelDestinationSelection()
-        {
-            IsSelectingDestination = false;
-            mapOverlay?.CloseMap();
         }
 
         public void CommitDestination(Vector3 worldPosition, string label)
@@ -507,7 +492,6 @@ namespace F89.Flight
                 hasDestination = false;
                 destinationLabel = string.Empty;
                 DestinationDistanceMiles = 0f;
-                IsSelectingDestination = false;
                 IsFlying = false;
                 mapOverlay?.ClearMapRouteOnArrival();
                 ShowToast("Already at destination.");
@@ -515,7 +499,6 @@ namespace F89.Flight
                 return false;
             }
 
-            IsSelectingDestination = false;
             IsFlying = true;
             PrepareHostileDetectionForFlight();
             aircraft?.ApplyAutopilotState(
@@ -621,7 +604,6 @@ namespace F89.Flight
         private void SuspendAutopilot(bool closeMap = false)
         {
             IsFlying = false;
-            IsSelectingDestination = false;
             Time.timeScale = 1f;
             mapOverlay?.SetAutopilotHudBearing(destinationWorld, destinationLabel);
             if (closeMap)
@@ -645,7 +627,6 @@ namespace F89.Flight
             }
 
             IsFlying = false;
-            IsSelectingDestination = false;
             hasDestination = false;
             destinationLabel = string.Empty;
             DestinationDistanceMiles = 0f;
@@ -656,7 +637,6 @@ namespace F89.Flight
         private void Disengage(string reason, bool closeMap = false)
         {
             IsFlying = false;
-            IsSelectingDestination = false;
             hasDestination = false;
             destinationLabel = string.Empty;
             DestinationDistanceMiles = 0f;

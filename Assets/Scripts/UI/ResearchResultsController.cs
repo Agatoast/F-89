@@ -86,7 +86,8 @@ namespace F89.UI
 
             if (MissionEndReportState.RequiresCourtMartial)
             {
-                lines += "\n\nCOURT-MARTIAL — excessive friendly losses ended this career.\n(Full report copy pending.)";
+                lines += "\n\nGENERAL COURT-MARTIAL — total mission score fell below zero.\n"
+                    + "Character imprisoned (GCMP). Record preserved; pilot cannot fly again.";
             }
 
             return lines;

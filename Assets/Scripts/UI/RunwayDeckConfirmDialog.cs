@@ -105,7 +105,7 @@ namespace F89.UI
                 case Action.Dismount:
                     return "Dismount to ground?";
                 case Action.TakeOff:
-                    return "Take off from runway?";
+                    return "Take Off?";
                 default:
                     return string.Empty;
             }

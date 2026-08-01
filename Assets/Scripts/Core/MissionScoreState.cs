@@ -22,16 +22,11 @@ namespace F89.Core
     /// </summary>
     public static class MissionScoreState
     {
-        public const int CourtMartialFriendlyKillThreshold = -100;
-
         public static int SessionScore { get; private set; }
-        /// <summary>Running friendly-kill penalty for this mission (zero or negative).</summary>
-        public static int FriendlyKillPoints { get; private set; }
 
         public static void Reset()
         {
             SessionScore = 0;
-            FriendlyKillPoints = 0;
         }
 
         public static void AddMissionPoints(int points)
@@ -47,12 +42,8 @@ namespace F89.Core
             }
 
             var penalty = -pointValue;
-            FriendlyKillPoints += penalty;
             SessionScore += penalty;
         }
-
-        public static bool IsCourtMartialPending =>
-            FriendlyKillPoints <= CourtMartialFriendlyKillThreshold;
 
         /// <summary>Drops the in-progress mission score without updating career totals.</summary>
         public static void AbandonMissionWithoutScoring()
@@ -78,7 +69,8 @@ namespace F89.Core
             }
 
             save.TotalScore += missionScore;
-            var requiresCourtMartial = IsCourtMartialPending;
+            PilotCareerRanks.SyncCareerRankProgress(save);
+            var requiresCourtMartial = PilotCareerRanks.ShouldImprisonForNegativeTotal(save);
             var result = new MissionEndScoreResult(missionScore, newBest, requiresCourtMartial);
             Reset();
             CharacterSaveRepository.WriteWorldProgress(save);

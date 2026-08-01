@@ -36,21 +36,18 @@ namespace F89.UI
         private Texture2D satelliteTexture;
 
         public static bool IsOpen { get; private set; }
-        public static bool IsAutopilotSelectMode { get; private set; }
         public static bool IsAutopilotFlightMode { get; private set; }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStaticState()
         {
             IsOpen = false;
-            IsAutopilotSelectMode = false;
             IsAutopilotFlightMode = false;
         }
 
         private void OnDestroy()
         {
             IsOpen = false;
-            IsAutopilotSelectMode = false;
             IsAutopilotFlightMode = false;
         }
 
@@ -385,18 +382,8 @@ namespace F89.UI
             autopilot = autopilotController;
         }
 
-        public void OpenAutopilotSelection()
-        {
-            IsAutopilotSelectMode = true;
-            IsAutopilotFlightMode = false;
-            baseNamePopup = string.Empty;
-            ClearMapPointerState();
-            SetOpen(true);
-        }
-
         public void BeginAutopilotFlight()
         {
-            IsAutopilotSelectMode = false;
             IsAutopilotFlightMode = true;
             ClearMapPointerState();
         }
@@ -418,7 +405,6 @@ namespace F89.UI
 
             IsOpen = false;
             IsAutopilotFlightMode = false;
-            IsAutopilotSelectMode = false;
             baseNamePopup = string.Empty;
             selectedMapBase = null;
             hoveredMapBase = null;
@@ -436,7 +422,6 @@ namespace F89.UI
         public void PauseAutopilotFlight()
         {
             IsAutopilotFlightMode = false;
-            IsAutopilotSelectMode = false;
         }
 
         public void ClearMapRouteOnArrival()
@@ -454,11 +439,9 @@ namespace F89.UI
                 pendingBaseCommit = null;
             }
 
-            IsAutopilotSelectMode = false;
             IsAutopilotFlightMode = false;
             baseNamePopup = string.Empty;
             ClearMapPointerState();
-            ResolveAutopilot()?.NotifyMapClosed();
             SetOpen(false);
         }
 
@@ -474,19 +457,7 @@ namespace F89.UI
 
             if (Input.GetKeyDown(KeyCode.M))
             {
-                if (IsAutopilotSelectMode)
-                {
-                    // Leave destination-select without engaging.
-                    if (activeAutopilot != null)
-                    {
-                        activeAutopilot.CancelDestinationSelection();
-                    }
-                    else
-                    {
-                        CloseMap();
-                    }
-                }
-                else if (IsAutopilotFlightMode && IsOpen)
+                if (IsAutopilotFlightMode && IsOpen)
                 {
                     HideMapForAutopilotHud();
                 }
@@ -511,9 +482,7 @@ namespace F89.UI
                 FollowAutopilotAircraft();
             }
 
-            if (!IsAutopilotSelectMode
-                && aircraft != null
-                && worldMap != null)
+            if (aircraft != null && worldMap != null)
             {
                 var mapRect = GetGeoMapRect(GetMapRect());
                 var mouse = GetGuiMousePosition();
@@ -568,13 +537,11 @@ namespace F89.UI
             IsOpen = open;
             if (!open)
             {
-                IsAutopilotSelectMode = false;
                 IsAutopilotFlightMode = false;
                 baseNamePopup = string.Empty;
                 selectedMapBase = null;
                 hoveredMapBase = null;
                 ClearMapPointerState();
-                ResolveAutopilot()?.NotifyMapClosed();
                 RestoreWaypointHudBearing();
             }
 
@@ -1738,13 +1705,12 @@ namespace F89.UI
 
             mapPanControlId = GUIUtility.GetControlID(FocusType.Passive);
             var mouse = GetMapGuiMouse(currentEvent);
-            var allowPan = !IsAutopilotSelectMode && !IsAutopilotFlightMode;
+            var allowPan = !IsAutopilotFlightMode;
             var ownsPan = mapPanHotActive && GUIUtility.hotControl == mapPanControlId;
 
             if (currentEvent.type == EventType.MouseDown
                 && currentEvent.button == 1
-                && mapRect.Contains(mouse)
-                && !IsAutopilotSelectMode)
+                && mapRect.Contains(mouse))
             {
                 if (TryCancelAutopilotFromMap())
                 {
@@ -1819,11 +1785,6 @@ namespace F89.UI
                         AppendRouteWaypointAtMapPoint(mapRect, releaseGui);
                         currentEvent.Use();
                     }
-                    else if (IsAutopilotSelectMode)
-                    {
-                        HandleAutopilotDestinationClick(mapRect, releaseGui);
-                        currentEvent.Use();
-                    }
                     else if (TryPickBaseAtGuiPoint(mapRect, releaseGui, out var pickedBase))
                     {
                         selectedMapBase = pickedBase;
@@ -1879,7 +1840,6 @@ namespace F89.UI
 
             selectedMapBase = null;
             IsAutopilotFlightMode = false;
-            IsAutopilotSelectMode = false;
             ClearMapRoute();
             activeAutopilot.DisengageAutopilot("Autopilot canceled.");
             ClearHudBearing();
@@ -1923,43 +1883,6 @@ namespace F89.UI
             AbandonSuspendedAutopilotIfNeeded();
             AppendMapRouteWaypoint(targetWorld, label);
             Debug.Log($"F-89: Route waypoint added — {label} ({mapRoute.Count} total).");
-        }
-
-        private void HandleAutopilotDestinationClick(Rect mapRect, Vector2 mouse)
-        {
-            if (ResolveAutopilot() == null || aircraft?.Profile == null)
-            {
-                return;
-            }
-
-            if (mapRoute.Count > 0 && TryPickRouteWaypointAtGuiPoint(mapRect, mouse, out _))
-            {
-                CommitAutopilotRoute();
-                return;
-            }
-
-            if (TryPickBaseAtGuiPoint(mapRect, mouse, out var baseSite))
-            {
-                if (pendingBaseCommit != null)
-                {
-                    StopCoroutine(pendingBaseCommit);
-                }
-
-                pendingBaseCommit = StartCoroutine(CommitBaseDestinationAfterPopup(baseSite, mouse));
-                return;
-            }
-
-            if (pendingBaseCommit != null)
-            {
-                StopCoroutine(pendingBaseCommit);
-                pendingBaseCommit = null;
-                baseNamePopup = string.Empty;
-            }
-
-            var destinationMiles = GuiToWorldMiles(mapRect, mouse);
-            var destinationWorld = MilesToWorld(destinationMiles);
-            var label = FormatWaypointLabel(destinationMiles);
-            CommitAutopilotDestination(destinationWorld, label);
         }
 
         private void EnsureMapRangeLabelStyle()
@@ -2113,21 +2036,6 @@ namespace F89.UI
             }
 
             return false;
-        }
-
-        private IEnumerator CommitBaseDestinationAfterPopup(AntarcticaBase baseSite, Vector2 mouse)
-        {
-            baseNamePopup = string.IsNullOrWhiteSpace(baseSite.SiteCode)
-                ? baseSite.BaseName
-                : $"{baseSite.SiteCode} — {baseSite.BaseName}";
-            baseNamePopupGui = mouse;
-            baseNamePopupUntil = Time.unscaledTime + 2f;
-            yield return new WaitForSecondsRealtime(0.75f);
-            pendingBaseCommit = null;
-            var baseMiles = GetBaseMapMiles(baseSite);
-            CommitAutopilotDestination(
-                GetBaseWorldPosition(baseSite),
-                FormatRouteWaypointLabel(baseMiles, 0, baseSite.SiteCode));
         }
 
         private void CommitAutopilotDestination(Vector3 worldPosition, string label)

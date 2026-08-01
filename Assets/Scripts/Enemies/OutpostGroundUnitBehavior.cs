@@ -179,7 +179,7 @@ namespace F89.Enemies
             ResolvePlayerTargetIfNeeded();
 
             var target = SelectCombatTarget(out var useAirCombat);
-            if (target == null)
+            if (target == null || IsForbiddenFriendlyTarget(target))
             {
                 return;
             }
@@ -205,6 +205,7 @@ namespace F89.Enemies
             if (lockedCombatTarget != null)
             {
                 if (!lockedCombatTarget.IsAlive
+                    || IsForbiddenFriendlyTarget(lockedCombatTarget)
                     || !IsValidLockedCombatTarget(lockedCombatTarget, lockedCombatUsesAir)
                     || !IsLockedCombatTargetInRange(lockedCombatTarget, lockedCombatUsesAir))
                 {
@@ -280,6 +281,16 @@ namespace F89.Enemies
             transform.rotation = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
         }
 
+        private bool IsForbiddenFriendlyTarget(LockableTarget target)
+        {
+            if (definition == null || definition.IsHostile || target == null)
+            {
+                return false;
+            }
+
+            return target.IsPlayerAircraft || target.IsFriendly;
+        }
+
         private bool IsOpposingCombatTarget(LockableTarget target)
         {
             if (target == null || !target.IsAlive || target.IsFlareDecoy || definition == null)
@@ -297,21 +308,29 @@ namespace F89.Enemies
                 return definition.IsHostile;
             }
 
-            if (target.GetComponent<AntarcticaBase>() != null)
-            {
-                return definition.IsHostile && target.IsFriendly;
-            }
-
-            var otherUnit = target.GetComponent<VehicleUnitComponent>();
-            if (otherUnit != null && otherUnit.Definition != null)
-            {
-                return otherUnit.Definition.designation != definition.designation;
-            }
-
-            // US only fights opposing UR vehicle/troop units.
+            // Friendly US units only engage hostile UR vehicle/troop units — never the plane or other friendlies.
             if (!definition.IsHostile)
             {
-                return false;
+                if (target.IsFriendly)
+                {
+                    return false;
+                }
+
+                var otherUnit = target.GetComponent<VehicleUnitComponent>();
+                return otherUnit != null
+                    && otherUnit.Definition != null
+                    && otherUnit.Definition.IsHostile;
+            }
+
+            if (target.GetComponent<AntarcticaBase>() != null)
+            {
+                return target.IsFriendly;
+            }
+
+            var opposingUnit = target.GetComponent<VehicleUnitComponent>();
+            if (opposingUnit != null && opposingUnit.Definition != null)
+            {
+                return opposingUnit.Definition.designation != definition.designation;
             }
 
             return target.IsFriendly;
@@ -416,7 +435,7 @@ namespace F89.Enemies
             for (var i = 0; i < targets.Length; i++)
             {
                 var target = targets[i];
-                if (!IsValidAirCombatTarget(target))
+                if (IsForbiddenFriendlyTarget(target) || !IsValidAirCombatTarget(target))
                 {
                     continue;
                 }
@@ -447,7 +466,7 @@ namespace F89.Enemies
             for (var i = 0; i < targets.Length; i++)
             {
                 var target = targets[i];
-                if (!IsValidGroundCombatTarget(target))
+                if (IsForbiddenFriendlyTarget(target) || !IsValidGroundCombatTarget(target))
                 {
                     continue;
                 }

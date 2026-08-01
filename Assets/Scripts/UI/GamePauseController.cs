@@ -435,6 +435,8 @@ namespace F89.UI
                 var save = CharacterSessionState.ActiveSave;
                 if (save != null)
                 {
+                    CharacterSaveRepository.SyncVehicleKillCredit(save);
+                    MissionScoreState.AbandonMissionWithoutScoring();
                     CharacterSaveRepository.ApplyScorePenalty(save, MissionBriefingState.BailOutScorePenalty);
                 }
             }
