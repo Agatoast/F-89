@@ -20,9 +20,13 @@ namespace F89.UI
 
         public static RunwayDeckMenuDialog.Options BuildCarrierDeckOptions()
         {
-            return BuildFullServiceOptions(
+            var options = BuildFullServiceOptions(
                 "USS MARTIN VAN BUREN",
                 GamePlayModeState.IsCampaign);
+            // Empty tanks: refuel first — prevents CV launch with zero fuel.
+            options.TakeOffEnabled = SortieSnapshotFuel.HasUsableFuel(
+                LandMissionHandoffState.GetStoredFlightSnapshot());
+            return options;
         }
 
         public static RunwayDeckMenuDialog.Options BuildGroundPlaneOptions()
@@ -47,6 +51,7 @@ namespace F89.UI
                 RefuelEnabled = !DeckLandingServiceState.RefuelUsedThisLanding,
                 RearmEnabled = !DeckLandingServiceState.RearmUsedThisLanding,
                 DismountEnabled = false,
+                TakeOffEnabled = true,
                 EndMissionEnabled = endMissionEnabled,
                 Subtitle = subtitle
             };
@@ -59,6 +64,7 @@ namespace F89.UI
                 RefuelEnabled = false,
                 RearmEnabled = false,
                 DismountEnabled = true,
+                TakeOffEnabled = true,
                 EndMissionEnabled = false,
                 Subtitle = subtitle,
                 DialogVerticalAnchor = 0.68f,

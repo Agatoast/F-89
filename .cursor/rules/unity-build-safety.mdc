@@ -1,0 +1,48 @@
+---
+description: Keep UnityEditor out of player builds so Windows .exe builds compile and run
+alwaysApply: true
+---
+
+# Unity Build Safety — Windows Standalone
+
+Player builds **do not include** the Unity Editor API. Code that references `UnityEditor` in runtime scripts causes compile failures or broken `.exe` output.
+
+Before adding or approving C# changes under `Assets/`, enforce these rules.
+
+## Editor-only code
+
+- **New editor tools** → `Assets/Editor/` only (Unity excludes this folder from builds).
+- **Never** add `using UnityEditor;` at the top of scripts under `Assets/Scripts/`.
+- If runtime code must call Editor APIs, wrap **every** reference:
+
+```csharp
+#if UNITY_EDITOR
+    UnityEditor.EditorApplication.isPlaying = false;
+#else
+    Application.Quit();
+#endif
+```
+
+- Prefer fully qualified `UnityEngine.Object` / `GameObject.Destroy` when `using System;` is present (avoids `Object` ambiguity CS0104).
+
+## Dev-only behavior
+
+- Debug menus, cheats, test resets → `#if UNITY_EDITOR || DEVELOPMENT_BUILD` with `#else` release defaults (see `LandCombatTestCheats.cs`).
+- Do not ship dev-only UI or boss-reset logic in release builds without guards.
+
+## Before suggesting a build is ready
+
+1. Console must have **zero compile errors**.
+2. Grep `Assets/Scripts/` for `UnityEditor` — only inside `#if UNITY_EDITOR` blocks.
+3. Any new `SceneManager.LoadScene(...)` target must exist in **File → Build Settings**.
+4. `Resources.Load("...")` paths must match files under `Assets/Resources/`.
+
+## Existing patterns (match these)
+
+- Quit: `GamePauseController`, `SettingsMenuUi`
+- File picker: `PortraitFilePicker` (Editor panel + `UNITY_STANDALONE_WIN` fallback)
+- Editor utilities: `Assets/Editor/*.cs`
+
+## When to warn
+
+If a change adds `UnityEditor`, `[MenuItem]`, or `AssetDatabase` to runtime scripts without guards, **tell the user** it will break the Windows build and fix it before finishing.

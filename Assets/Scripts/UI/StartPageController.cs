@@ -14,6 +14,7 @@ namespace F89.UI
 
         private Texture2D backgroundTexture;
         private Texture2D saveAntarcticaLogoTexture;
+        private static bool showDeleteAllSavesConfirm;
 
         private void Start()
         {
@@ -30,10 +31,18 @@ namespace F89.UI
             StartPageMenuStyles.DrawFullscreenBackground(backgroundTexture);
             StartPageMenuStyles.DrawSaveAntarcticaLogo(saveAntarcticaLogoTexture);
             DrawButtons();
+            if (!showDeleteAllSavesConfirm)
+            {
+                DrawDeleteAllSavesButton();
+            }
+            else
+            {
+                DrawDeleteAllSavesConfirm();
+            }
+
             if (LandCombatTestCheats.ShowDevMenuButtons)
             {
                 DrawTempFightReichButton();
-                DrawDevResetMapButton();
             }
         }
 
@@ -51,22 +60,69 @@ namespace F89.UI
             }
         }
 
-        /// <summary>Temporary land-combat jump; remove when land entry is fully wired.</summary>
-        private static void DrawDevResetMapButton()
+        private static void DrawDeleteAllSavesButton()
         {
             var width = UiFitCanvas.Px(220f);
             var height = UiFitCanvas.Px(44f);
             var x = UiFitCanvas.Rect.x + UiFitCanvas.Px(18f);
             var y = UiFitCanvas.Rect.y + UiFitCanvas.Px(18f);
-            var resetRect = new Rect(x, y, width, height);
-            if (!StartPageMenuStyles.DrawMenuButton(resetRect, "RESET MAP", fontSize: 22))
+            var buttonRect = new Rect(x, y, width, height);
+            if (!StartPageMenuStyles.DrawMenuButton(buttonRect, "DELETE ALL SAVES", fontSize: 22))
             {
                 return;
             }
 
-            EnsureActiveSaveForDevJump();
-            CharacterGearSession.Bind(CharacterSessionState.ActiveSave, forceReload: true);
-            CampaignWorldReset.ResetMapForFreshPlay();
+            showDeleteAllSavesConfirm = true;
+        }
+
+        private static void DrawDeleteAllSavesConfirm()
+        {
+            GUI.color = new Color(0f, 0f, 0f, 0.45f);
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            const float dialogWidth = 520f;
+            const float dialogHeight = 180f;
+            var dialogRect = new Rect(
+                (Screen.width - dialogWidth) * 0.5f,
+                (Screen.height - dialogHeight) * 0.5f,
+                dialogWidth,
+                dialogHeight);
+
+            GUI.color = new Color(0.93f, 0.93f, 0.93f);
+            GUI.DrawTexture(dialogRect, Texture2D.whiteTexture);
+            GUI.color = Color.black;
+            HudGuiUtility.DrawWireBox(dialogRect, 2f);
+
+            var messageStyle = HudStyleFactory.CreateLabel(
+                16,
+                FontStyle.Normal,
+                TextAnchor.MiddleCenter,
+                Color.black,
+                wordWrap: true);
+            GUI.Label(
+                new Rect(dialogRect.x + 24f, dialogRect.y + 28f, dialogRect.width - 48f, 70f),
+                "Delete all characters and career progress? This cannot be undone.",
+                messageStyle);
+
+            const float choiceWidth = 120f;
+            const float choiceHeight = 40f;
+            var choiceY = dialogRect.yMax - choiceHeight - 24f;
+            var yesRect = new Rect(dialogRect.x + dialogRect.width * 0.5f - choiceWidth - 12f, choiceY, choiceWidth, choiceHeight);
+            var noRect = new Rect(dialogRect.x + dialogRect.width * 0.5f + 12f, choiceY, choiceWidth, choiceHeight);
+
+            if (StartPageMenuStyles.DrawMenuButton(yesRect, "YES", fontSize: 16))
+            {
+                CharacterSaveRepository.ClearAllSaves();
+                LandingMileFlagState.Clear();
+                MissionScoreState.AbandonMissionWithoutScoring();
+                showDeleteAllSavesConfirm = false;
+            }
+
+            if (StartPageMenuStyles.DrawMenuButton(noRect, "NO", fontSize: 16))
+            {
+                showDeleteAllSavesConfirm = false;
+            }
         }
 
         /// <summary>Temporary land-combat jump; remove when land entry is fully wired.</summary>

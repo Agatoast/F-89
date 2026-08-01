@@ -1,6 +1,7 @@
 using F89.Audio;
 using F89.Flight;
 using F89.Testing;
+using F89.Weapons;
 using UnityEngine;
 
 namespace F89.Core
@@ -97,6 +98,8 @@ namespace F89.Core
 
             if (aircraft.TryApplyMissionOutpostLaunch())
             {
+                // Fresh mission start from loadout — always launch topped off.
+                aircraft.Refuel();
                 return;
             }
 
@@ -107,6 +110,11 @@ namespace F89.Core
 
         private static void ApplyCarrierDeckStart(AircraftController aircraft, bool consumeLaunchFlag)
         {
+            var restoreDeckTakeoff = CarrierDeckTakeoffState.Consume();
+            var deckSnapshot = restoreDeckTakeoff
+                ? LandMissionHandoffState.GetStoredFlightSnapshot()
+                : LandSortieSnapshot.Empty;
+
             LandMissionHandoffState.Clear();
             LandingMileFlagState.Clear();
 
@@ -122,12 +130,52 @@ namespace F89.Core
                     aircraft.Profile);
             }
 
+            if (restoreDeckTakeoff && deckSnapshot.IsValid)
+            {
+                // Mid-mission CV deck takeoff — keep fuel/stores from the deck stay.
+                RestoreDeckTakeoffAircraftState(aircraft, deckSnapshot);
+            }
+            else
+            {
+                // Fresh Start Mission (or default carrier spawn) — full tanks.
+                aircraft.Refuel();
+            }
+
             if (consumeLaunchFlag)
             {
                 FlightMissionLaunchState.TryConsumeCarrierLaunch();
             }
 
             VtolTakeoffLaunch.BeginAt(aircraft, aircraft.transform.position);
+        }
+
+        private static void RestoreDeckTakeoffAircraftState(
+            AircraftController aircraft,
+            LandSortieSnapshot snapshot)
+        {
+            if (aircraft == null)
+            {
+                return;
+            }
+
+            aircraft.ApplyFuelState(
+                snapshot.LeftTankGallons,
+                snapshot.RightTankGallons,
+                snapshot.AfterburnerFuelRemaining);
+
+            if (snapshot.HasStoresInventory)
+            {
+                var weapons = aircraft.GetComponent<PlayerWeaponController>();
+                weapons?.ApplySortieLoadout(
+                    snapshot.Aim9zRemaining,
+                    snapshot.Agm88jRemaining,
+                    snapshot.Gbu12Remaining,
+                    snapshot.Agm114Remaining,
+                    snapshot.GauRoundsRemaining);
+            }
+
+            var flares = aircraft.GetComponent<FlareCountermeasureController>();
+            flares?.SetFlaresRemaining(snapshot.FlaresRemaining);
         }
     }
 }

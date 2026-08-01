@@ -5,6 +5,8 @@ namespace F89.Core
 {
     public static class SortieSnapshotFuel
     {
+        private const float UsableFuelGallonsEpsilon = 0.01f;
+
         public static void ApplyMaxFuel(ref LandSortieSnapshot snapshot)
         {
             var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
@@ -16,6 +18,22 @@ namespace F89.Core
                 ? profile.afterburnerFuelCapacity
                 : snapshot.AfterburnerFuelRemaining;
             snapshot.FuelNormalized = 1f;
+            snapshot.IsValid = true;
+        }
+
+        public static bool HasUsableFuel(in LandSortieSnapshot snapshot)
+        {
+            if (!snapshot.IsValid)
+            {
+                return false;
+            }
+
+            if (snapshot.LeftTankGallons + snapshot.RightTankGallons > UsableFuelGallonsEpsilon)
+            {
+                return true;
+            }
+
+            return snapshot.FuelNormalized > 0.001f;
         }
     }
 }

@@ -19,6 +19,7 @@ namespace F89.UI
             public bool RefuelEnabled;
             public bool RearmEnabled;
             public bool DismountEnabled;
+            public bool TakeOffEnabled;
             public bool EndMissionEnabled;
             public string Subtitle;
             /// <summary>Vertical anchor for the dialog (0.5 = center). Higher values sit lower on screen.</summary>
@@ -110,10 +111,14 @@ namespace F89.UI
 
             buttonY += ButtonHeight + ButtonGap;
 
-            if (StartPageMenuStyles.DrawMenuButton(
+            // Default TakeOffEnabled to true when callers omit the field (struct default is false only
+            // for newly constructed options that set it — Build* helpers always assign it).
+            if (DrawMenuButton(
                     new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight),
                     "TAKE OFF",
-                    fontSize: ButtonFontSize))
+                    options.TakeOffEnabled,
+                    out var takeOffClicked)
+                && takeOffClicked)
             {
                 return Result.TakeOff;
             }

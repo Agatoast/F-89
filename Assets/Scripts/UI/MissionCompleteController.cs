@@ -104,7 +104,8 @@ namespace F89.UI
             }
             else if (deckResult == RunwayDeckMenuDialog.Result.TakeOff)
             {
-                pendingDeckConfirm = RunwayDeckConfirmDialog.Action.TakeOff;
+                // No second "Take Off?" confirm — TAKE OFF already is the choice.
+                BeginCarrierTakeOff();
             }
             else if (deckResult == RunwayDeckMenuDialog.Result.EndMission)
             {
@@ -123,21 +124,19 @@ namespace F89.UI
                 case RunwayDeckConfirmDialog.Action.Refuel:
                     ApplyCarrierRefuel();
                     break;
-                case RunwayDeckConfirmDialog.Action.TakeOff:
-                    BeginCarrierTakeOff();
-                    break;
             }
         }
 
         private void ApplyCarrierRefuel()
         {
             var snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
-            if (snapshot.IsValid)
+            if (!snapshot.IsValid)
             {
-                SortieSnapshotFuel.ApplyMaxFuel(ref snapshot);
-                LandMissionHandoffState.UpdateStoredFlightSnapshot(snapshot);
+                snapshot = LandSortieSnapshot.Empty;
             }
 
+            SortieSnapshotFuel.ApplyMaxFuel(ref snapshot);
+            LandMissionHandoffState.UpdateStoredFlightSnapshot(snapshot);
             DeckLandingServiceState.MarkRefuelUsed();
         }
 
@@ -151,18 +150,28 @@ namespace F89.UI
 
         private void BeginCarrierTakeOff()
         {
-            isLeaving = true;
             var snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
-            if (!snapshot.IsValid)
+            if (!SortieSnapshotFuel.HasUsableFuel(snapshot))
             {
-                snapshot = LandSortieSnapshot.Empty;
-                snapshot.IsValid = true;
+                return;
             }
 
+            isLeaving = true;
+
+            // Carrier launch path — do not use ground-return landing miles (that re-applied empty
+            // fuel and could surface another deck/takeoff prompt after scene load).
             snapshot.ReturnToRunwayDeck = false;
-            snapshot.RestoreWithImmediateTakeoff = true;
-            LandMissionHandoffState.BeginReturnToFlight(snapshot, LandGroundSessionResult.Empty);
+            snapshot.RestoreWithImmediateTakeoff = false;
+            snapshot.IsOpenFieldLanding = false;
+            snapshot.HasLandingMiles = false;
+            snapshot.OutpostName = string.Empty;
+            LandMissionHandoffState.UpdateStoredFlightSnapshot(snapshot);
+
+            LandingMileFlagState.Clear();
             LandMissionCompleteState.Clear();
+            DeckLandingServiceState.Clear();
+            CarrierDeckTakeoffState.Begin();
+            FlightMissionLaunchState.BeginCarrierLaunch();
             FlightMissionStartBootstrap.ResetForSceneLoad();
             SceneManager.LoadScene(GameScenes.FlightTest);
         }

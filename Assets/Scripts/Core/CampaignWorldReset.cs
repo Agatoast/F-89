@@ -21,6 +21,7 @@ namespace F89.Core
                 LandingMileFlagState.Clear();
                 OutpostRunwayDeckState.Clear();
                 CarrierResupplyState.Clear();
+                CarrierDeckTakeoffState.Clear();
                 FriendlyOutpostTakeoffState.Clear();
                 DeckLandingServiceState.Clear();
                 OpenFieldLandingState.Clear();

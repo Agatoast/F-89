@@ -311,7 +311,8 @@ namespace F89.Flight
                 }
                 else if (deckResult == RunwayDeckMenuDialog.Result.TakeOff)
                 {
-                    pendingRunwayConfirm = RunwayDeckConfirmDialog.Action.TakeOff;
+                    // TAKE OFF is already the deck choice — skip redundant "Take Off?" confirm.
+                    ExecuteRunwayDeckAction(RunwayDeckConfirmDialog.Action.TakeOff);
                 }
                 else if (deckResult == RunwayDeckMenuDialog.Result.EndMission)
                 {
