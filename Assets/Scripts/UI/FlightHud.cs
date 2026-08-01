@@ -70,7 +70,7 @@ namespace F89.UI
                 && aircraft != null
                 && !AircraftLandingController.IsCarrierApproachPromptVisible
                 && !AircraftLandingController.IsRunwayRefuelPromptVisible
-                && AircraftLanding.CanLand(aircraft.CurrentSpeedMph))
+                && AircraftLanding.CanAttemptLanding())
             {
                 AircraftLanding.TryLand(aircraft);
             }
@@ -355,7 +355,7 @@ namespace F89.UI
             var etaSpeedMilesPerSecond = GetAircraftTravelSpeedMilesPerSecond(useAutopilotTimeWarp);
             DrawWorldBearingIndicator(
                 targetWorld,
-                FlightHudColorPalette.Default,
+                FlightHudColorPalette.Waypoint,
                 etaSpeedMilesPerSecond,
                 stackIndex: 0,
                 stackCount: 1);

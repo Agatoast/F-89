@@ -3,12 +3,12 @@ using UnityEngine;
 
 namespace F89.Core
 {
-    /// <summary>Credits UR vehicle/troop destroys to character kill folders by catalog level.</summary>
+    /// <summary>Credits enemy destroys to kill folders (+1 career kill each) and mission score (level points).</summary>
     public static class UrKillCredit
     {
         public const int LevelCount = 10;
 
-        public static void RegisterDestroy(VehicleUnitDefinition definition)
+        public static void RegisterEnemyDestroy(VehicleUnitDefinition definition)
         {
             if (definition == null || !definition.IsHostile)
             {
@@ -27,20 +27,19 @@ namespace F89.Core
             if (definition.isTroop)
             {
                 save.UrTroopKillsByLevel[index]++;
-                save.EnemyTroopsKilled = Sum(save.UrTroopKillsByLevel);
+                save.EnemyTroopsKilled++;
             }
             else
             {
                 save.UrVehicleKillsByLevel[index]++;
-                save.EnemyVehiclesKilled = Sum(save.UrVehicleKillsByLevel);
+                save.EnemyVehiclesKilled++;
             }
 
-            MissionScoreState.AddPoints(points);
-            CharacterSaveRepository.ReconcileTotalScore(save);
+            MissionScoreState.AddMissionPoints(points);
             CharacterSaveRepository.WriteWorldProgress(save);
         }
 
-        public static void RegisterUrTroopKillByLevel(int level)
+        public static void RegisterEnemyTroopKillByLevel(int level)
         {
             if (CharacterSessionState.ActiveSave == null)
             {
@@ -52,10 +51,36 @@ namespace F89.Core
             var index = LevelToIndex(level);
             var points = PilotScoreService.GetUrTroopPointValue(level);
             save.UrTroopKillsByLevel[index]++;
-            save.EnemyTroopsKilled = Sum(save.UrTroopKillsByLevel);
-            MissionScoreState.AddPoints(points);
-            CharacterSaveRepository.ReconcileTotalScore(save);
+            save.EnemyTroopsKilled++;
+            MissionScoreState.AddMissionPoints(points);
             CharacterSaveRepository.WriteWorldProgress(save);
+        }
+
+        public static void RegisterFriendlyDestroy(VehicleUnitDefinition definition)
+        {
+            if (definition == null || definition.IsHostile)
+            {
+                return;
+            }
+
+            if (CharacterSessionState.ActiveSave == null)
+            {
+                return;
+            }
+
+            var points = PilotScoreService.GetDestroyPointValue(definition);
+            MissionScoreState.RegisterFriendlyKillPoints(points);
+        }
+
+        public static void RegisterFriendlyTroopKillByLevel(int level)
+        {
+            if (CharacterSessionState.ActiveSave == null)
+            {
+                return;
+            }
+
+            var points = PilotScoreService.GetUrTroopPointValue(level);
+            MissionScoreState.RegisterFriendlyKillPoints(points);
         }
 
         public static int GetVehicleKillsAtLevel(CharacterSaveData save, int level)

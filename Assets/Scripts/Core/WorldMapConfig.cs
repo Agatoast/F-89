@@ -104,27 +104,6 @@ namespace F89.Core
             return worldMap.MilesToTics(rangeMiles) * ticSizeWorldUnits;
         }
 
-        /// <summary>
-        /// World +X = east, world +Z = north (matches radar and flight forward).
-        /// Tactical-map mile +Y renders toward screen bottom (visual south), so mile Y = -world Z.
-        /// </summary>
-        public static Vector3 MileOffsetToWorld(Vector2 miles, float worldUnitsPerMile)
-        {
-            return new Vector3(miles.x * worldUnitsPerMile, 0f, -miles.y * worldUnitsPerMile);
-        }
-
-        public static Vector2 WorldToMileOffset(Vector3 worldPosition, float worldUnitsPerMile)
-        {
-            if (worldUnitsPerMile <= 0f)
-            {
-                return Vector2.zero;
-            }
-
-            return new Vector2(
-                worldPosition.x / worldUnitsPerMile,
-                -worldPosition.z / worldUnitsPerMile);
-        }
-
         /// <summary>World units represented by one map mile for the supplied flight tic size.</summary>
         public float GetWorldUnitsPerMile(float ticSizeWorldUnits)
         {

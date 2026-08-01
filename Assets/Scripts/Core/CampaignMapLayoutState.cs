@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using F89.Flight;
 using UnityEngine;
 
 namespace F89.Core
@@ -11,8 +12,6 @@ namespace F89.Core
         /// <summary>Stable speakable ID (OP-01, OP-SOUTH, STN-PALMER). Derived from Label if empty.</summary>
         public string SiteCode = string.Empty;
         public string Label = "Mission";
-        public float XMiles;
-        public float ZMiles;
         public int GridCellX;
         public int GridCellZ;
     }
@@ -132,7 +131,17 @@ namespace F89.Core
 
         public static Vector2 GetLockedMiles(CampaignMapMarkerRecord site)
         {
-            return site == null ? Vector2.zero : new Vector2(site.XMiles, site.ZMiles);
+            if (site == null)
+            {
+                return Vector2.zero;
+            }
+
+            if (site.GridCellX > 0 && site.GridCellZ > 0)
+            {
+                return CampaignMapCoordinates.GridCellToMiles(new Vector2Int(site.GridCellX, site.GridCellZ));
+            }
+
+            return Vector2.zero;
         }
 
         public static Vector3 GetSiteWorldPosition(CampaignMapMarkerRecord site)
@@ -142,7 +151,18 @@ namespace F89.Core
                 return Vector3.zero;
             }
 
-            return CampaignMapCoordinates.MilesToWorld(new Vector2(site.XMiles, site.ZMiles));
+            if (site.GridCellX > 0 && site.GridCellZ > 0)
+            {
+                var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+                var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
+                var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+                return CampaignMapCoordinates.GridCellToWorld(
+                    new Vector2Int(site.GridCellX, site.GridCellZ),
+                    worldMap,
+                    ticSize);
+            }
+
+            return Vector3.zero;
         }
 
         public static string NormalizeSiteName(string siteName)

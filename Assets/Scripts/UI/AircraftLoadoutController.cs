@@ -1,4 +1,5 @@
 using F89.Core;
+using F89.Flight;
 using F89.LandCombat;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -1146,9 +1147,11 @@ namespace F89.UI
 
             var gap = UiFitCanvas.Px(32f);
             var fromCarrierResupply = CarrierResupplyState.IsResupplyFromCarrier;
+            var fromDeckRearm = FriendlyOutpostTakeoffState.HasPending
+                && FriendlyOutpostTakeoffState.ReturnToDeckMenu;
             var y = UiFitCanvas.Rect.yMax - buttonHeight - margin;
 
-            if (fromCarrierResupply)
+            if (fromCarrierResupply || fromDeckRearm)
             {
                 var continueWidth = UiFitCanvas.Px(320f);
                 var continueRect = new Rect(
@@ -1156,7 +1159,7 @@ namespace F89.UI
                     y,
                     continueWidth,
                     buttonHeight);
-                if (DrawActionButton(continueRect, "CONTINUE MISSION", 20))
+                if (DrawActionButton(continueRect, "RETURN TO DECK", 20))
                 {
                     heldGunArrowIndex = -1;
                     CancelGunRoundsEdit();
@@ -1363,19 +1366,35 @@ namespace F89.UI
         {
             AircraftLoadoutState.MarkConfigured();
             var resupplyFromCarrier = CarrierResupplyState.IsResupplyFromCarrier;
+            var returnToCarrierDeck = CarrierResupplyState.ReturnToDeckMenu;
             var fromFriendlyOutpost = FriendlyOutpostTakeoffState.HasPending;
             CarrierResupplyState.Clear();
             Time.timeScale = 1f;
+            FlightMissionStartBootstrap.ResetForSceneLoad();
+            FlightHudColorPalette.ResetToDefault();
 
             if (resupplyFromCarrier || fromFriendlyOutpost)
             {
                 LandBossEncounter.ResetUndefeatedBossHealthOnRearm();
             }
 
-            if (FriendlyOutpostTakeoffState.TryConsume(out var takeoffOutpost))
+            if (FriendlyOutpostTakeoffState.TryConsume(out _, out var returnToRunwayDeck)
+                && returnToRunwayDeck)
             {
-                FlightMissionLaunchState.BeginOutpostLaunch(takeoffOutpost, vtolTakeoff: true);
+                DeckLandingServiceState.MarkRearmUsed();
+                var stored = LandMissionHandoffState.GetStoredFlightSnapshot();
+                stored.ReturnToRunwayDeck = true;
+                stored.RestoreWithImmediateTakeoff = false;
+                LandMissionHandoffState.BeginReturnToFlight(stored, LandGroundSessionResult.Empty);
                 SceneManager.LoadScene(GameScenes.FlightTest);
+                return;
+            }
+
+            if (resupplyFromCarrier && returnToCarrierDeck)
+            {
+                DeckLandingServiceState.MarkRearmUsed();
+                LandMissionCompleteState.BeginCarrierLanding();
+                SceneManager.LoadScene(GameScenes.MissionComplete);
                 return;
             }
 
@@ -1387,15 +1406,12 @@ namespace F89.UI
 
             if (resupplyFromCarrier)
             {
+                LandMissionHandoffState.Clear();
                 FlightMissionLaunchState.BeginCarrierLaunch();
-            }
-            else if (save != null && !string.IsNullOrWhiteSpace(save.MissionLaunchOutpostName))
-            {
-                FlightMissionLaunchState.BeginOutpostLaunch(save.MissionLaunchOutpostName);
             }
             else
             {
-                FlightMissionLaunchState.BeginCarrierLaunch();
+                MissionLaunchOrigin.PrepareFreshSortieLaunch(save);
             }
 
             SceneManager.LoadScene(GameScenes.FlightTest);

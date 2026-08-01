@@ -68,7 +68,10 @@ namespace F89.UI
                 return;
             }
 
+            var previousMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.identity;
             DrawStoresPanel(FlightHudColorPalette.Mfd);
+            GUI.matrix = previousMatrix;
         }
 
         private void DrawStoresPanel(Color hudColor)

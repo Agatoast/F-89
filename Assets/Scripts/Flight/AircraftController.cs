@@ -168,32 +168,27 @@ namespace F89.Flight
 
         private void Start()
         {
-            // Prefer restoring a ground-return landing site over carrier launch.
-            if (FlightGroundReturnService.TryApplyPendingReturn(gameObject))
-            {
-                return;
-            }
-
-            if (FlightGroundReturnService.ShouldSkipCarrierSpawn())
-            {
-                return;
-            }
-
-            TryApplyMissionOutpostLaunch();
-            TryApplyMissionCarrierLaunch();
+            FlightMissionStartBootstrap.Apply(this, gameObject);
+            FlightHudBootstrap.EnsureForPlayer(gameObject);
         }
 
-        public void TryApplyMissionOutpostLaunch()
+        public bool TryApplyMissionOutpostLaunch()
         {
-            if (!FlightMissionLaunchState.TryConsumeOutpostLaunch(out var outpostName, out var vtolTakeoff))
+            var outpostName = FlightMissionLaunchState.LaunchFromOutpostName;
+            if (string.IsNullOrWhiteSpace(outpostName))
             {
-                return;
+                return false;
             }
 
             if (!OutpostRunwayLanding.TryGetRunwaySpawn(outpostName, out var spawnPosition, out var runwayRotation))
             {
                 Debug.LogWarning($"F-89: Could not spawn at outpost runway '{outpostName}'.");
-                return;
+                return false;
+            }
+
+            if (!FlightMissionLaunchState.TryConsumeOutpostLaunch(out _, out _))
+            {
+                return false;
             }
 
             transform.SetPositionAndRotation(spawnPosition, runwayRotation);
@@ -205,16 +200,8 @@ namespace F89.Flight
                 body.angularVelocity = Vector3.zero;
             }
 
-            if (vtolTakeoff)
-            {
-                var landing = GetComponent<AircraftLandingController>()
-                    ?? gameObject.AddComponent<AircraftLandingController>();
-                landing.PrepareForGroundReturn(transform.position);
-                landing.BeginTakeoff();
-                return;
-            }
-
-            ApplyCarrierTakeoffLaunch(FlightMissionLaunchState.CarrierTakeoffSpeedMph);
+            VtolTakeoffLaunch.BeginAt(this, spawnPosition);
+            return true;
         }
 
         public void TryApplyMissionCarrierLaunch()
@@ -224,7 +211,11 @@ namespace F89.Flight
                 return;
             }
 
-            ApplyCarrierTakeoffLaunch(FlightMissionLaunchState.CarrierTakeoffSpeedMph);
+            F89.Testing.AntarcticaBaseSpawner.TryMovePlayerToCarrier(
+                transform,
+                worldMap,
+                profile);
+            VtolTakeoffLaunch.BeginAt(this, transform.position);
         }
 
         private void InitializeFlightState()
@@ -240,10 +231,19 @@ namespace F89.Flight
             }
 
             Refuel();
-            currentSpeedMph = Mathf.Min(profile.startThrottleMph, EffectiveMaxThrottleMph);
+            if (FlightMissionLaunchState.HasPendingLaunch || AircraftLandingController.IsTakeoffActive)
+            {
+                currentSpeedMph = 0f;
+                currentSpeed = 0f;
+            }
+            else
+            {
+                currentSpeedMph = Mathf.Min(profile.startThrottleMph, EffectiveMaxThrottleMph);
+                currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
+            }
+
             afterburnerSpoolDownActive = false;
             IsAfterburning = false;
-            currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
         }
 
         public void ApplyCarrierTakeoffLaunch(float speedMph)

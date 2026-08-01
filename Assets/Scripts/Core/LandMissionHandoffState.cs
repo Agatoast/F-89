@@ -63,7 +63,8 @@ namespace F89.Core
             return storedFlightSnapshot.IsValid
                 || pendingEnterSnapshot.IsValid
                 || pendingReturnSnapshot.IsValid
-                || suppressCarrierRespawn;
+                || suppressCarrierRespawn
+                || LandingMileFlagState.HasActiveFlag;
         }
 
         public static void ForceReloadFromPrefs()
@@ -76,6 +77,14 @@ namespace F89.Core
         {
             EnsureRestoredAfterScriptReload();
             return storedFlightSnapshot;
+        }
+
+        public static void UpdateStoredFlightSnapshot(LandSortieSnapshot snapshot)
+        {
+            EnsureRestoredAfterScriptReload();
+            storedFlightSnapshot = snapshot;
+            storedFlightSnapshot.IsValid = true;
+            SaveToPrefs();
         }
 
         public static bool TryGetPendingReturnSnapshot(out LandSortieSnapshot snapshot)

@@ -29,7 +29,9 @@ namespace F89.Enemies
         private float nextRoamRetargetTime;
         private float roamLateralBias;
         private float roamSpeedScale = 1f;
-        private float roamRadiusMiles = 0.85f;
+        private const float DefaultRoamRadiusMiles = 2f;
+
+        private float roamRadiusMiles = DefaultRoamRadiusMiles;
         private float altitudeWorld;
         private float nextFireTime;
         private LockableTarget lockedCombatTarget;
@@ -41,7 +43,8 @@ namespace F89.Enemies
             FlightProfile profile,
             float unitsPerMile,
             LockableTarget playerLockableTarget,
-            float roamRadiusMilesOverride = 0.85f)
+            float roamRadiusMilesOverride = DefaultRoamRadiusMiles,
+            Vector3? roamHomeWorld = null)
         {
             definition = unitDefinition;
             worldMap = mapConfig;
@@ -49,7 +52,7 @@ namespace F89.Enemies
             worldUnitsPerMile = unitsPerMile;
             playerTarget = playerLockableTarget;
             roamRadiusMiles = roamRadiusMilesOverride;
-            homeWorld = transform.position;
+            homeWorld = roamHomeWorld ?? transform.position;
             homeWorld.y = 0f;
 
             var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
@@ -152,7 +155,7 @@ namespace F89.Enemies
                     transform,
                     moveDir.normalized * (speedWorld * Time.deltaTime),
                     worldMap,
-                    worldUnitsPerMile);
+                    ticSize);
                 position = transform.position;
                 position.y = 0f;
                 transform.position = position;
@@ -168,7 +171,7 @@ namespace F89.Enemies
 
         private void TryCombat()
         {
-            if (!definition.IsHostile || Time.time < nextFireTime)
+            if (Time.time < nextFireTime)
             {
                 return;
             }
@@ -229,7 +232,10 @@ namespace F89.Enemies
             useAirCombat = false;
             ResolvePlayerTargetIfNeeded();
 
-            if (playerTarget != null
+            // UR only: weighted chance to prioritize the player aircraft.
+            // US always engages opposing UR units — never the plane.
+            if (definition.IsHostile
+                && playerTarget != null
                 && playerTarget.IsAlive
                 && IsValidAirCombatTarget(playerTarget)
                 && IsWithinAirRange(playerTarget)
@@ -302,12 +308,13 @@ namespace F89.Enemies
                 return otherUnit.Definition.designation != definition.designation;
             }
 
-            if (definition.IsHostile)
+            // US only fights opposing UR vehicle/troop units.
+            if (!definition.IsHostile)
             {
-                return target.IsFriendly;
+                return false;
             }
 
-            return target.Affiliation == TargetAffiliation.Hostile;
+            return target.IsFriendly;
         }
 
         private void ClearCombatLock()
@@ -626,6 +633,7 @@ namespace F89.Enemies
 
         private void PickRoamPoint(bool force)
         {
+            var ticSize = flightProfile != null ? flightProfile.ticSizeWorldUnits : 1f;
             for (var attempt = 0; attempt < 12; attempt++)
             {
                 var angle = Random.Range(0f, Mathf.PI * 2f);
@@ -656,7 +664,7 @@ namespace F89.Enemies
                     return;
                 }
 
-                if (GroundUnitMovement.IsAllowedWorldPosition(candidate, worldMap, worldUnitsPerMile))
+                if (GroundUnitMovement.IsAllowedWorldPosition(candidate, worldMap, ticSize))
                 {
                     roamPoint = candidate;
                     ScheduleRetarget(force);

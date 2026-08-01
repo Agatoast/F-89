@@ -241,12 +241,16 @@ namespace F89.UI
                 return false;
             }
 
+            var baseMiles = GetBaseMapMiles(selectedMapBase);
             world = GetBaseWorldPosition(selectedMapBase);
-            label = FormatRouteWaypointLabel(
-                selectedMapBase.PositionMiles,
-                0,
-                selectedMapBase.SiteCode);
+            label = FormatRouteWaypointLabel(baseMiles, 0, selectedMapBase.SiteCode);
             return true;
+        }
+
+        private static Vector2 GetBaseMapMiles(AntarcticaBase baseSite)
+        {
+            CampaignMapCoordinates.TryGetLockedBaseMiles(baseSite, out var miles);
+            return miles;
         }
 
         private Vector3 GetBaseWorldPosition(AntarcticaBase baseSite)
@@ -256,7 +260,8 @@ namespace F89.UI
                 return Vector3.zero;
             }
 
-            return MilesToWorld(baseSite.PositionMiles);
+            var ticSize = aircraft?.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
+            return CampaignMapCoordinates.GetLockedBaseWorldPosition(baseSite, worldMap, ticSize);
         }
 
         private void AbandonSuspendedAutopilotIfNeeded()
@@ -394,10 +399,12 @@ namespace F89.UI
             IsAutopilotSelectMode = false;
             IsAutopilotFlightMode = true;
             ClearMapPointerState();
-            if (!IsOpen)
-            {
-                SetOpen(true);
-            }
+        }
+
+        public void StageAutopilotTarget(Vector3 worldTarget, string label)
+        {
+            ClearMapRouteAndSetSingleWaypoint(worldTarget, label);
+            SetAutopilotHudBearing(worldTarget, label);
         }
 
         /// <summary>Close the tactical map during autopilot but keep flying (return to HUD).</summary>
@@ -538,7 +545,7 @@ namespace F89.UI
                 if (zoomLevel <= 0.001f)
                 {
                     zoomLevel = 0f;
-                    panOffsetMiles = Vector2.zero;
+                    panOffsetMiles = CampaignMapCoordinates.GetMapCenterMiles(worldMap);
                 }
                 else if (zoomAnchorMiles.HasValue)
                 {
@@ -574,8 +581,7 @@ namespace F89.UI
             if (open && !wasOpen)
             {
                 zoomLevel = 0f;
-                // Full-theater view must stay centered on map origin or satellite UVs wrap and tile.
-                panOffsetMiles = Vector2.zero;
+                panOffsetMiles = CampaignMapCoordinates.GetMapCenterMiles(worldMap);
             }
         }
 
@@ -971,6 +977,7 @@ namespace F89.UI
 
         private static readonly Color LandOutpostColor = new Color(0.9f, 0.18f, 0.12f);
         private static readonly Color ClearedOutpostFillColor = new Color(0.96f, 0.96f, 0.96f, 1f);
+        private static readonly Color MissionObjectiveFillColor = new Color(0.18f, 0.48f, 0.95f, 1f);
         private static readonly Color FriendlyOutpostFillColor = new Color(0.18f, 0.72f, 0.22f, 1f);
         private static readonly Color FriendlyOutpostBorderColor = Color.black;
         private static readonly Color CarrierLabelColor = new Color(0.95f, 0.85f, 0.1f);
@@ -989,7 +996,7 @@ namespace F89.UI
                     continue;
                 }
 
-                var guiPoint = WorldMilesToGui(mapRect, baseSite.PositionMiles);
+                var guiPoint = WorldMilesToGui(mapRect, GetBaseMapMiles(baseSite));
                 var isCarrier = baseSite.SiteKind == BaseSiteKind.Carrier;
                 if (!IsPointVisibleOnMap(mapRect, guiPoint, isCarrier))
                 {
@@ -1023,6 +1030,12 @@ namespace F89.UI
                     continue;
                 }
 
+                if (ShouldDrawMissionObjectiveMapMarker(baseSite))
+                {
+                    DrawMapBorderedDot(guiPoint, dotSize, MissionObjectiveFillColor, LandOutpostBorderPixels);
+                    continue;
+                }
+
                 if (ShouldDrawClearedOutpostMapMarker(baseSite))
                 {
                     DrawMapBorderedDot(guiPoint, dotSize, ClearedOutpostFillColor, LandOutpostBorderPixels);
@@ -1041,6 +1054,23 @@ namespace F89.UI
             }
 
             return AntarcticaOutpostState.IsFriendlyBase(baseSite.BaseName);
+        }
+
+        private static bool ShouldDrawMissionObjectiveMapMarker(AntarcticaBase baseSite)
+        {
+            if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Land || baseSite.IsDestroyed)
+            {
+                return false;
+            }
+
+            if (AntarcticaOutpostState.IsFriendlyBase(baseSite.BaseName))
+            {
+                return false;
+            }
+
+            return LandBossMissionAssignment.IsActiveMissionOutpost(
+                CharacterSessionState.ActiveSave,
+                baseSite.BaseName);
         }
 
         private static bool ShouldDrawClearedOutpostMapMarker(AntarcticaBase baseSite)
@@ -1091,7 +1121,7 @@ namespace F89.UI
                     continue;
                 }
 
-                var guiPoint = WorldMilesToGui(mapRect, baseSite.PositionMiles);
+                var guiPoint = WorldMilesToGui(mapRect, GetBaseMapMiles(baseSite));
                 if (!mapRect.Contains(guiPoint))
                 {
                     continue;
@@ -1099,7 +1129,9 @@ namespace F89.UI
 
                 var emphasize = baseSite == selectedMapBase || baseSite == hoveredMapBase;
                 var priority = emphasize ? 100 : 0;
-                if (baseSite.IsMissionObjective)
+                if (LandBossMissionAssignment.IsActiveMissionOutpost(
+                        CharacterSessionState.ActiveSave,
+                        baseSite.BaseName))
                 {
                     priority += 10;
                 }
@@ -1341,7 +1373,7 @@ namespace F89.UI
                     continue;
                 }
 
-                var guiPoint = WorldMilesToGui(mapRect, baseSite.PositionMiles);
+                var guiPoint = WorldMilesToGui(mapRect, GetBaseMapMiles(baseSite));
                 if (!IsPointVisibleOnMap(mapRect, guiPoint, isCarrier: true))
                 {
                     continue;
@@ -1799,7 +1831,7 @@ namespace F89.UI
                         ClearMapRouteAndSetSingleWaypoint(
                             GetBaseWorldPosition(pickedBase),
                             FormatRouteWaypointLabel(
-                                pickedBase.PositionMiles,
+                                GetBaseMapMiles(pickedBase),
                                 0,
                                 pickedBase.SiteCode));
                         SyncHudBearingToCurrentTarget();
@@ -2066,6 +2098,7 @@ namespace F89.UI
                 return false;
             }
 
+            guiPoint = MapGeoProjection.MirrorOverlayGuiY(mapRect, guiPoint);
             var pickRadius = WaypointMarkerRadius + 4f;
             for (var i = 0; i < mapRoute.Count; i++)
             {
@@ -2091,7 +2124,7 @@ namespace F89.UI
             baseNamePopupUntil = Time.unscaledTime + 2f;
             yield return new WaitForSecondsRealtime(0.75f);
             pendingBaseCommit = null;
-            var baseMiles = baseSite.PositionMiles;
+            var baseMiles = GetBaseMapMiles(baseSite);
             CommitAutopilotDestination(
                 GetBaseWorldPosition(baseSite),
                 FormatRouteWaypointLabel(baseMiles, 0, baseSite.SiteCode));
@@ -2120,13 +2153,14 @@ namespace F89.UI
             if (activeAutopilot.CommitRoute(legs))
             {
                 SyncHudBearingToCurrentTarget();
-                HideMapForAutopilotHud();
+                BeginAutopilotFlight();
             }
         }
 
         private bool TryPickBaseAtGuiPoint(Rect mapRect, Vector2 guiPoint, out AntarcticaBase baseSite)
         {
             baseSite = null;
+            guiPoint = MapGeoProjection.MirrorOverlayGuiY(mapRect, guiPoint);
             var dotSize = Mathf.Clamp(GetVisibleWidthMiles() * 0.014f, 6f, 14f);
             var bestDistance = float.MaxValue;
 
@@ -2161,7 +2195,7 @@ namespace F89.UI
             float dotSize,
             out float distance)
         {
-            var guiBase = WorldMilesToGui(mapRect, candidate.PositionMiles);
+            var guiBase = WorldMilesToGui(mapRect, GetBaseMapMiles(candidate));
             distance = Vector2.Distance(guiPoint, guiBase);
 
             if (candidate.SiteKind == BaseSiteKind.Carrier)
@@ -2214,7 +2248,7 @@ namespace F89.UI
 
             var dotSize = Mathf.Clamp(GetVisibleWidthMiles() * 0.014f, 6f, 14f);
             EnsureBaseRangeLabelStyle(dotSize);
-            var guiPoint = WorldMilesToGui(mapRect, selectedMapBase.PositionMiles);
+            var guiPoint = WorldMilesToGui(mapRect, GetBaseMapMiles(selectedMapBase));
             if (!mapRect.Contains(guiPoint))
             {
                 return;
@@ -2286,32 +2320,34 @@ namespace F89.UI
 
         private Vector3 MilesToWorld(Vector2 miles)
         {
-            return WorldMapConfig.MileOffsetToWorld(miles, GetWorldUnitsPerMile());
+            var ticSize = aircraft?.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
+            return CampaignMapCoordinates.MilesToWorld(miles, worldMap, ticSize);
         }
 
         private void ClampPanOffset()
         {
-            var antarcticaHalfWidthMiles = worldMap.antarcticaSizeMiles * 0.5f;
-            var antarcticaHalfHeightMiles = antarcticaHalfWidthMiles / AntarcticaLandMask.GetMapWidthOverHeight();
+            var mapWidthMiles = worldMap.antarcticaSizeMiles;
+            var mapHeightMiles = AntarcticaLandMask.GetMapHeightMiles(mapWidthMiles);
             GetVisibleHalfExtents(out var visibleHalfXMiles, out var visibleHalfYMiles);
 
-            // Full-theater zoom shows the entire map. Keep pan at origin so imagery stays aligned.
-            if (visibleHalfXMiles >= antarcticaHalfWidthMiles
-                && visibleHalfYMiles >= antarcticaHalfHeightMiles)
+            if (visibleHalfXMiles >= mapWidthMiles * 0.5f
+                && visibleHalfYMiles >= mapHeightMiles * 0.5f)
             {
                 if (zoomLevel <= 0.001f)
                 {
-                    panOffsetMiles = Vector2.zero;
+                    panOffsetMiles = CampaignMapCoordinates.GetMapCenterMiles(worldMap);
                 }
 
                 return;
             }
 
-            var panLimitX = Mathf.Max(0f, antarcticaHalfWidthMiles - visibleHalfXMiles);
-            var panLimitY = Mathf.Max(0f, antarcticaHalfHeightMiles - visibleHalfYMiles);
+            var panMinX = visibleHalfXMiles;
+            var panMaxX = mapWidthMiles - visibleHalfXMiles;
+            var panMinY = visibleHalfYMiles;
+            var panMaxY = mapHeightMiles - visibleHalfYMiles;
             panOffsetMiles = new Vector2(
-                Mathf.Clamp(panOffsetMiles.x, -panLimitX, panLimitX),
-                Mathf.Clamp(panOffsetMiles.y, -panLimitY, panLimitY));
+                Mathf.Clamp(panOffsetMiles.x, panMinX, panMaxX),
+                Mathf.Clamp(panOffsetMiles.y, panMinY, panMaxY));
         }
 
         private Rect GetGeoMapRect(Rect mapRect)
@@ -2361,18 +2397,10 @@ namespace F89.UI
         {
             var mapAspect = AntarcticaLandMask.GetMapWidthOverHeight();
             var antarcticaHalfWidthMiles = worldMap.antarcticaSizeMiles * 0.5f;
-            var antarcticaHalfHeightMiles = antarcticaHalfWidthMiles / mapAspect;
-            if (zoomLevel <= 0.001f)
-            {
-                // Match native map mile extents so one map mile spans equally in X and Y on screen.
-                halfXMiles = antarcticaHalfWidthMiles;
-                halfYMiles = antarcticaHalfHeightMiles;
-                return;
-            }
-
             var fullViewHalfXMiles = antarcticaHalfWidthMiles * FullViewOceanPadding;
             var minHalfXMiles = MinVisibleWidthMiles * 0.5f;
-            halfXMiles = Mathf.Lerp(fullViewHalfXMiles, minHalfXMiles, zoomLevel);
+            var t = zoomLevel <= 0.001f ? 0f : zoomLevel;
+            halfXMiles = Mathf.Lerp(fullViewHalfXMiles, minHalfXMiles, t);
             halfYMiles = halfXMiles / mapAspect;
         }
 
@@ -2394,6 +2422,7 @@ namespace F89.UI
 
         private Vector2 WorldMilesToGui(Rect mapRect, Vector2 worldMiles)
         {
+            // All overlay markers (outposts, CV, player, routes) must go through this path.
             return GetMapGeoProjection().WorldMilesToGui(mapRect, worldMiles);
         }
 
@@ -2403,8 +2432,10 @@ namespace F89.UI
         }
 
         /// <summary>
-        /// Single mile ↔ screen projection shared by satellite imagery and every map overlay marker.
-        /// A fixed mile coordinate always maps to the same satellite-map pixel while panning/zooming.
+        /// Locked map display (do not change without explicit map-orientation work):
+        /// Satellite — top=north, bottom=south, left=west, right=east (<see cref="GetSatelliteTextureCoords"/>).
+        /// Overlays (outposts, CV, player, routes) — same orientation via <see cref="MirrorOverlayGuiY"/>.
+        /// Mile/world/spawn data is never modified here.
         /// </summary>
         private readonly struct MapGeoProjection
         {
@@ -2423,17 +2454,14 @@ namespace F89.UI
                 VisibleHalfMilesY = visibleHalfMilesY;
                 MapWidthMiles = mapWidthMiles;
                 MapHeightMiles = AntarcticaLandMask.GetMapHeightMiles(mapWidthMiles);
-                var halfWidthMiles = mapWidthMiles * 0.5f;
-                var halfHeightMiles = MapHeightMiles * 0.5f;
-                UMin = (centerMiles.x - visibleHalfMilesX + halfWidthMiles) / MapWidthMiles;
-                UMax = (centerMiles.x + visibleHalfMilesX + halfWidthMiles) / MapWidthMiles;
-                MileVMin = (centerMiles.y - visibleHalfMilesY + halfHeightMiles) / MapHeightMiles;
-                MileVMax = (centerMiles.y + visibleHalfMilesY + halfHeightMiles) / MapHeightMiles;
+                UMin = (centerMiles.x - visibleHalfMilesX) / MapWidthMiles;
+                UMax = (centerMiles.x + visibleHalfMilesX) / MapWidthMiles;
+                MileVMin = (centerMiles.y - visibleHalfMilesY) / MapHeightMiles;
+                MileVMax = (centerMiles.y + visibleHalfMilesY) / MapHeightMiles;
             }
 
             public Rect GetSatelliteTextureCoords()
             {
-                // Match AntarcticaLandMask mile→pixel mapping (mile +Y → lower texture v).
                 var vMin = 1f - MileVMax;
                 var vMax = 1f - MileVMin;
                 return new Rect(UMin, vMin, UMax - UMin, vMax - vMin);
@@ -2442,13 +2470,15 @@ namespace F89.UI
             public Vector2 WorldMilesToGui(Rect mapRect, Vector2 worldMiles)
             {
                 WorldMilesToFractions(worldMiles, out var fu, out var fy);
-                return new Vector2(
+                var gui = new Vector2(
                     mapRect.xMin + fu * mapRect.width,
                     mapRect.yMin + fy * mapRect.height);
+                return MirrorOverlayGuiY(mapRect, gui);
             }
 
             public Vector2 GuiToWorldMiles(Rect mapRect, Vector2 guiPoint)
             {
+                guiPoint = MirrorOverlayGuiY(mapRect, guiPoint);
                 var fu = (guiPoint.x - mapRect.xMin) / mapRect.width;
                 var fy = (guiPoint.y - mapRect.yMin) / mapRect.height;
                 return FractionsToWorldMiles(fu, fy);
@@ -2456,6 +2486,7 @@ namespace F89.UI
 
             public Vector2 ComputePanForAnchorAtGui(Rect mapRect, Vector2 anchorMiles, Vector2 guiPoint)
             {
+                guiPoint = MirrorOverlayGuiY(mapRect, guiPoint);
                 var visibleWidthMiles = VisibleHalfMilesX * 2f;
                 var visibleHeightMiles = VisibleHalfMilesY * 2f;
                 var fu = (guiPoint.x - mapRect.xMin) / mapRect.width;
@@ -2465,25 +2496,28 @@ namespace F89.UI
                     anchorMiles.y + VisibleHalfMilesY - fy * visibleHeightMiles);
             }
 
+            public static Vector2 MirrorOverlayGuiY(Rect mapRect, Vector2 guiPoint)
+            {
+                return new Vector2(
+                    guiPoint.x,
+                    mapRect.yMax - (guiPoint.y - mapRect.yMin));
+            }
+
             private void WorldMilesToFractions(Vector2 worldMiles, out float fu, out float fy)
             {
-                var halfWidthMiles = MapWidthMiles * 0.5f;
-                var halfHeightMiles = MapHeightMiles * 0.5f;
-                var u = (worldMiles.x + halfWidthMiles) / MapWidthMiles;
-                var mileV = (worldMiles.y + halfHeightMiles) / MapHeightMiles;
+                var u = worldMiles.x / MapWidthMiles;
+                var mileV = worldMiles.y / MapHeightMiles;
                 fu = Mathf.InverseLerp(UMin, UMax, u);
                 fy = Mathf.InverseLerp(MileVMin, MileVMax, mileV);
             }
 
             private Vector2 FractionsToWorldMiles(float fu, float fy)
             {
-                var halfWidthMiles = MapWidthMiles * 0.5f;
-                var halfHeightMiles = MapHeightMiles * 0.5f;
                 var u = Mathf.Lerp(UMin, UMax, fu);
                 var mileV = Mathf.Lerp(MileVMin, MileVMax, fy);
                 return new Vector2(
-                    u * MapWidthMiles - halfWidthMiles,
-                    mileV * MapHeightMiles - halfHeightMiles);
+                    u * MapWidthMiles,
+                    mileV * MapHeightMiles);
             }
         }
 
@@ -2501,7 +2535,8 @@ namespace F89.UI
 
         private Vector2 WorldToMiles(Vector3 worldPosition)
         {
-            return WorldMapConfig.WorldToMileOffset(worldPosition, GetWorldUnitsPerMile());
+            var ticSize = aircraft?.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
+            return CampaignMapCoordinates.WorldToMiles(worldPosition, worldMap, ticSize);
         }
 
         private float GetWorldUnitsPerMile()

@@ -78,6 +78,18 @@ namespace F89.Core
         /// <summary>Persisted friendly occupation — set only after END MISSION with air objectives complete.</summary>
         public static bool IsFriendlyBase(string outpostName) => IsFriendlyOccupied(outpostName);
 
+        /// <summary>Hostile while the bunker boss is still alive.</summary>
+        public static bool IsEnemyOutpost(string outpostName) =>
+            !string.IsNullOrWhiteSpace(outpostName)
+            && !IsFriendlyOccupied(outpostName)
+            && !IsBunkerCleared(outpostName);
+
+        /// <summary>Boss cleared but not yet friendly — white on map until END MISSION.</summary>
+        public static bool IsNeutralOutpost(string outpostName) =>
+            !string.IsNullOrWhiteSpace(outpostName)
+            && !IsFriendlyOccupied(outpostName)
+            && IsBunkerCleared(outpostName);
+
         /// <summary>
         /// Marks the mission outpost friendly after air objectives are destroyed and the pilot
         /// ends the mission from the carrier deck or an outpost runway.

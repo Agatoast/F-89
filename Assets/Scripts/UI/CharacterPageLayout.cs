@@ -185,6 +185,39 @@ namespace F89.UI
         public static Rect GetResearchAndDevelopmentRect()
         {
             const float heightDesignPx = 200f;
+            const float gapFromLoadoutDesignPx = 10f;
+            var footlocker = GetFootlockerGridRect();
+            var footlockerLeft = CharacterPageGearUi.GetFootlockerCellsLeft(footlocker);
+            CharacterPageGearUi.GetFootlockerCellsBounds(
+                footlocker,
+                topAlign: false,
+                out var cellsRight,
+                out _);
+            var width = (cellsRight - footlockerLeft) * 0.5f;
+            var height = UiFitCanvas.Px(heightDesignPx);
+            var loadout = GetCharacterLoadoutButtonRect();
+            var x = loadout.x - UiFitCanvas.Px(gapFromLoadoutDesignPx) - width;
+            return new Rect(x, loadout.y, width, height);
+        }
+
+        public static Rect GetResearchAndDevelopmentTitleRect()
+        {
+            const float gapFromBoxLeftDesignPx = 10f;
+            const float titleWidthDesignPx = 72f;
+            const float titleHeightDesignPx = 44f;
+            var box = GetResearchAndDevelopmentRect();
+            var width = UiFitCanvas.Px(titleWidthDesignPx);
+            var height = UiFitCanvas.Px(titleHeightDesignPx);
+            return new Rect(
+                box.x - UiFitCanvas.Px(gapFromBoxLeftDesignPx) - width,
+                box.y,
+                width,
+                height);
+        }
+
+        private static Rect GetSaveAntarcticaPanelRect()
+        {
+            const float heightDesignPx = 200f;
             const float gapFromFootlockerDesignPx = 16f;
             var footlocker = GetFootlockerGridRect();
             var footlockerLeft = CharacterPageGearUi.GetFootlockerCellsLeft(footlocker);
@@ -194,17 +227,6 @@ namespace F89.UI
                 footlockerLeft - UiFitCanvas.Px(gapFromFootlockerDesignPx) - width,
                 footlocker.y,
                 width,
-                height);
-        }
-
-        public static Rect GetResearchAndDevelopmentTitleRect()
-        {
-            var box = GetResearchAndDevelopmentRect();
-            var height = UiFitCanvas.Rect.height * 0.06f;
-            return new Rect(
-                box.x,
-                box.y - height - UiFitCanvas.Px(4f),
-                box.width,
                 height);
         }
 
@@ -254,29 +276,33 @@ namespace F89.UI
             const float footerHeightDesignPx = 48f;
             var panel = GetResearchAndDevelopmentRect();
             var pad = UiFitCanvas.Px(padDesignPx);
-            var slot = GetResearchAndDevelopmentSlotRect(0);
-            var y = slot.yMax + UiFitCanvas.Px(8f);
-            var height = Mathf.Min(
-                UiFitCanvas.Px(footerHeightDesignPx),
-                Mathf.Max(1f, panel.yMax - pad - y));
-            return new Rect(panel.x + pad, y, panel.width - pad * 2f, height);
+            var height = UiFitCanvas.Px(footerHeightDesignPx);
+            return new Rect(
+                panel.x + pad,
+                panel.yMax - pad - height,
+                panel.width - pad * 2f,
+                height);
         }
 
-        /// <summary>Four R&amp;D drop slots sized like the inventory top row (not inventory storage).</summary>
+        /// <summary>Four R&amp;D drop slots in one row inside the panel.</summary>
         public static Rect GetResearchAndDevelopmentSlotRect(int index)
         {
             index = Mathf.Clamp(index, 0, ResearchAndDevelopmentSlotCount - 1);
             var panel = GetResearchAndDevelopmentRect();
-            var inventory = GetInventoryGridRect();
-            CharacterPageGearUi.TryGetInventoryCellRect(inventory, index, out var inventoryCell);
-
-            const float contentShiftDownDesignPx = 0f;
             var hint = GetResearchAndDevelopmentHintRect();
-            return new Rect(
-                panel.x + (inventoryCell.x - inventory.x),
-                hint.yMax + UiFitCanvas.Px(contentShiftDownDesignPx),
-                inventoryCell.width,
-                inventoryCell.height);
+            var footer = GetResearchAndDevelopmentFooterRect();
+            const float padDesignPx = 12f;
+            const float slotGapDesignPx = 4f;
+            var pad = UiFitCanvas.Px(padDesignPx);
+            var gap = UiFitCanvas.Px(slotGapDesignPx);
+            var rowTop = hint.yMax + UiFitCanvas.Px(4f);
+            var rowBottom = footer.y - UiFitCanvas.Px(4f);
+            var rowHeight = Mathf.Max(1f, rowBottom - rowTop);
+            var rowWidth = panel.width - pad * 2f;
+            var cellWidth = (rowWidth - gap * (ResearchAndDevelopmentSlotCount - 1))
+                / ResearchAndDevelopmentSlotCount;
+            var x = panel.x + pad + index * (cellWidth + gap);
+            return new Rect(x, rowTop, cellWidth, Mathf.Min(cellWidth, rowHeight));
         }
 
         public static Rect GetPortraitRect()
@@ -301,24 +327,28 @@ namespace F89.UI
 
         public static Rect GetSaveAntarcticaLogoRect(Texture2D logoTexture)
         {
-            const float gapAbovePaperdollDesignPx = 6f;
-            const float sizeScale = 2.667f;
-            const float shiftRightDesignPx = 80f;
-            const int equipmentSlotCount = 4;
-            var paperdoll = GetPaperdollRect();
-            var equipmentSlot = GetEquipmentSlotRect(0, equipmentSlotCount);
-            var clusterLeft = equipmentSlot.x;
-            var clusterWidth = paperdoll.xMax - clusterLeft;
+            const float padDesignPx = 10f;
+            var panel = GetSaveAntarcticaPanelRect();
+            var pad = UiFitCanvas.Px(padDesignPx);
+            var inner = new Rect(
+                panel.x + pad,
+                panel.y + pad,
+                panel.width - pad * 2f,
+                panel.height - pad * 2f);
             var aspect = logoTexture != null && logoTexture.width > 0
                 ? (float)logoTexture.height / logoTexture.width
                 : 0.34f;
-            var width = clusterWidth * sizeScale;
-            var height = width * aspect;
-            var x = clusterLeft + (clusterWidth - width) * 0.5f + UiFitCanvas.Px(shiftRightDesignPx);
-            var y = Mathf.Max(
-                UiFitCanvas.Rect.y,
-                paperdoll.y - UiFitCanvas.Px(gapAbovePaperdollDesignPx) - height);
-            return new Rect(x, y, width, height);
+            var fitWidth = inner.width;
+            var fitHeight = fitWidth * aspect;
+            if (fitHeight > inner.height)
+            {
+                fitHeight = inner.height;
+                fitWidth = fitHeight / aspect;
+            }
+
+            var x = inner.x + (inner.width - fitWidth) * 0.5f;
+            var y = inner.y + (inner.height - fitHeight) * 0.5f;
+            return new Rect(x, y, fitWidth, fitHeight);
         }
 
         public static Rect GetPaperdollRect()
@@ -376,17 +406,20 @@ namespace F89.UI
         public static Rect GetCharacterLoadoutButtonRect()
         {
             const float gapBelowFootlockerDesignPx = 10f;
+            var footlocker = GetFootlockerGridRect();
             CharacterPageGearUi.GetFootlockerCellsBounds(
-                GetFootlockerGridRect(),
+                footlocker,
                 topAlign: false,
                 out var cellsRight,
                 out var cellsBottom);
             StartPageMenuStyles.GetMenuButtonSize(out var width, out var height);
             // Match Mission Brief button sizing.
             width *= 0.72f;
-            var x = cellsRight - width;
-            var y = cellsBottom + UiFitCanvas.Px(gapBelowFootlockerDesignPx);
-            return new Rect(x, y, width, height);
+            return new Rect(
+                cellsRight - width,
+                cellsBottom + UiFitCanvas.Px(gapBelowFootlockerDesignPx),
+                width,
+                height);
         }
 
         public static Rect GetEquipmentSlotRect(int index, int slotCount)

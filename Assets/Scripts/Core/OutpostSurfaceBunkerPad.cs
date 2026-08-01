@@ -83,16 +83,93 @@ namespace F89.Core
             var renderer = pad.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.sharedMaterial = new Material(renderer.sharedMaterial)
+                var material = F89RenderMaterials.CreateUnlit(Color.black);
+                if (material != null)
                 {
-                    color = Color.black
-                };
+                    renderer.sharedMaterial = material;
+                }
             }
 
             pad.AddComponent<OutpostSurfaceBunkerPad>();
 
             var cluster = padParent.GetComponent<OutpostBuildingCluster>();
             cluster?.SetBunkerSurfaceRevealed(true);
+        }
+
+        /// <summary>World position of the bunker pad or runway bunker anchor for grid-cell landing checks.</summary>
+        public static bool TryGetBunkerGroundPosition(AntarcticaBase baseSite, out Vector3 groundPosition)
+        {
+            groundPosition = Vector3.zero;
+            if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Land)
+            {
+                return false;
+            }
+
+            var pad = FindPadTransform(baseSite);
+            if (pad != null)
+            {
+                groundPosition = pad.position;
+                groundPosition.y = 0f;
+                return true;
+            }
+
+            var runwayBunker = baseSite.transform.Find(OutpostRunwayVisual.RunwayBunkerObjectName);
+            if (runwayBunker != null && runwayBunker.gameObject.activeSelf)
+            {
+                groundPosition = runwayBunker.position;
+                groundPosition.y = 0f;
+                return true;
+            }
+
+            var runway = baseSite.transform.Find(OutpostRunwayVisual.RunwayObjectName);
+            if (runway != null)
+            {
+                groundPosition = OutpostRunwayVisual.GetRunwayBunkerWorldPosition(runway);
+                groundPosition.y = 0f;
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool TryGetBunkerGroundPosition(string outpostName, out Vector3 groundPosition)
+        {
+            groundPosition = Vector3.zero;
+            if (string.IsNullOrWhiteSpace(outpostName))
+            {
+                return false;
+            }
+
+            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            for (var i = 0; i < bases.Length; i++)
+            {
+                var candidate = bases[i];
+                if (candidate == null
+                    || candidate.SiteKind != BaseSiteKind.Land
+                    || !string.Equals(candidate.BaseName, outpostName, System.StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                return TryGetBunkerGroundPosition(candidate, out groundPosition);
+            }
+
+            return false;
+        }
+
+        private static Transform FindPadTransform(AntarcticaBase baseSite)
+        {
+            var cluster = baseSite.transform.Find(OutpostBuildingClusterSpawner.ClusterRootName);
+            if (cluster != null)
+            {
+                var pad = cluster.Find(PadObjectName);
+                if (pad != null)
+                {
+                    return pad;
+                }
+            }
+
+            return baseSite.transform.Find(PadObjectName);
         }
     }
 }

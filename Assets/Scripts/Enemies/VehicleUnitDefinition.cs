@@ -72,8 +72,7 @@ namespace F89.Enemies
         [Tooltip("For UR units: chance this unit prioritizes the player aircraft over other targets.")]
         public float planeVsOtherTargetChance;
 
-        [Header("Scoring")]
-        [Tooltip("Points added to Total Score and Mission Score when destroyed.")]
+        [Tooltip("Mission-score points by unit level when destroyed (enemy +, friendly -).")]
         public int pointValue;
 
         public bool IsHostile => designation == VehicleUnitDesignation.UR;

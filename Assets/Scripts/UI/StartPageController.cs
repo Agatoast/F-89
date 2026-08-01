@@ -30,8 +30,11 @@ namespace F89.UI
             StartPageMenuStyles.DrawFullscreenBackground(backgroundTexture);
             StartPageMenuStyles.DrawSaveAntarcticaLogo(saveAntarcticaLogoTexture);
             DrawButtons();
-            DrawTempFightReichButton();
-            DrawDevResetMapButton();
+            if (LandCombatTestCheats.ShowDevMenuButtons)
+            {
+                DrawTempFightReichButton();
+                DrawDevResetMapButton();
+            }
         }
 
         private static void DrawButtons()

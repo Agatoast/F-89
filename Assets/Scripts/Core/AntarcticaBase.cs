@@ -1,3 +1,4 @@
+using F89.Flight;
 using UnityEngine;
 
 namespace F89.Core
@@ -81,7 +82,10 @@ namespace F89.Core
         public void ApplyWorldPosition(float worldUnitsPerMile)
         {
             this.worldUnitsPerMile = worldUnitsPerMile;
-            transform.position = WorldMapConfig.MileOffsetToWorld(positionMiles, worldUnitsPerMile);
+            var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+            var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            transform.position = CampaignMapCoordinates.MilesToWorld(positionMiles, worldMap, ticSize);
         }
 
         public void RefreshPersistedWorldState(float worldUnitsPerMile)

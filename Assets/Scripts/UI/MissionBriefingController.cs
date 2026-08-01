@@ -38,7 +38,9 @@ namespace F89.UI
                 Debug.LogWarning("F-89: BURN BAG ONLY stamp missing from Resources/MissionBriefing/burn_bag_only_stamp.");
             }
 
-            if (CharacterSessionState.ActiveSave != null && CharacterSessionState.ActiveSave.IsKilledInAction)
+            if (CharacterSessionState.ActiveSave != null
+                && (CharacterSessionState.ActiveSave.IsKilledInAction
+                    || CharacterSessionState.ActiveSave.IsCourtMartialed))
             {
                 SceneManager.LoadScene(GameScenes.SelectionPage);
             }

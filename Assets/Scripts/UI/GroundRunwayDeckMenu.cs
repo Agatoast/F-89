@@ -65,7 +65,7 @@ namespace F89.UI
             }
             else if (deckResult == RunwayDeckMenuDialog.Result.TakeOff)
             {
-                pendingConfirm = RunwayDeckConfirmDialog.Action.TakeOff;
+                ExecuteTakeOff();
             }
             else if (deckResult == RunwayDeckMenuDialog.Result.EndMission)
             {
@@ -110,6 +110,44 @@ namespace F89.UI
             }
         }
 
+        private static void ExecuteTakeOff()
+        {
+            pendingConfirm = RunwayDeckConfirmDialog.Action.None;
+            endMissionFailureConfirmVisible = false;
+            if (LandOutpostLandingState.HasActiveOutpost)
+            {
+                Time.timeScale = 1f;
+            }
+
+            LandLandedPlane.CancelTakeOffPrompt();
+
+            var snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
+            if (snapshot.IsValid)
+            {
+                snapshot.ReturnToRunwayDeck = false;
+                snapshot.RestoreWithImmediateTakeoff = true;
+                snapshot.IsOpenFieldLanding = OpenFieldLandingState.IsActive;
+                if (OpenFieldLandingState.IsActive && OpenFieldLandingState.LandingMiles.sqrMagnitude > 0.01f)
+                {
+                    snapshot.HasLandingMiles = true;
+                    snapshot.LandingMileX = OpenFieldLandingState.LandingMiles.x;
+                    snapshot.LandingMileY = OpenFieldLandingState.LandingMiles.y;
+                    LandingMileFlagState.SetFromMiles(
+                        OpenFieldLandingState.LandingMiles,
+                        snapshot.LandingRotationY);
+                }
+                else
+                {
+                    LandingMileFlagState.TryApplyToSnapshot(ref snapshot);
+                }
+
+                LandMissionHandoffState.UpdateStoredFlightSnapshot(snapshot);
+            }
+
+            OutpostRunwayDeckState.RequestDeckTakeoffOnRestore();
+            LandGroundMissionExit.Leave();
+        }
+
         private static void ExecuteConfirmedAction(RunwayDeckConfirmDialog.Action action)
         {
             pendingConfirm = RunwayDeckConfirmDialog.Action.None;
@@ -122,10 +160,6 @@ namespace F89.UI
                     break;
                 case RunwayDeckConfirmDialog.Action.Refuel:
                     OutpostRunwayDeckState.RequestDeckRefuelOnRestore();
-                    LandGroundMissionExit.Leave();
-                    break;
-                case RunwayDeckConfirmDialog.Action.TakeOff:
-                    OutpostRunwayDeckState.RequestDeckTakeoffOnRestore();
                     LandGroundMissionExit.Leave();
                     break;
                 case RunwayDeckConfirmDialog.Action.Dismount:
@@ -142,7 +176,7 @@ namespace F89.UI
             }
 
             CharacterGearSession.PersistActive();
-            FriendlyOutpostTakeoffState.Begin(outpostName);
+            FriendlyOutpostTakeoffState.BeginDeckRearm(outpostName);
             Time.timeScale = 1f;
             SceneManager.LoadScene(GameScenes.AircraftLoadout);
         }

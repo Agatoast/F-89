@@ -1,0 +1,42 @@
+---
+description: Warn before reintroducing spawn validation or carrier fallback on sortie return / open-field takeoff paths
+alwaysApply: true
+---
+
+# Sortie Return Spawn — Do Not Regress
+
+Ground combat return and open-field takeoff use **one rule only**:
+
+**Landing tactical miles `(x, y) MI` → VTOL takeoff at those exact miles.**
+
+Before implementing or approving any change that touches sortie return, ground takeoff, or flight scene startup, **stop and warn the user** if the change would reintroduce any of the following on sortie-return paths:
+
+## Forbidden on sortie return
+
+- Calling `EnsurePlausibleOrCarrier` (or similar validation) after a pending ground return / mile flag / `ShouldSuppressCarrierRespawn`
+- Clearing `LandingMileFlagState` because land/ocean validation failed
+- Carrier fallback (`TryMovePlayerToCarrier`, `ForcePlayerToDefaultCarrier`, `TryGetPlayerSpawn` → CV) when `ShouldSkipCarrierSpawn()` or a ground return is pending
+- Using `IsValidSpawnPosition` / “near CV ocean is valid” to **relocate** the player after GroundAttack TAKE OFF
+- Runway or outpost spawn fallback instead of saved landing miles for immediate takeoff
+- Preferring `AircraftWorldPosition` over `HasLandingMiles` / mile flag for open-field return
+
+## Allowed (separate explicit paths)
+
+- `EnsurePlausibleOrCarrier` for **fresh** sortie starts with no pending ground return
+- Carrier deck VTOL launch via `ApplyCarrierDeckStart` / mission launch
+- `ReturnToRunwayDeck` for rearm→loadout→parked deck (not ground TAKE OFF)
+
+## Key files (guard these)
+
+- `FlightSpawnValidation.cs` — `ShouldBypassSpawnCorrection`, no mile-flag clear + carrier move on return
+- `FlightGroundReturnService.cs` — miles-only restore, no validation detours
+- `FlightMissionStartBootstrap.cs` — skip `EnsurePlausibleOrCarrier` when `sortieReturnPending`
+- `LandingMileFlagState.cs`, `LandCombatModule.cs`, `GroundRunwayDeckMenu.cs`, `AntarcticaBaseSpawner.TryGetPlayerSpawn`
+
+## When to prompt
+
+If the user (or a requested change) would add validation, carrier redirect, or ocean-as-valid spawn logic to the return path, **tell them explicitly**:
+
+> This would reintroduce spawn validation / carrier fallback on sortie return. That caused open-field takeoff to spawn in the wrong ocean tile. Keep return on landing tactical miles only, or use a separate explicit code path.
+
+Do not silently apply the change unless the user confirms after the warning.

@@ -1,5 +1,6 @@
 using F89.Core;
 using F89.LandCombat;
+using F89.UI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -14,6 +15,9 @@ namespace F89.UI
     {
         public static void Leave()
         {
+            LandLandedPlane.CancelTakeOffPrompt();
+            GroundRunwayDeckMenu.Cancel();
+
             var health = Object.FindAnyObjectByType<LandPlayerHealth>();
             var downed = health != null && health.IsUnconscious
                 ? health.DownedOutcome
@@ -31,7 +35,7 @@ namespace F89.UI
             {
                 CompletedVoluntarily = downed == LandDownedOutcome.None,
                 TroopsKilled = LandGroundSceneController.SessionKills,
-                ScoreEarned = LandGroundSceneController.SessionScore,
+                ScoreEarned = MissionScoreState.SessionScore,
                 DownedOutcome = downed
             };
 
@@ -41,8 +45,12 @@ namespace F89.UI
                 CharacterSaveRepository.RecordGroundSession(save, result);
             }
 
-            LandMissionHandoffState.ForceReloadFromPrefs();
             var stored = LandMissionHandoffState.GetStoredFlightSnapshot();
+            if (!stored.IsValid)
+            {
+                LandMissionHandoffState.ForceReloadFromPrefs();
+                stored = LandMissionHandoffState.GetStoredFlightSnapshot();
+            }
             var returningToMenu = stored.ReturnSceneName == GameScenes.StartPage
                 || stored.ReturnSceneName == GameScenes.MainMenu
                 || (string.IsNullOrEmpty(stored.ReturnSceneName) && !stored.IsValid);
@@ -62,7 +70,7 @@ namespace F89.UI
             if (save != null
                 && (downed != LandDownedOutcome.None || continueScene != GameScenes.FlightTest))
             {
-                MissionScoreState.FinalizeToSave(save);
+                MissionScoreState.AbandonMissionWithoutScoring();
             }
 
             Time.timeScale = 1f;

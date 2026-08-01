@@ -53,7 +53,7 @@ namespace F89.UI
                 CharacterSaveRepository.EnsureUrKillArrays(save);
             }
 
-            CharacterGearSession.Bind(save, forceReload: save == null || !save.IsKilledInAction);
+            CharacterGearSession.Bind(save, forceReload: save == null || (!save.IsKilledInAction && !save.IsCourtMartialed));
         }
 
         private void OnGUI()
@@ -62,8 +62,8 @@ namespace F89.UI
             LandItemTooltipUi.BeginFrame();
 
             var save = CharacterSessionState.ActiveSave;
-            var isKiaMemorial = save != null && save.IsKilledInAction;
-            if (!isKiaMemorial)
+            var isCareerMemorial = save != null && (save.IsKilledInAction || save.IsCourtMartialed);
+            if (!isCareerMemorial)
             {
                 CharacterGearSession.Bind(save);
             }
@@ -71,7 +71,7 @@ namespace F89.UI
             DrawPageBackground();
             DrawFootlockerHeader();
 
-            if (!isKiaMemorial)
+            if (!isCareerMemorial)
             {
                 DrawResearchAndDevelopment();
                 CharacterPageGearUi.HandleGearDragAndDrop(
@@ -86,13 +86,13 @@ namespace F89.UI
             }
 
             DrawPaperdoll();
-            if (!isKiaMemorial)
+            if (!isCareerMemorial)
             {
                 LandPaperdollDrUi.DrawOnPaperdoll(CharacterPageLayout.GetPaperdollRect(), offsetX: -2f);
             }
 
             DrawLeftColumn(save);
-            if (!isKiaMemorial)
+            if (!isCareerMemorial)
             {
                 CharacterPageGearUi.DrawFootlocker(CharacterPageLayout.GetFootlockerGridRect());
             }
@@ -101,7 +101,7 @@ namespace F89.UI
             DrawScoreRows(save);
             DrawKillFolderLabels();
 
-            if (isKiaMemorial)
+            if (isCareerMemorial)
             {
                 DrawReturnToSavePageButton();
             }
@@ -155,7 +155,7 @@ namespace F89.UI
                 return;
             }
 
-            var result = ResearchDestroyConfirmDialog.Draw(true);
+            var result = ResearchDestroyConfirmDialog.Draw(true, CharacterPageGearUi.PendingResearchOfferCount);
             if (result == ResearchDestroyConfirmDialog.Result.Confirmed)
             {
                 CharacterPageGearUi.ConfirmResearchDestroy();
@@ -253,10 +253,10 @@ namespace F89.UI
 
         private static void DrawResearchAndDevelopment()
         {
-            GUI.Label(
+            CharacterPageStyles.DrawYellowLabelWithBlackOutline(
                 CharacterPageLayout.GetResearchAndDevelopmentTitleRect(),
                 "R&D",
-                CharacterPageStyles.FootlockerTitleStyle);
+                CharacterPageStyles.ResearchTitleStyle);
 
             var box = CharacterPageLayout.GetResearchAndDevelopmentRect();
             const float border = 2f;

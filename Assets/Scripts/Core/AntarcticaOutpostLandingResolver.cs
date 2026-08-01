@@ -2,89 +2,60 @@ using UnityEngine;
 
 namespace F89.Core
 {
-    /// <summary>Resolves whether an aircraft landed at or near an active land outpost.</summary>
+    /// <summary>Resolves whether an aircraft landed on an outpost bunker grid square.</summary>
     public static class AntarcticaOutpostLandingResolver
     {
-        public const float NearestOutpostMaxMiles = 1.5f;
-
-        public static bool TryResolveOutpost(
+        /// <summary>
+        /// True when the landing position shares the same 1 MI x 1 MI map grid cell as the outpost bunker pad.
+        /// </summary>
+        public static bool IsLandingInBunkerGrid(
             Vector3 landingWorldPosition,
+            string outpostName,
             WorldMapConfig worldMap,
-            float ticSizeWorldUnits,
-            out string outpostName)
+            float ticSizeWorldUnits)
         {
-            if (TryResolveOutpostGridCell(landingWorldPosition, worldMap, ticSizeWorldUnits, out outpostName))
-            {
-                return true;
-            }
-
-            return TryResolveNearestOutpost(
-                landingWorldPosition,
-                worldMap,
-                ticSizeWorldUnits,
-                NearestOutpostMaxMiles,
-                out outpostName);
-        }
-
-        public static bool TryResolveNearestOutpost(
-            Vector3 landingWorldPosition,
-            WorldMapConfig worldMap,
-            float ticSizeWorldUnits,
-            float maxMiles,
-            out string outpostName)
-        {
-            outpostName = string.Empty;
-            if (worldMap == null || maxMiles <= 0f)
+            if (string.IsNullOrWhiteSpace(outpostName)
+                || worldMap == null
+                || ticSizeWorldUnits <= 0f)
             {
                 return false;
             }
 
-            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
-            AntarcticaBase nearest = null;
-            var nearestDistance = float.MaxValue;
-
-            for (var i = 0; i < bases.Length; i++)
-            {
-                var candidate = bases[i];
-                if (candidate == null
-                    || candidate.SiteKind != BaseSiteKind.Land
-                    || !candidate.IsActive
-                    || candidate.IsDestroyed)
-                {
-                    continue;
-                }
-
-                var distanceMiles = F89.Flight.CombatThreatRange.DistanceMiles(
+            if (!worldMap.TryWorldPositionToGridCell(
                     landingWorldPosition,
-                    candidate.transform.position,
-                    worldMap,
-                    ticSizeWorldUnits);
-                if (distanceMiles > maxMiles || distanceMiles >= nearestDistance)
-                {
-                    continue;
-                }
-
-                nearestDistance = distanceMiles;
-                nearest = candidate;
-            }
-
-            if (nearest == null)
+                    ticSizeWorldUnits,
+                    out var landingCell))
             {
                 return false;
             }
 
-            outpostName = nearest.BaseName;
-            return true;
+            if (!OutpostSurfaceBunkerPad.TryGetBunkerGroundPosition(outpostName, out var bunkerPosition))
+            {
+                return false;
+            }
+
+            if (!worldMap.TryWorldPositionToGridCell(
+                    bunkerPosition,
+                    ticSizeWorldUnits,
+                    out var bunkerCell))
+            {
+                return false;
+            }
+
+            return landingCell == bunkerCell;
         }
 
-        private static bool TryResolveOutpostGridCell(
+        /// <summary>
+        /// Assigns an outpost only when the aircraft landed in that outpost's bunker map grid cell.
+        /// </summary>
+        public static bool TryResolveBunkerGridLanding(
             Vector3 landingWorldPosition,
             WorldMapConfig worldMap,
             float ticSizeWorldUnits,
             out string outpostName)
         {
             outpostName = string.Empty;
-            if (worldMap == null)
+            if (worldMap == null || ticSizeWorldUnits <= 0f)
             {
                 return false;
             }
@@ -108,11 +79,16 @@ namespace F89.Core
                     continue;
                 }
 
+                if (!OutpostSurfaceBunkerPad.TryGetBunkerGroundPosition(candidate, out var bunkerPosition))
+                {
+                    continue;
+                }
+
                 if (!worldMap.TryWorldPositionToGridCell(
-                        candidate.transform.position,
+                        bunkerPosition,
                         ticSizeWorldUnits,
-                        out var outpostCell)
-                    || outpostCell != landingCell)
+                        out var bunkerCell)
+                    || bunkerCell != landingCell)
                 {
                     continue;
                 }
@@ -122,6 +98,20 @@ namespace F89.Core
             }
 
             return false;
+        }
+
+        /// <summary>Legacy entry point — resolves only an exact bunker-grid landing.</summary>
+        public static bool TryResolveOutpost(
+            Vector3 landingWorldPosition,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits,
+            out string outpostName)
+        {
+            return TryResolveBunkerGridLanding(
+                landingWorldPosition,
+                worldMap,
+                ticSizeWorldUnits,
+                out outpostName);
         }
     }
 }

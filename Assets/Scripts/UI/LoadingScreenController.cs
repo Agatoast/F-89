@@ -1,3 +1,4 @@
+using F89.Audio;
 using F89.Core;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -15,6 +16,10 @@ namespace F89.UI
 
         private void Start()
         {
+            // Cold boot — discard Editor session handoff so flight spawns on the carrier with terrain.
+            GameplaySessionBootstrap.ClearStalePersistedSession();
+            FlightAudioBootstrap.EnsureReady();
+
             splashTexture = Resources.Load<Texture2D>(SplashResourcePath);
             loadOperation = SceneManager.LoadSceneAsync(GameScenes.StartPage, LoadSceneMode.Single);
             if (loadOperation != null)

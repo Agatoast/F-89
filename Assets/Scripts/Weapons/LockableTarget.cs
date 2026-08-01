@@ -228,7 +228,7 @@ namespace F89.Weapons
                 }
 
                 F89.Flight.CombatThreatRange.InvalidateCaches();
-                TryRegisterUrKillCredit();
+                TryRegisterKillCredit();
                 Debug.Log($"Troop {targetLabel} destroyed by {weaponName} ({hitKind}) — no explosion.");
                 gameObject.SetActive(false);
                 return;
@@ -275,22 +275,35 @@ namespace F89.Weapons
             }
 
             F89.Flight.CombatThreatRange.InvalidateCaches();
-            TryRegisterUrKillCredit();
+            TryRegisterKillCredit();
             Debug.Log($"Target {targetLabel} destroyed by {weaponName} ({hitKind}).");
             gameObject.SetActive(false);
         }
 
-        private void TryRegisterUrKillCredit()
+        private void TryRegisterKillCredit()
         {
-            if (affiliation != TargetAffiliation.Hostile)
-            {
-                return;
-            }
-
             var vehicleUnit = GetComponent<F89.Enemies.VehicleUnitComponent>();
             if (vehicleUnit?.Definition != null)
             {
-                UrKillCredit.RegisterDestroy(vehicleUnit.Definition);
+                if (vehicleUnit.Definition.IsHostile)
+                {
+                    UrKillCredit.RegisterEnemyDestroy(vehicleUnit.Definition);
+                }
+                else
+                {
+                    UrKillCredit.RegisterFriendlyDestroy(vehicleUnit.Definition);
+                }
+
+                return;
+            }
+
+            if (affiliation == TargetAffiliation.Hostile && IsInfantry)
+            {
+                UrKillCredit.RegisterEnemyTroopKillByLevel(1);
+            }
+            else if (affiliation == TargetAffiliation.Friendly && IsInfantry)
+            {
+                UrKillCredit.RegisterFriendlyTroopKillByLevel(1);
             }
         }
 

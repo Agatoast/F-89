@@ -1,3 +1,4 @@
+using F89.Core;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -5,7 +6,7 @@ namespace F89.LandCombat
 {
     public static class LandGroundTerrainBuilder
     {
-        private const string ShaderName = "F89/LandCombatGround";
+        private const string MaterialResourcePath = "F89_LandCombatGround";
 
         public static GameObject BuildArena()
         {
@@ -37,19 +38,17 @@ namespace F89.LandCombat
 
         private static Material CreateTerrainMaterial()
         {
-            var shader = Shader.Find(ShaderName);
-            if (shader == null)
+            var template = Resources.Load<Material>(MaterialResourcePath);
+            if (template != null && F89RenderMaterials.HasWorkingShader(template))
             {
-                Debug.LogWarning("[LandCombat] F89/LandCombatGround shader not found; using fallback color.");
-                var fallback = new Material(Shader.Find("Sprites/Default"));
-                fallback.color = new Color(0.86f, 0.90f, 0.94f);
-                return fallback;
+                var material = new Material(template);
+                material.SetFloat("_SatelliteBlend", 0f);
+                material.SetFloat("_LandNoiseScale", 0.09f);
+                return material;
             }
 
-            var material = new Material(shader);
-            material.SetFloat("_SatelliteBlend", 0f);
-            material.SetFloat("_LandNoiseScale", 0.09f);
-            return material;
+            Debug.LogWarning("[LandCombat] F89_LandCombatGround material missing; using flat ice fallback.");
+            return F89RenderMaterials.CreateUnlit(new Color(0.86f, 0.90f, 0.94f));
         }
 
         private static Mesh CreateQuadMesh(float width, float height)

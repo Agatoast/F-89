@@ -17,20 +17,9 @@ namespace F89.Testing
             var existingPlayer = Object.FindAnyObjectByType<AircraftController>();
             if (existingPlayer != null)
             {
-                if (FlightGroundReturnService.TryGetPendingReturnSpawn(
-                        out var returnPosition,
-                        out var returnRotation))
-                {
-                    existingPlayer.transform.SetPositionAndRotation(returnPosition, returnRotation);
-                    var returnBody = existingPlayer.GetComponent<Rigidbody>();
-                    if (returnBody != null)
-                    {
-                        returnBody.position = returnPosition;
-                        returnBody.rotation = returnRotation;
-                        returnBody.linearVelocity = Vector3.zero;
-                        returnBody.angularVelocity = Vector3.zero;
-                    }
-                }
+                FlightAudioBootstrap.EnsureReady();
+                FlightMissionStartBootstrap.ResetForSceneLoad();
+                EnsurePlayerConfigured(existingPlayer);
 
                 EnsureMapSystems(existingPlayer);
                 EnsurePlayerVisuals(existingPlayer);
@@ -39,19 +28,7 @@ namespace F89.Testing
                 JetEngineSound.EnsureOn(existingPlayer.gameObject);
                 Gau27FireSound.EnsureOn(existingPlayer.gameObject);
                 WeaponTestTargetSpawner.RemoveIfPresent();
-
-                // Restore landing site after weapon/flare systems init (they refill by default).
-                var restoredFromGround = FlightGroundReturnService.TryApplyPendingReturn(existingPlayer.gameObject);
-                if (!restoredFromGround && !FlightGroundReturnService.ShouldSkipCarrierSpawn())
-                {
-                    if (string.IsNullOrEmpty(FlightMissionLaunchState.LaunchFromOutpostName))
-                    {
-                        AntarcticaBaseSpawner.EnsureMissionPlatoonsIfNeeded(existingPlayer);
-                        AntarcticaBaseSpawner.TryMovePlayerToCarrier(existingPlayer.transform);
-                    }
-
-                    ApplyMissionLaunchIfNeeded(existingPlayer);
-                }
+                FlightHudHost.EnsureOn(existingPlayer.gameObject);
 
                 return null;
             }
@@ -131,6 +108,7 @@ namespace F89.Testing
 
         public static GameObject Build()
         {
+            FlightAudioBootstrap.EnsureReady();
             var profile = LoadFlightProfile();
             var worldMap = LoadWorldMapConfig();
             var mapRoot = CreateMapRoot(worldMap, profile);
@@ -140,8 +118,6 @@ namespace F89.Testing
             CreateWeaponSystems(player);
             EnsureCountermeasureSystems(player);
             RemoveInvisibleOutpostSamLaunchers();
-            CreateFlightHud(player);
-            CreateAntarcticaMapOverlay(player);
             WeaponTestTargetSpawner.RemoveIfPresent();
             mapRoot.GetComponent<InfiniteWhiteMap>().SetTarget(player.transform);
 
@@ -153,19 +129,8 @@ namespace F89.Testing
 
             grid.Configure(player.transform, profile.ticSizeWorldUnits, worldMap);
 
-            // Apply after weapon/flare init so stores/fuel from the landing snapshot win.
-            var restoredFromGround = FlightGroundReturnService.TryApplyPendingReturn(player);
-            if (!restoredFromGround && !FlightGroundReturnService.ShouldSkipCarrierSpawn())
-            {
-                var aircraftController = player.GetComponent<AircraftController>();
-                if (string.IsNullOrEmpty(FlightMissionLaunchState.LaunchFromOutpostName))
-                {
-                    AntarcticaBaseSpawner.EnsureMissionPlatoonsIfNeeded(aircraftController);
-                    AntarcticaBaseSpawner.TryMovePlayerToCarrier(player.transform);
-                }
-
-                ApplyMissionLaunchIfNeeded(aircraftController);
-            }
+            CreateAntarcticaMapOverlay(player);
+            FlightHudHost.EnsureOn(player);
 
             Debug.Log("F-89 flight test ready. Launch from USS Martin Van Buren. Mission 1: capture Palmer Station.");
             return player;
@@ -395,9 +360,25 @@ namespace F89.Testing
             var gbu12Config = LoadGbu12Config();
             var agm114Config = LoadAgm114Config();
             var gau27aConfig = LoadGau27aConfig();
+            EnsureWeaponConfigs(
+                ref aim9zConfig,
+                ref agm88jConfig,
+                ref gbu12Config,
+                ref agm114Config,
+                ref gau27aConfig);
             var controller = player.GetComponent<AircraftController>();
             var lockController = player.GetComponent<MissileLockController>();
+            if (lockController == null)
+            {
+                lockController = player.AddComponent<MissileLockController>();
+            }
+
             var targetPaint = player.GetComponent<WeaponTargetPaint>();
+            if (targetPaint == null)
+            {
+                targetPaint = player.AddComponent<WeaponTargetPaint>();
+            }
+
             var gau27aGun = player.GetComponent<Gau27aGunController>();
             var weaponController = player.GetComponent<PlayerWeaponController>();
             var flareController = player.GetComponent<FlareCountermeasureController>();
@@ -419,48 +400,6 @@ namespace F89.Testing
                 gau27aGun);
 
             AircraftLoadoutState.ApplyToWeaponController(weaponController);
-
-            if (Object.FindAnyObjectByType<WeaponReticleHud>() == null)
-            {
-                var reticleObject = new GameObject("WeaponReticleHud");
-                var reticle = reticleObject.AddComponent<WeaponReticleHud>();
-                reticle.Configure(weaponController, input);
-            }
-
-            if (Object.FindAnyObjectByType<HudTargetDiamondOverlay>() == null)
-            {
-                var diamondObject = new GameObject("HudTargetDiamondOverlay");
-                var diamonds = diamondObject.AddComponent<HudTargetDiamondOverlay>();
-                diamonds.Configure(weaponController, controller, camera);
-            }
-
-            var longRangeRadar = FindLongRangeRadarOverlay();
-            if (longRangeRadar == null)
-            {
-                var radarObject = new GameObject("PlaneRadarOverlay");
-                longRangeRadar = radarObject.AddComponent<PlaneRadarOverlay>();
-            }
-
-            longRangeRadar.Configure(controller, lockController, weaponController, PlaneRadarOverlay.RadarScopeKind.LongRange);
-            weaponController.SetRadarOverlay(longRangeRadar);
-
-            if (Object.FindAnyObjectByType<ShortRangeRadarOverlay>() == null)
-            {
-                var shortRadarObject = new GameObject("ShortRangeRadarOverlay");
-                var shortRadar = shortRadarObject.AddComponent<ShortRangeRadarOverlay>();
-                shortRadar.ConfigureShortRange(controller, lockController, weaponController);
-            }
-            else
-            {
-                Object.FindAnyObjectByType<ShortRangeRadarOverlay>()
-                    ?.ConfigureShortRange(controller, lockController, weaponController);
-            }
-
-            var hud = Object.FindAnyObjectByType<FlightHud>();
-            if (hud != null)
-            {
-                hud.Configure(controller, weaponController);
-            }
         }
 
         private static void EnsureWeaponSystems(GameObject player)
@@ -468,15 +407,8 @@ namespace F89.Testing
             CreateWeaponSystems(player);
             EnsureCountermeasureSystems(player);
             EnsureFuelCrashMonitor(player);
-            var controller = player.GetComponent<AircraftController>();
-            var weaponController = player.GetComponent<PlayerWeaponController>();
             RemoveInvisibleOutpostSamLaunchers();
-            CreateFlightHud(player);
-            if (weaponController != null && controller != null)
-            {
-                var hud = Object.FindAnyObjectByType<FlightHud>();
-                hud?.Configure(controller, weaponController);
-            }
+            CreateAntarcticaMapOverlay(player);
         }
 
         private static void EnsureCountermeasureSystems(GameObject player)
@@ -505,61 +437,6 @@ namespace F89.Testing
             {
                 player.AddComponent<PlayerAircraftFuelCrashMonitor>();
             }
-        }
-
-        private static void CreateFlightHud(GameObject player)
-        {
-            var hud = Object.FindAnyObjectByType<FlightHud>();
-            if (hud == null)
-            {
-                var hudObject = new GameObject("FlightHud");
-                hud = hudObject.AddComponent<FlightHud>();
-            }
-
-            var controller = player.GetComponent<AircraftController>();
-            var weaponController = player.GetComponent<PlayerWeaponController>();
-            hud.Configure(controller, weaponController);
-            CreateAirspeedTapeHud(player);
-            CreateStoresPanelHud(player);
-            CreateFuelGaugeHud(player);
-        }
-
-        private static void CreateFuelGaugeHud(GameObject player)
-        {
-            var fuelGauge = Object.FindAnyObjectByType<FuelGaugeHud>();
-            if (fuelGauge == null)
-            {
-                var fuelObject = new GameObject("FuelGaugeHud");
-                fuelGauge = fuelObject.AddComponent<FuelGaugeHud>();
-            }
-
-            fuelGauge.Configure(player.GetComponent<AircraftController>());
-        }
-
-        private static void CreateStoresPanelHud(GameObject player)
-        {
-            var storesHud = Object.FindAnyObjectByType<StoresPanelHud>();
-            if (storesHud == null)
-            {
-                var storesObject = new GameObject("StoresPanelHud");
-                storesHud = storesObject.AddComponent<StoresPanelHud>();
-            }
-
-            storesHud.Configure(
-                player.GetComponent<PlayerWeaponController>(),
-                player.GetComponent<FlareCountermeasureController>());
-        }
-
-        private static void CreateAirspeedTapeHud(GameObject player)
-        {
-            var tapeHud = Object.FindAnyObjectByType<AirspeedTapeHud>();
-            if (tapeHud == null)
-            {
-                var tapeObject = new GameObject("AirspeedTapeHud");
-                tapeHud = tapeObject.AddComponent<AirspeedTapeHud>();
-            }
-
-            tapeHud.Configure(player.GetComponent<AircraftController>());
         }
 
         private static void EnsureAutopilotController(GameObject player)
@@ -601,29 +478,36 @@ namespace F89.Testing
             EnsureFlightCamera(player.GetComponent<AircraftController>());
         }
 
-        private static PlaneRadarOverlay FindLongRangeRadarOverlay()
+        private static void EnsurePlayerConfigured(AircraftController player)
         {
-            var overlays = Object.FindObjectsByType<PlaneRadarOverlay>(FindObjectsSortMode.None);
-            foreach (var overlay in overlays)
-            {
-                if (overlay != null && overlay.ScopeKind == PlaneRadarOverlay.RadarScopeKind.LongRange)
-                {
-                    return overlay;
-                }
-            }
-
-            return null;
-        }
-
-        private static void ApplyMissionLaunchIfNeeded(AircraftController aircraft)
-        {
-            if (aircraft == null)
+            if (player == null)
             {
                 return;
             }
 
-            aircraft.TryApplyMissionOutpostLaunch();
-            aircraft.TryApplyMissionCarrierLaunch();
+            if (player.GetComponent<PlayerAircraftInput>() == null)
+            {
+                player.gameObject.AddComponent<PlayerAircraftInput>();
+            }
+
+            var profile = player.Profile ?? LoadFlightProfile();
+            var worldMap = player.WorldMap ?? LoadWorldMapConfig();
+            var input = player.GetComponent<PlayerAircraftInput>();
+            player.Configure(profile, input, worldMap);
+        }
+
+        private static void EnsureWeaponConfigs(
+            ref Aim9zWeaponConfig aim9z,
+            ref Agm88jSiawWeaponConfig agm88j,
+            ref Gbu12PavewayConfig gbu12,
+            ref Agm114HellfireWeaponConfig agm114,
+            ref Gau27aWeaponConfig gau27a)
+        {
+            aim9z ??= LoadAim9zConfig();
+            agm88j ??= LoadAgm88jConfig();
+            gbu12 ??= LoadGbu12Config();
+            agm114 ??= LoadAgm114Config();
+            gau27a ??= LoadGau27aConfig();
         }
     }
 }

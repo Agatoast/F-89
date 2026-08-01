@@ -76,6 +76,16 @@ namespace F89.Audio
                 return;
             }
 
+            if (aircraft != null
+                && aircraft.CurrentSpeedMph > 5f
+                && !FlightAudio.IsInFlight
+                && !AircraftLandingController.IsLandingActive
+                && !AircraftLandingController.IsLandingComplete
+                && !aircraft.IsLandingLocked)
+            {
+                FlightAudio.SetInFlight(true);
+            }
+
             ApplyVolume();
 
             if (ShouldPlay())
@@ -93,15 +103,16 @@ namespace F89.Audio
 
         private bool ShouldPlay()
         {
-            if (!FlightAudio.IsInFlight
-                || aircraft == null
+            if (aircraft == null
                 || GamePauseController.IsPaused
                 || PlayerAircraftCrashController.IsCrashActive)
             {
                 return false;
             }
 
-            return true;
+            return FlightAudio.IsInFlight
+                || AircraftLandingController.IsTakeoffActive
+                || aircraft.CurrentSpeedMph > 5f;
         }
 
         private void EnsureAudioSource()

@@ -14,7 +14,15 @@ namespace F89.LandCombat
 
         public Vector3 WorldPosition => transform.position;
 
-        public static void CancelTakeOffPrompt() => IsTakeOffPromptPending = false;
+        public static void CancelTakeOffPrompt()
+        {
+            if (IsTakeOffPromptPending && LandOutpostLandingState.HasActiveOutpost)
+            {
+                Time.timeScale = 1f;
+            }
+
+            IsTakeOffPromptPending = false;
+        }
 
         public static bool IsWorldPointerOverPlane()
         {
@@ -50,6 +58,10 @@ namespace F89.LandCombat
             if (Input.GetMouseButtonDown(0) && IsWorldPointerOverPlane())
             {
                 IsTakeOffPromptPending = true;
+                if (LandOutpostLandingState.HasActiveOutpost)
+                {
+                    Time.timeScale = 0f;
+                }
             }
         }
 

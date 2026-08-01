@@ -168,7 +168,7 @@ namespace F89.LandCombat
             var areaLabel = LandBossAreaState.HasActiveArea ? $"  |  {LandBossAreaState.SurfaceCode}" : string.Empty;
             GUI.Label(
                 LandCombatHudLayout.GetStatusLineRect(),
-                $"Ground Ops{areaLabel}  |  Kills: {LandGroundSceneController.SessionKills}  Score: {LandGroundSceneController.SessionScore}"
+                $"Ground Ops{areaLabel}  |  Kills: {LandGroundSceneController.SessionKills}  Mission Score: {MissionScoreState.SessionScore}"
                 + (AutoFireState.Enabled ? "  |  AUTO ON" : string.Empty)
                 + $"  |  {FormatColdStatus()}",
                 style);

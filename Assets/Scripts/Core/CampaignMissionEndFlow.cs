@@ -14,7 +14,8 @@ namespace F89.Core
         public enum FinishResult
         {
             LeftForResearch = 0,
-            ShowDemotion = 1
+            ShowDemotion = 1,
+            CourtMartialed = 2
         }
 
         public static bool RequiresFailureConfirm =>
@@ -29,11 +30,20 @@ namespace F89.Core
             var save = CharacterSessionState.ActiveSave;
             CharacterGearSession.PersistActive();
             CharacterSaveRepository.SyncVehicleKillCredit(save);
-            MissionScoreState.FinalizeToSave(save);
+
+            var scoreResult = MissionScoreState.FinalizeMissionEnd(save);
+            MissionEndReportState.Begin(
+                scoreResult.MissionScore,
+                scoreResult.NewBestMissionScore,
+                scoreResult.RequiresCourtMartial);
+
+            if (scoreResult.RequiresCourtMartial && save != null)
+            {
+                CharacterSaveRepository.MarkCourtMartialed(save);
+            }
 
             if (applyCampaignFailurePenalty && GamePlayModeState.IsCampaign && save != null)
             {
-                CharacterSaveRepository.ApplyTotalScoreFractionPenalty(save, 0.5f);
                 LandBossMissionAssignment.ResolveAssignedMissionWithoutVictory(save);
                 if (PilotCareerRanks.TryDemoteToScoreFloor(save, out var previousRank, out var newRank))
                 {
@@ -43,7 +53,8 @@ namespace F89.Core
                     return FinishResult.ShowDemotion;
                 }
             }
-            else if (GamePlayModeState.IsCampaign
+            else if (!scoreResult.RequiresCourtMartial
+                     && GamePlayModeState.IsCampaign
                      && save != null
                      && LandBossMissionAssignment.HasActiveAssignment(save)
                      && LandBossMissionAssignment.IsPrimaryMissionComplete(save))
@@ -53,7 +64,9 @@ namespace F89.Core
 
             ClearMissionSessionState();
             PostMissionContinuation.ContinueToResearchOrCharacter(save);
-            return FinishResult.LeftForResearch;
+            return scoreResult.RequiresCourtMartial
+                ? FinishResult.CourtMartialed
+                : FinishResult.LeftForResearch;
         }
 
         public static void LoadDemotionScene()
@@ -86,6 +99,8 @@ namespace F89.Core
             LandMissionCompleteState.Clear();
             CarrierResupplyState.Clear();
             OutpostRunwayDeckState.Clear();
+            DeckLandingServiceState.Clear();
+            OpenFieldLandingState.Clear();
         }
     }
 }

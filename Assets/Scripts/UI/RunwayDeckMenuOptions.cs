@@ -1,6 +1,6 @@
-using System;
 using F89.Core;
 using F89.LandCombat;
+using UnityEngine;
 
 namespace F89.UI
 {
@@ -8,48 +8,97 @@ namespace F89.UI
     {
         public static RunwayDeckMenuDialog.Options BuildFlightDeckOptions()
         {
-            return BuildOptions(ResolveActiveOutpostName());
+            return BuildFriendlyBaseDeckOptions(ResolveActiveOutpostName());
+        }
+
+        public static RunwayDeckMenuDialog.Options BuildFriendlyBaseDeckOptions(string outpostName)
+        {
+            RefreshGuardClearance(outpostName);
+            var subtitle = string.IsNullOrWhiteSpace(outpostName) ? "Friendly Base" : outpostName;
+            return BuildFullServiceOptions(subtitle, ShouldShowEndMission(outpostName));
+        }
+
+        public static RunwayDeckMenuDialog.Options BuildCarrierDeckOptions()
+        {
+            return BuildFullServiceOptions(
+                "USS MARTIN VAN BUREN",
+                GamePlayModeState.IsCampaign);
         }
 
         public static RunwayDeckMenuDialog.Options BuildGroundPlaneOptions()
         {
-            return BuildOptions(ResolveActiveOutpostName());
-        }
-
-        private static RunwayDeckMenuDialog.Options BuildOptions(string outpostName)
-        {
-            RefreshGuardClearance(outpostName);
-            var servicesAvailable = HasRunwayServices(outpostName);
-            var showEndMission = ShouldShowEndMission(outpostName);
-            return BuildCoreOptions(
-                showRearm: servicesAvailable,
-                rearmEnabled: servicesAvailable,
-                showRefuel: servicesAvailable,
-                refuelEnabled: servicesAvailable,
-                showEndMission: showEndMission,
-                showDismount: true,
-                dismountEnabled: true,
-                subtitle: BuildSubtitle(outpostName, servicesAvailable, showEndMission));
-        }
-
-        private static string BuildSubtitle(string outpostName, bool servicesAvailable, bool showEndMission)
-        {
-            if (servicesAvailable)
+            if (OpenFieldLandingState.IsActive)
             {
-                return "Runway";
+                return BuildGroundOnlyOptions(ResolveOpenFieldSubtitle());
             }
 
-            if (showEndMission)
+            if (LandOutpostLandingState.HasActiveOutpost)
             {
-                return "Runway — end mission to secure this outpost";
+                return BuildGroundOnlyOptions(ResolveOutpostGroundSubtitle());
             }
 
-            return "Runway";
+            return BuildGroundOnlyOptions("Runway");
+        }
+
+        private static RunwayDeckMenuDialog.Options BuildFullServiceOptions(string subtitle, bool endMissionEnabled)
+        {
+            return new RunwayDeckMenuDialog.Options
+            {
+                RefuelEnabled = !DeckLandingServiceState.RefuelUsedThisLanding,
+                RearmEnabled = !DeckLandingServiceState.RearmUsedThisLanding,
+                DismountEnabled = false,
+                EndMissionEnabled = endMissionEnabled,
+                Subtitle = subtitle
+            };
+        }
+
+        private static RunwayDeckMenuDialog.Options BuildGroundOnlyOptions(string subtitle)
+        {
+            return new RunwayDeckMenuDialog.Options
+            {
+                RefuelEnabled = false,
+                RearmEnabled = false,
+                DismountEnabled = true,
+                EndMissionEnabled = false,
+                Subtitle = subtitle,
+                DialogVerticalAnchor = 0.68f,
+                ButtonVerticalOffset = 30f
+            };
+        }
+
+        private static string ResolveOpenFieldSubtitle()
+        {
+            if (OpenFieldLandingState.LandingMiles.sqrMagnitude > 0.01f)
+            {
+                return CampaignMapCoordinates.FormatMilesLabel(OpenFieldLandingState.LandingMiles);
+            }
+
+            var snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
+            if (snapshot.HasLandingMiles)
+            {
+                return CampaignMapCoordinates.FormatMilesLabel(
+                    new Vector2(snapshot.LandingMileX, snapshot.LandingMileY));
+            }
+
+            return "Open Field";
+        }
+
+        private static string ResolveOutpostGroundSubtitle()
+        {
+            var outpostName = LandOutpostLandingState.ActiveOutpostName;
+            if (string.IsNullOrWhiteSpace(outpostName))
+            {
+                return "Enemy Outpost";
+            }
+
+            return AntarcticaOutpostState.IsNeutralOutpost(outpostName)
+                ? $"{outpostName} (Neutral)"
+                : outpostName;
         }
 
         /// <summary>
-        /// END MISSION appears only at a friendly base or the assigned outpost after air objectives are cleared.
-        /// Carrier deck uses its own mission-complete screen.
+        /// END MISSION at a friendly base or the carrier deck.
+        /// Cleared hostile/neutral outposts stay non-friendly until END MISSION turns them green.
         /// </summary>
         private static bool ShouldShowEndMission(string outpostName)
         {
@@ -58,21 +107,7 @@ namespace F89.UI
                 return false;
             }
 
-            if (AntarcticaOutpostState.IsFriendlyOccupied(outpostName))
-            {
-                return true;
-            }
-
-            var save = CharacterSessionState.ActiveSave;
-            if (save == null
-                || !LandBossMissionAssignment.HasActiveAssignment(save)
-                || !LandBossMissionAssignment.IsPrimaryMissionComplete(save))
-            {
-                return false;
-            }
-
-            return !string.IsNullOrWhiteSpace(outpostName)
-                && string.Equals(outpostName, save.AssignedBossOutpostName, StringComparison.Ordinal);
+            return AntarcticaOutpostState.IsFriendlyOccupied(outpostName);
         }
 
         private static string ResolveActiveOutpostName()
@@ -86,39 +121,12 @@ namespace F89.UI
             return outpostName;
         }
 
-        private static bool HasRunwayServices(string outpostName) =>
-            AntarcticaOutpostState.IsFriendlyOccupied(outpostName)
-            || OutpostRunwayDeckState.IsFriendlyOutpost;
-
         private static void RefreshGuardClearance(string outpostName)
         {
             if (!string.IsNullOrWhiteSpace(outpostName))
             {
                 OutpostRunwayDeckState.RefreshSurfaceGuardsCleared(outpostName);
             }
-        }
-
-        private static RunwayDeckMenuDialog.Options BuildCoreOptions(
-            bool showRearm,
-            bool rearmEnabled,
-            bool showRefuel,
-            bool refuelEnabled,
-            bool showEndMission,
-            bool showDismount,
-            bool dismountEnabled,
-            string subtitle)
-        {
-            return new RunwayDeckMenuDialog.Options
-            {
-                ShowRearm = showRearm,
-                RearmEnabled = rearmEnabled,
-                ShowRefuel = showRefuel,
-                RefuelEnabled = refuelEnabled,
-                ShowEndMission = showEndMission,
-                ShowDismount = showDismount,
-                DismountEnabled = dismountEnabled,
-                Subtitle = subtitle
-            };
         }
     }
 }

@@ -115,23 +115,42 @@ namespace F89.Weapons
             MissileSeekerSettings seekerSettings = default,
             System.Action onFlightComplete = null)
         {
-            var missileObject = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            missileObject.name = lockedShot
-                ? $"{weaponConfig.WeaponName} (locked)"
-                : weaponConfig.WeaponName;
+            var isIncomingEnemyThreat = seekerSettings.RespondsToFlares
+                && seekerSettings.PrimaryTarget != null
+                && seekerSettings.PrimaryTarget.IsPlayerAircraft;
 
-            missileObject.transform.localScale = new Vector3(0.15f, 0.6f, 0.15f);
-
-            var collider = missileObject.GetComponent<Collider>();
-            if (collider != null)
+            GameObject missileObject;
+            if (isIncomingEnemyThreat)
             {
-                Object.Destroy(collider);
+                missileObject = new GameObject(lockedShot
+                    ? $"{weaponConfig.WeaponName} (locked)"
+                    : weaponConfig.WeaponName);
+                FlareBurnVisual.AttachTo(missileObject.transform, profile, 0.5f);
             }
-
-            var renderer = missileObject.GetComponent<Renderer>();
-            if (renderer != null)
+            else
             {
-                renderer.sharedMaterial.color = bodyColor;
+                missileObject = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                missileObject.name = lockedShot
+                    ? $"{weaponConfig.WeaponName} (locked)"
+                    : weaponConfig.WeaponName;
+
+                missileObject.transform.localScale = new Vector3(0.15f, 0.6f, 0.15f);
+
+                var collider = missileObject.GetComponent<Collider>();
+                if (collider != null)
+                {
+                    Object.Destroy(collider);
+                }
+
+                var renderer = missileObject.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    var material = F89RenderMaterials.CreateUnlit(bodyColor);
+                    if (material != null)
+                    {
+                        renderer.sharedMaterial = material;
+                    }
+                }
             }
 
             var missile = missileObject.AddComponent<HomingMissile>();

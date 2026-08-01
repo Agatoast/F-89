@@ -1,3 +1,4 @@
+using F89.Flight;
 using UnityEngine;
 
 namespace F89.Core
@@ -270,8 +271,7 @@ namespace F89.Core
         }
 
         /// <summary>
-        /// Resolves a carrier seed toward flight-view ocean on the north-up tactical map.
-        /// Mile +Y renders toward the bottom of the map, so visual north is decreasing mile Y.
+        /// Resolves a carrier seed toward flight-view ocean on the north-up tactical map (+Y north).
         /// </summary>
         public static bool TryResolveVisibleOceanNorthOf(
             Vector2 seedMiles,
@@ -282,13 +282,13 @@ namespace F89.Core
         {
             oceanMiles = seedMiles;
             var found = false;
-            var bestY = float.MaxValue;
+            var bestY = float.MinValue;
             var bestXDistance = float.MaxValue;
             const float stepMiles = 12f;
-            var mapHalfMiles = mapSizeMiles * 0.5f;
-            var northLimit = Mathf.Max(seedMiles.y - maxNorthMiles, -mapHalfMiles + stepMiles);
+            var mapHeightMiles = GetMapHeightMiles(mapSizeMiles);
+            var northLimit = Mathf.Min(seedMiles.y + maxNorthMiles, mapHeightMiles - stepMiles);
 
-            for (var y = seedMiles.y; y >= northLimit; y -= stepMiles)
+            for (var y = seedMiles.y; y <= northLimit; y += stepMiles)
             {
                 for (var x = seedMiles.x - maxEastWestMiles; x <= seedMiles.x + maxEastWestMiles; x += stepMiles)
                 {
@@ -299,7 +299,7 @@ namespace F89.Core
                     }
 
                     var xDistance = Mathf.Abs(candidate.x - seedMiles.x);
-                    if (y < bestY - 0.01f
+                    if (y > bestY + 0.01f
                         || (Mathf.Abs(y - bestY) <= 0.01f && xDistance < bestXDistance))
                     {
                         bestY = y;
@@ -402,7 +402,7 @@ namespace F89.Core
             var minX = seedMiles.x - maxWestMiles;
             var maxX = seedMiles.x + maxEastMiles;
 
-            for (var y = seedMiles.y + maxNorthMiles; y >= seedMiles.y - maxSouthMiles; y -= stepMiles)
+            for (var y = seedMiles.y - maxSouthMiles; y <= seedMiles.y + maxNorthMiles; y += stepMiles)
             {
                 for (var x = minX; x <= maxX; x += stepMiles)
                 {
@@ -428,7 +428,7 @@ namespace F89.Core
         }
 
         /// <summary>
-        /// Finds inland ice by stepping toward the bottom of the north-up map (+mile Y), fanning east/west.
+        /// Finds inland ice by stepping south (-mile Y) from a seed, fanning east/west.
         /// </summary>
         public static bool TryFindDisplayLandSouthOf(
             Vector2 startMiles,
@@ -445,7 +445,7 @@ namespace F89.Core
 
             for (var southRing = 0; southRing <= southSteps; southRing++)
             {
-                var y = startMiles.y + southRing * stepMiles;
+                var y = startMiles.y - southRing * stepMiles;
 
                 for (var eastRing = 0; eastRing <= eastSteps; eastRing++)
                 {
@@ -486,14 +486,74 @@ namespace F89.Core
             return GetDisplayLandBlendMilesInternal(positionMiles, mapSizeMiles);
         }
 
+        /// <summary>Mask UV in the same orientation as ProceduralFlightGround.shader WorldToMaskUv.</summary>
         public static Vector2 GetMaskUvForMiles(Vector2 positionMiles, float mapWidthMiles)
         {
             var mapHeightMiles = GetMapHeightMiles(mapWidthMiles);
-            var halfWidth = mapWidthMiles * 0.5f;
-            var halfHeight = mapHeightMiles * 0.5f;
-            var u = (positionMiles.x + halfWidth) / mapWidthMiles;
-            var mileV = (positionMiles.y + halfHeight) / mapHeightMiles;
+            var u = positionMiles.x / mapWidthMiles;
+            var uvY = positionMiles.y / mapHeightMiles;
+            return new Vector2(u, uvY);
+        }
+
+        /// <summary>Matches ProceduralFlightGround.shader WorldToMaskUv for the processed land-mask texture.</summary>
+        public static Vector2 WorldPositionToShaderMaskUv(
+            Vector3 worldPosition,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits)
+        {
+            var worldUnitsPerMile = worldMap != null ? worldMap.GetWorldUnitsPerMile(ticSizeWorldUnits) : 0f;
+            if (worldMap == null || worldUnitsPerMile <= 0f)
+            {
+                return Vector2.zero;
+            }
+
+            var mapWidthWorld = worldMap.antarcticaSizeMiles * worldUnitsPerMile;
+            var mapHeightWorld = GetMapHeightMiles(worldMap.antarcticaSizeMiles) * worldUnitsPerMile;
+            var halfWidthWorld = mapWidthWorld * 0.5f;
+            var halfHeightWorld = mapHeightWorld * 0.5f;
+            var u = (worldPosition.x + halfWidthWorld) / mapWidthWorld;
+            var mileV = (-worldPosition.z + halfHeightWorld) / mapHeightWorld;
             return new Vector2(u, 1f - mileV);
+        }
+
+        public static float GetLandBlendAtMaskUv(Vector2 maskUv)
+        {
+            var map = GetReadableMap();
+            if (map == null)
+            {
+                return 1f;
+            }
+
+            if (maskUv.x < 0f || maskUv.x > 1f || maskUv.y < 0f || maskUv.y > 1f)
+            {
+                return 0f;
+            }
+
+            var x = maskUv.x * (map.width - 1);
+            var y = maskUv.y * (map.height - 1);
+            var x0 = Mathf.FloorToInt(x);
+            var y0 = Mathf.FloorToInt(y);
+            var x1 = Mathf.Min(x0 + 1, map.width - 1);
+            var y1 = Mathf.Min(y0 + 1, map.height - 1);
+            var tx = x - x0;
+            var ty = y - y0;
+
+            var c00 = GetDisplayLandBlendPixel(map, x0, y0);
+            var c10 = GetDisplayLandBlendPixel(map, x1, y0);
+            var c01 = GetDisplayLandBlendPixel(map, x0, y1);
+            var c11 = GetDisplayLandBlendPixel(map, x1, y1);
+            var c0 = Mathf.Lerp(c00, c10, tx);
+            var c1 = Mathf.Lerp(c01, c11, ty);
+            return Mathf.Lerp(c0, c1, ty);
+        }
+
+        public static float GetLandBlendAtWorld(
+            Vector3 worldPosition,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits)
+        {
+            var maskUv = WorldPositionToShaderMaskUv(worldPosition, worldMap, ticSizeWorldUnits);
+            return GetLandBlendAtMaskUv(maskUv);
         }
 
         public static bool IsInlandMiles(Vector2 positionMiles, float mapSizeMiles, float insetMiles)
@@ -543,12 +603,10 @@ namespace F89.Core
         {
             var aspect = width > 0 && height > 0 ? (float)width / height : DefaultMapWidthOverHeight;
             var mapHeightMiles = mapWidthMiles / aspect;
-            var halfWidth = mapWidthMiles * 0.5f;
-            var halfHeight = mapHeightMiles * 0.5f;
             var u = pixel.x / (float)(width - 1);
-            // Unity texture pixels use a bottom-left origin; mile +Y is map north (up).
-            var v = 1f - pixel.y / (float)(height - 1);
-            return new Vector2(u * mapWidthMiles - halfWidth, v * mapHeightMiles - halfHeight);
+            // Match ProceduralFlightGround.shader WorldToMaskUv (+Y north = increasing texture v).
+            var v = pixel.y / (float)(height - 1);
+            return new Vector2(u * mapWidthMiles, v * mapHeightMiles);
         }
 
         public static bool TryMilesToPixel(
@@ -561,10 +619,8 @@ namespace F89.Core
             pixel = default;
             var aspect = width > 0 && height > 0 ? (float)width / height : DefaultMapWidthOverHeight;
             var mapHeightMiles = mapWidthMiles / aspect;
-            var halfWidth = mapWidthMiles * 0.5f;
-            var halfHeight = mapHeightMiles * 0.5f;
-            var u = (positionMiles.x + halfWidth) / mapWidthMiles;
-            var v = (positionMiles.y + halfHeight) / mapHeightMiles;
+            var u = positionMiles.x / mapWidthMiles;
+            var v = positionMiles.y / mapHeightMiles;
             if (u < 0f || u > 1f || v < 0f || v > 1f)
             {
                 return false;
@@ -572,8 +628,66 @@ namespace F89.Core
 
             pixel = new Vector2Int(
                 Mathf.Clamp(Mathf.RoundToInt(u * (width - 1)), 0, width - 1),
-                Mathf.Clamp(Mathf.RoundToInt((1f - v) * (height - 1)), 0, height - 1));
+                Mathf.Clamp(Mathf.RoundToInt(v * (height - 1)), 0, height - 1));
             return true;
+        }
+
+        /// <summary>
+        /// Landing check aligned with flight-ground shader sampling; allows a small coastal sample radius.
+        /// </summary>
+        public static bool IsLandingLandWorld(
+            Vector3 worldPosition,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits)
+        {
+            if (worldMap == null || ticSizeWorldUnits <= 0f)
+            {
+                return false;
+            }
+
+            const float sampleStepMiles = 0.4f;
+            const float landThreshold = 0.45f;
+            if (GetLandBlendAtWorld(worldPosition, worldMap, ticSizeWorldUnits) >= landThreshold)
+            {
+                return true;
+            }
+
+            var worldUnitsPerMile = worldMap.GetWorldUnitsPerMile(ticSizeWorldUnits);
+            var sampleStepWorld = sampleStepMiles * worldUnitsPerMile;
+            var offsets = new[]
+            {
+                new Vector3(sampleStepWorld, 0f, 0f),
+                new Vector3(-sampleStepWorld, 0f, 0f),
+                new Vector3(0f, 0f, sampleStepWorld),
+                new Vector3(0f, 0f, -sampleStepWorld)
+            };
+
+            for (var i = 0; i < offsets.Length; i++)
+            {
+                if (GetLandBlendAtWorld(worldPosition + offsets[i], worldMap, ticSizeWorldUnits) >= landThreshold)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Mile-space wrapper for <see cref="IsLandingLandWorld"/>.
+        /// </summary>
+        public static bool IsLandingLandMiles(Vector2 positionMiles, float mapSizeMiles)
+        {
+            var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+            var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            if (worldMap == null || ticSize <= 0f)
+            {
+                return false;
+            }
+
+            var worldPosition = CampaignMapCoordinates.MilesToWorld(positionMiles, worldMap, ticSize);
+            return IsLandingLandWorld(worldPosition, worldMap, ticSize);
         }
 
         public static Texture2D GetReadableMap()

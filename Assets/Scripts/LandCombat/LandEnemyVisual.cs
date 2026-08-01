@@ -1,4 +1,5 @@
 using System;
+using F89.Core;
 using UnityEngine;
 
 namespace F89.LandCombat
@@ -28,8 +29,23 @@ namespace F89.LandCombat
         private void Awake()
         {
             spriteRenderer = GetComponent<SpriteRenderer>();
+            EnsureSpriteMaterial();
             LandEnemySpriteSheet.EnsureLoaded();
             ApplyFrame(LandEnemySpriteSheet.Clip.Idle, 0);
+        }
+
+        private void EnsureSpriteMaterial()
+        {
+            if (F89RenderMaterials.HasWorkingShader(spriteRenderer.sharedMaterial))
+            {
+                return;
+            }
+
+            var material = F89RenderMaterials.CreateSpriteMaterial();
+            if (material != null)
+            {
+                spriteRenderer.sharedMaterial = material;
+            }
         }
 
         public void SetFaceTarget(Transform target) => faceTarget = target;

@@ -19,6 +19,7 @@ namespace F89.UI
 
         private CarrierPhase carrierPhase = CarrierPhase.DeckChoice;
         private bool isLeaving;
+        private RunwayDeckConfirmDialog.Action pendingDeckConfirm;
 
         private void Start()
         {
@@ -73,35 +74,97 @@ namespace F89.UI
         private void DrawDeckChoice()
         {
             var title = HudStyleFactory.CreateLabel(36, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
-            var detail = HudStyleFactory.CreateLabel(
-                18,
-                FontStyle.Normal,
-                TextAnchor.MiddleCenter,
-                new Color(0.82f, 0.78f, 0.52f));
-            GUI.Label(new Rect(0f, Screen.height * 0.28f, Screen.width, 54f), "ON DECK", title);
-            GUI.Label(
-                new Rect(0f, Screen.height * 0.36f, Screen.width, 34f),
-                "USS MARTIN VAN BUREN",
-                detail);
+            GUI.Label(new Rect(0f, Screen.height * 0.22f, Screen.width, 54f), "ON DECK", title);
 
-            var buttonWidth = UiFitCanvas.Px(320f);
-            var buttonHeight = UiFitCanvas.Px(52f);
-            var gap = UiFitCanvas.Px(18f);
-            var centerX = UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - buttonWidth) * 0.5f;
-            var startY = UiFitCanvas.Rect.y + UiFitCanvas.Rect.height * 0.52f;
-
-            var refuelRect = new Rect(centerX, startY, buttonWidth, buttonHeight);
-            var endRect = new Rect(centerX, startY + buttonHeight + gap, buttonWidth, buttonHeight);
-
-            if (StartPageMenuStyles.DrawMenuButton(refuelRect, "REFUEL AND REARM", fontSize: 16))
+            if (pendingDeckConfirm != RunwayDeckConfirmDialog.Action.None)
             {
-                BeginRefuelAndRearm();
+                var confirmResult = RunwayDeckConfirmDialog.Draw(pendingDeckConfirm);
+                if (confirmResult == RunwayDeckConfirmDialog.Result.Confirmed)
+                {
+                    ExecuteDeckAction(pendingDeckConfirm);
+                }
+                else if (confirmResult == RunwayDeckConfirmDialog.Result.Cancelled)
+                {
+                    pendingDeckConfirm = RunwayDeckConfirmDialog.Action.None;
+                }
+
+                return;
             }
 
-            if (StartPageMenuStyles.DrawMenuButton(endRect, "END MISSION", fontSize: 16))
+            var deckOptions = RunwayDeckMenuOptions.BuildCarrierDeckOptions();
+            deckOptions.DialogVerticalAnchor = 0.58f;
+            var deckResult = RunwayDeckMenuDialog.Draw(true, deckOptions);
+            if (deckResult == RunwayDeckMenuDialog.Result.Rearm)
+            {
+                pendingDeckConfirm = RunwayDeckConfirmDialog.Action.Rearm;
+            }
+            else if (deckResult == RunwayDeckMenuDialog.Result.Refuel)
+            {
+                pendingDeckConfirm = RunwayDeckConfirmDialog.Action.Refuel;
+            }
+            else if (deckResult == RunwayDeckMenuDialog.Result.TakeOff)
+            {
+                pendingDeckConfirm = RunwayDeckConfirmDialog.Action.TakeOff;
+            }
+            else if (deckResult == RunwayDeckMenuDialog.Result.EndMission)
             {
                 RequestEndMission();
             }
+        }
+
+        private void ExecuteDeckAction(RunwayDeckConfirmDialog.Action action)
+        {
+            pendingDeckConfirm = RunwayDeckConfirmDialog.Action.None;
+            switch (action)
+            {
+                case RunwayDeckConfirmDialog.Action.Rearm:
+                    BeginDeckRearm();
+                    break;
+                case RunwayDeckConfirmDialog.Action.Refuel:
+                    ApplyCarrierRefuel();
+                    break;
+                case RunwayDeckConfirmDialog.Action.TakeOff:
+                    BeginCarrierTakeOff();
+                    break;
+            }
+        }
+
+        private void ApplyCarrierRefuel()
+        {
+            var snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
+            if (snapshot.IsValid)
+            {
+                SortieSnapshotFuel.ApplyMaxFuel(ref snapshot);
+                LandMissionHandoffState.UpdateStoredFlightSnapshot(snapshot);
+            }
+
+            DeckLandingServiceState.MarkRefuelUsed();
+        }
+
+        private void BeginDeckRearm()
+        {
+            isLeaving = true;
+            CharacterGearSession.PersistActive();
+            CarrierResupplyState.BeginDeckRearm();
+            SceneManager.LoadScene(GameScenes.AircraftLoadout);
+        }
+
+        private void BeginCarrierTakeOff()
+        {
+            isLeaving = true;
+            var snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
+            if (!snapshot.IsValid)
+            {
+                snapshot = LandSortieSnapshot.Empty;
+                snapshot.IsValid = true;
+            }
+
+            snapshot.ReturnToRunwayDeck = false;
+            snapshot.RestoreWithImmediateTakeoff = true;
+            LandMissionHandoffState.BeginReturnToFlight(snapshot, LandGroundSessionResult.Empty);
+            LandMissionCompleteState.Clear();
+            FlightMissionStartBootstrap.ResetForSceneLoad();
+            SceneManager.LoadScene(GameScenes.FlightTest);
         }
 
         private void DrawFailureConfirm()
@@ -176,18 +239,6 @@ namespace F89.UI
                 LandMissionCompleteState.Clear();
                 SceneManager.LoadScene(GameScenes.GroundAttack);
             }
-        }
-
-        private void BeginRefuelAndRearm()
-        {
-            isLeaving = true;
-            CharacterGearSession.PersistActive();
-            LandMissionHealthState.Clear();
-            LandBossMissionAssignment.ClearMissionLaunchOutpost(CharacterSessionState.ActiveSave);
-            CarrierResupplyState.Begin();
-            CharacterLoadoutNavState.MarkEnteredFromMissionBrief();
-            LandMissionCompleteState.Clear();
-            SceneManager.LoadScene(GameScenes.AircraftLoadout);
         }
 
         private void RequestEndMission()

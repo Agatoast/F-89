@@ -408,10 +408,11 @@ namespace F89.Core
             var renderer = building.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.sharedMaterial = new Material(renderer.sharedMaterial)
+                var material = F89RenderMaterials.CreateUnlit(ResolveColor(type));
+                if (material != null)
                 {
-                    color = ResolveColor(type)
-                };
+                    renderer.sharedMaterial = material;
+                }
             }
         }
 

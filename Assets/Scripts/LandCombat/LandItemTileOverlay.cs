@@ -32,7 +32,8 @@ namespace F89.LandCombat
             int baseNameFontSize,
             Color labelColor,
             bool scaleFonts = false,
-            bool paintRarityFill = false)
+            bool paintRarityFill = false,
+            bool invertColors = false)
         {
             if (!LandLoadoutSlots.IsValidItem(item) || catalog == null)
             {
@@ -41,9 +42,14 @@ namespace F89.LandCombat
 
             EnsureOverlaysLoaded();
 
+            if (invertColors)
+            {
+                labelColor = InvertRgb(labelColor);
+            }
+
             if (LandConsumableIds.IsConsumable(item))
             {
-                DrawConsumableTile(cell, item, catalog, baseNameFontSize, labelColor, scaleFonts, paintRarityFill);
+                DrawConsumableTile(cell, item, catalog, baseNameFontSize, labelColor, scaleFonts, paintRarityFill, invertColors);
                 return;
             }
 
@@ -55,12 +61,23 @@ namespace F89.LandCombat
 
             if (paintRarityFill)
             {
-                GUI.color = LandItemRarityColors.GetTile(item);
+                var fill = LandItemRarityColors.GetTile(item);
+                if (invertColors)
+                {
+                    fill = InvertRgb(fill);
+                }
+
+                GUI.color = fill;
                 GUI.DrawTexture(cell, Texture2D.whiteTexture);
                 GUI.color = Color.white;
             }
 
             var overlayColor = LandItemRarityColors.GetOverlayColor(item.Rarity);
+            if (invertColors)
+            {
+                overlayColor = InvertRgb(overlayColor);
+            }
+
             DrawCategoryTile(cell, item, catalog, slot, baseNameFontSize, overlayColor, scaleFonts);
         }
 
@@ -155,11 +172,18 @@ namespace F89.LandCombat
             int baseNameFontSize,
             Color labelColor,
             bool scaleFonts,
-            bool paintRarityFill)
+            bool paintRarityFill,
+            bool invertColors)
         {
             if (paintRarityFill)
             {
-                GUI.color = LandItemRarityColors.GetTile(item);
+                var fill = LandItemRarityColors.GetTile(item);
+                if (invertColors)
+                {
+                    fill = InvertRgb(fill);
+                }
+
+                GUI.color = fill;
                 GUI.DrawTexture(cell, Texture2D.whiteTexture);
                 GUI.color = Color.white;
             }
@@ -173,11 +197,15 @@ namespace F89.LandCombat
                     cell.y + pad,
                     cell.width - pad * 2f,
                     cell.height - pad * 2f - 14f);
-                GUI.color = Color.white;
+                GUI.color = invertColors ? InvertRgb(Color.white) : Color.white;
                 GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit, alphaBlend: true);
+                GUI.color = Color.white;
             }
 
         }
+
+        private static Color InvertRgb(Color color) =>
+            new Color(1f - color.r, 1f - color.g, 1f - color.b, color.a);
 
         private static bool TryResolveCategory(
             LandGearInstance item,

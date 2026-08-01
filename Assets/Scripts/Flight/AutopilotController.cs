@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using F89.Controls;
 using F89.Core;
 using F89.UI;
+using F89.Weapons;
 using UnityEngine;
 
 namespace F89.Flight
@@ -115,6 +117,11 @@ namespace F89.Flight
         public void ResumeAutopilot()
         {
             if (IsFlying || !hasDestination)
+            {
+                return;
+            }
+
+            if (!EnsureFlightReadyForAutopilot())
             {
                 return;
             }
@@ -381,7 +388,73 @@ namespace F89.Flight
                 return;
             }
 
+            if (TryEngageAutopilotToRadarTarget())
+            {
+                return;
+            }
+
             BeginDestinationSelection();
+        }
+
+        private bool TryEngageAutopilotToRadarTarget()
+        {
+            var lockController = GetComponent<MissileLockController>();
+            if (lockController?.SelectedTarget == null || !lockController.SelectedTarget.IsAlive)
+            {
+                return false;
+            }
+
+            var target = lockController.SelectedTarget;
+            var baseSite = target.GetComponent<AntarcticaBase>() ?? target.GetComponentInParent<AntarcticaBase>();
+            if (baseSite == null)
+            {
+                return false;
+            }
+
+            if (baseSite.SiteKind == BaseSiteKind.Land
+                && baseSite.Control == BaseControl.Hostile
+                && !AntarcticaOutpostState.IsNeutralOutpost(baseSite.BaseName)
+                && !AntarcticaOutpostState.IsFriendlyOccupied(baseSite.BaseName))
+            {
+                return false;
+            }
+
+            if (aircraft?.WorldMap == null || aircraft.Profile == null)
+            {
+                return false;
+            }
+
+            var world = CampaignMapCoordinates.GetLockedBaseWorldPosition(
+                baseSite,
+                aircraft.WorldMap,
+                aircraft.Profile.ticSizeWorldUnits);
+            CampaignMapCoordinates.TryGetLockedBaseMiles(baseSite, out var miles);
+            var label = baseSite.SiteKind == BaseSiteKind.Carrier
+                ? "CV"
+                : FormatRouteWaypointLabel(miles, 0, baseSite.SiteCode);
+
+            if (!EnsureFlightReadyForAutopilot())
+            {
+                return false;
+            }
+
+            if (mapOverlay == null)
+            {
+                mapOverlay = Object.FindAnyObjectByType<AntarcticaMapOverlay>();
+            }
+
+            mapOverlay?.StageAutopilotTarget(world, label);
+            return CommitDestination(world, label);
+        }
+
+        private static string FormatRouteWaypointLabel(Vector2 miles, int routeIndex, string placeName = null)
+        {
+            if (!string.IsNullOrWhiteSpace(placeName))
+            {
+                return placeName;
+            }
+
+            return $"WP {routeIndex + 1}";
         }
 
         public void BeginDestinationSelection()
@@ -409,6 +482,11 @@ namespace F89.Flight
         public bool CommitRoute(IReadOnlyList<RouteLeg> legs)
         {
             if (legs == null || legs.Count == 0)
+            {
+                return false;
+            }
+
+            if (!EnsureFlightReadyForAutopilot())
             {
                 return false;
             }
@@ -595,6 +673,34 @@ namespace F89.Flight
             Debug.Log($"F-89: {reason}");
         }
 
+        private bool EnsureFlightReadyForAutopilot()
+        {
+            if (aircraft == null)
+            {
+                return false;
+            }
+
+            if (AircraftLandingController.IsTakeoffActive
+                || AircraftLandingController.IsLandingActive)
+            {
+                ShowToast("Finish takeoff/landing first.");
+                return false;
+            }
+
+            if (aircraft.IsLandingLocked)
+            {
+                aircraft.SetLandingLocked(false);
+            }
+
+            var input = GetComponent<PlayerAircraftInput>();
+            if (input != null && !input.enabled)
+            {
+                input.enabled = true;
+            }
+
+            return true;
+        }
+
         private bool IsWithinArrivalRange(Vector3 worldTarget)
         {
             return MeasureDistanceMiles(worldTarget) <= ArrivalThresholdMiles;
@@ -623,10 +729,10 @@ namespace F89.Flight
                 return "destination";
             }
 
-            var worldUnitsPerMile = aircraft.WorldMap.GridSpacingTics
-                * aircraft.Profile.ticSizeWorldUnits
-                / aircraft.WorldMap.milesPerGrid;
-            var miles = WorldMapConfig.WorldToMileOffset(worldPosition, worldUnitsPerMile);
+            var miles = CampaignMapCoordinates.WorldToMiles(
+                worldPosition,
+                aircraft.WorldMap,
+                aircraft.Profile.ticSizeWorldUnits);
             return $"{miles.x:0}, {miles.y:0} MI";
         }
     }

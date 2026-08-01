@@ -4,9 +4,15 @@ namespace F89.Core
     {
         public const float CarrierTakeoffSpeedMph = 280f;
 
+        /// <summary>All VTOL takeoffs reach this speed when the scale-up animation completes.</summary>
+        public const float VtolTakeoffSpeedMph = CarrierTakeoffSpeedMph;
+
         public static bool LaunchFromCarrier { get; private set; }
         public static string LaunchFromOutpostName { get; private set; } = string.Empty;
         public static bool LaunchOutpostUsesVtolTakeoff { get; private set; }
+
+        public static bool HasPendingCarrierLaunch => LaunchFromCarrier;
+        public static bool HasPendingLaunch => LaunchFromCarrier || !string.IsNullOrEmpty(LaunchFromOutpostName);
 
         public static void BeginCarrierLaunch()
         {
@@ -15,7 +21,7 @@ namespace F89.Core
             LaunchOutpostUsesVtolTakeoff = false;
         }
 
-        public static void BeginOutpostLaunch(string outpostName, bool vtolTakeoff = false)
+        public static void BeginOutpostLaunch(string outpostName, bool vtolTakeoff = true)
         {
             LaunchFromCarrier = false;
             LaunchFromOutpostName = outpostName ?? string.Empty;

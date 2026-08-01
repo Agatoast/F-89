@@ -21,6 +21,7 @@ namespace F89.LandCombat
             }
 
             IsActive = true;
+            OpenFieldLandingState.BeginFromSortie(snapshot);
             LandOutpostLandingState.BeginFromSortie(snapshot);
             Debug.Log($"[LandCombat] Module active ({ModuleVersion}). Return scene: {snapshot.ReturnSceneName}");
         }
@@ -40,7 +41,17 @@ namespace F89.LandCombat
                 returnSnapshot.ReturnSceneName = GameScenes.FlightTest;
             }
 
-            if (OutpostRunwayDeckState.IsParkedAtRunway)
+            if (OutpostRunwayDeckState.ConsumePendingDeckTakeoffOnRestore()
+                || returnSnapshot.RestoreWithImmediateTakeoff
+                || LandingMileFlagState.HasActiveFlag
+                || returnSnapshot.HasLandingMiles
+                || returnSnapshot.IsOpenFieldLanding
+                || !OutpostRunwayDeckState.IsParkedAtRunway)
+            {
+                returnSnapshot.ReturnToRunwayDeck = false;
+                returnSnapshot.RestoreWithImmediateTakeoff = true;
+            }
+            else if (OutpostRunwayDeckState.IsParkedAtRunway)
             {
                 OutpostGroundGuardState.SyncClearanceFromGroundSession();
                 OutpostRunwayDeckState.RefreshSurfaceGuardsCleared(OutpostRunwayDeckState.ParkedOutpostName);
@@ -49,23 +60,34 @@ namespace F89.LandCombat
                     returnSnapshot.OutpostName = OutpostRunwayDeckState.ParkedOutpostName;
                 }
 
-                if (OutpostRunwayDeckState.ConsumePendingDeckTakeoffOnRestore())
-                {
-                    returnSnapshot.ReturnToRunwayDeck = false;
-                }
-                else
-                {
-                    returnSnapshot.ReturnToRunwayDeck = true;
-                }
+                returnSnapshot.ReturnToRunwayDeck = true;
             }
 
+            if (returnSnapshot.IsOpenFieldLanding && OpenFieldLandingState.LandingMiles.sqrMagnitude > 0.01f)
+            {
+                returnSnapshot.HasLandingMiles = true;
+                returnSnapshot.LandingMileX = OpenFieldLandingState.LandingMiles.x;
+                returnSnapshot.LandingMileY = OpenFieldLandingState.LandingMiles.y;
+                LandingMileFlagState.SetFromMiles(
+                    OpenFieldLandingState.LandingMiles,
+                    returnSnapshot.LandingRotationY);
+            }
+            else
+            {
+                LandingMileFlagState.TryApplyToSnapshot(ref returnSnapshot);
+            }
             LandSurfaceSession.Clear();
             LandBossAreaState.Clear();
             LandOutpostLandingState.Clear();
+            OpenFieldLandingState.Clear();
             LandMissionHandoffState.BeginReturnToFlight(returnSnapshot, result);
             IsActive = false;
-            Debug.Log(
-                $"[LandCombat] Module exited; flight return queued at {returnSnapshot.AircraftWorldPosition}.");
+            var locationLabel = returnSnapshot.HasLandingMiles
+                ? CampaignMapCoordinates.FormatMilesLabel(
+                    new Vector2(returnSnapshot.LandingMileX, returnSnapshot.LandingMileY))
+                : CampaignMapCoordinates.FormatMilesLabel(
+                    CampaignMapCoordinates.WorldToMiles(returnSnapshot.AircraftWorldPosition));
+            Debug.Log($"[LandCombat] Module exited; flight return queued at {locationLabel}.");
         }
 
         public static void ShutdownWithoutHandoff()
@@ -74,6 +96,7 @@ namespace F89.LandCombat
             LandSurfaceSession.Clear();
             LandBossAreaState.Clear();
             LandOutpostLandingState.Clear();
+            OpenFieldLandingState.Clear();
             LandMissionHandoffState.Clear();
         }
     }

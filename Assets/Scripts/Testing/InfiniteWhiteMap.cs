@@ -6,6 +6,7 @@ namespace F89.Testing
     public class InfiniteWhiteMap : MonoBehaviour
     {
         private const string GroundShaderName = "F89/ProceduralFlightGround";
+        private const string GroundMaterialResourcePath = "F89_ProceduralFlightGround";
         private const string LandMaskResourcePath = "F89_AntarcticaMap";
 
         [SerializeField] private Transform target;
@@ -20,6 +21,7 @@ namespace F89.Testing
         private WorldMapConfig worldMap;
         private float ticSizeWorldUnits = 1f;
         private Material groundMaterial;
+        private bool ownsGroundMaterial;
         private Camera followCamera;
         private float currentLandBlend;
         private float mapHalfSizeWorld = 30000f;
@@ -83,9 +85,7 @@ namespace F89.Testing
                 return 1f;
             }
 
-            var worldUnitsPerMile = GetMilesPerWorldUnit() > 0f ? 1f / GetMilesPerWorldUnit() : 20f;
-            var positionMiles = WorldMapConfig.WorldToMileOffset(worldPosition, worldUnitsPerMile);
-            return AntarcticaLandMask.GetDisplayLandBlendMiles(positionMiles, worldMap.antarcticaSizeMiles);
+            return AntarcticaLandMask.GetLandBlendAtWorld(worldPosition, worldMap, ticSizeWorldUnits);
         }
 
         private float GetMilesPerWorldUnit()
@@ -150,15 +150,16 @@ namespace F89.Testing
 
             if (groundMaterial == null)
             {
-                var shader = Shader.Find(GroundShaderName);
-                if (shader == null)
+                var existing = renderer.sharedMaterial;
+                if (F89RenderMaterials.HasWorkingShader(existing))
                 {
-                    Debug.LogWarning("F-89: ProceduralFlightGround shader not found — using flat fallback.");
-                    groundMaterial = CreateFallbackMaterial();
+                    groundMaterial = existing;
+                    ownsGroundMaterial = false;
                 }
                 else
                 {
-                    groundMaterial = new Material(shader);
+                    groundMaterial = CreateGroundMaterial();
+                    ownsGroundMaterial = true;
                 }
             }
 
@@ -184,6 +185,24 @@ namespace F89.Testing
             }
 
             renderer.sharedMaterial = groundMaterial;
+        }
+
+        private static Material CreateGroundMaterial()
+        {
+            var template = Resources.Load<Material>(GroundMaterialResourcePath);
+            if (template != null && template.shader != null)
+            {
+                return new Material(template);
+            }
+
+            var shader = Shader.Find(GroundShaderName);
+            if (shader != null)
+            {
+                return new Material(shader);
+            }
+
+            Debug.LogWarning("F-89: ProceduralFlightGround shader not found — using flat fallback.");
+            return CreateFallbackMaterial();
         }
 
         private static Material CreateFallbackMaterial()
@@ -223,7 +242,7 @@ namespace F89.Testing
 
         private void OnDestroy()
         {
-            if (groundMaterial != null)
+            if (ownsGroundMaterial && groundMaterial != null)
             {
                 Destroy(groundMaterial);
             }

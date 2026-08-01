@@ -21,6 +21,32 @@ namespace F89.Weapons
         private float halfWidthWorld;
         private float halfLengthWorld;
 
+        public static void GetPlaneDimensions(
+            FlightProfile profile,
+            float sizeScale,
+            out float planeWidthWorld,
+            out float planeLengthWorld)
+        {
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            planeLengthWorld = ticSize * AircraftVisualFactory.VisualSizeMultiplier * sizeScale;
+            var planeAspect = 1.67f;
+            var planeTexture = AircraftVisualFactory.LoadTexture();
+            if (planeTexture != null && planeTexture.height > 0)
+            {
+                planeAspect = (float)planeTexture.width / planeTexture.height;
+            }
+
+            planeWidthWorld = ticSize * planeAspect * AircraftVisualFactory.VisualSizeMultiplier * sizeScale;
+        }
+
+        public static FlareBurnVisual AttachTo(Transform parent, FlightProfile profile, float sizeScale = 1f)
+        {
+            GetPlaneDimensions(profile, sizeScale, out var planeWidthWorld, out var planeLengthWorld);
+            var visual = parent.gameObject.AddComponent<FlareBurnVisual>();
+            visual.Configure(planeWidthWorld, planeLengthWorld);
+            return visual;
+        }
+
         public void Configure(float planeWidthWorld, float planeLengthWorld)
         {
             halfWidthWorld = planeWidthWorld * 0.5f;

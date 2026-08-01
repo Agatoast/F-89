@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using F89.Core;
 using F89.LandCombat;
 using UnityEngine;
@@ -24,15 +25,24 @@ namespace F89.UI
             Vault
         }
 
+        private struct PendingResearchOffer
+        {
+            public DragSourceKind Source;
+            public int Index;
+            public int ResearchSlotIndex;
+        }
+
         private static LandEquipmentSlot? selectedEquipmentSlot;
-        private static int? selectedInventoryIndex;
-        private static int? selectedVaultIndex;
+        private static readonly HashSet<int> selectedInventoryIndices = new HashSet<int>();
+        private static readonly HashSet<int> selectedVaultIndices = new HashSet<int>();
+        private static bool ctrlGridSelectionActive;
 
         private static bool isDragging;
         private static DragSourceKind dragSource;
         private static LandGearInstance dragItem;
         private static LandEquipmentSlot dragEquipmentSlot;
         private static int dragIndex;
+        private static readonly List<int> dragIndices = new List<int>(8);
         private static float dragCellSize;
         private static Vector2 dragStartGui;
         private static bool dragMoved;
@@ -41,10 +51,7 @@ namespace F89.UI
         private static bool pendingResearchTechTooLow;
         private static bool pendingResearchWrongCategory;
         private static bool pendingBasicLoadoutSlotOccupied;
-        private static DragSourceKind pendingResearchSource;
-        private static LandEquipmentSlot pendingResearchEquipmentSlot;
-        private static int pendingResearchIndex;
-        private static int pendingResearchSlotIndex = -1;
+        private static readonly List<PendingResearchOffer> pendingResearchOffers = new List<PendingResearchOffer>(8);
 
         private static bool pendingDeleteConfirm;
         private static DragSourceKind pendingDeleteSource;
@@ -394,9 +401,7 @@ namespace F89.UI
             pendingResearchTechTooLow = false;
             pendingResearchWrongCategory = false;
             pendingBasicLoadoutSlotOccupied = false;
-            pendingResearchSource = DragSourceKind.None;
-            pendingResearchIndex = -1;
-            pendingResearchSlotIndex = -1;
+            pendingResearchOffers.Clear();
         }
 
         public static void AcknowledgeResearchTechTooLow()
@@ -446,18 +451,25 @@ namespace F89.UI
                 return false;
             }
 
-            var researchSlotIndex = pendingResearchSlotIndex;
-            if (!TryDestroyPendingResearchItem())
+            if (!TryDestroyPendingResearchItems())
             {
                 CancelResearchConfirm();
                 return false;
             }
 
-            LandResearchService.AddResearchProgress(CharacterGearSession.ActiveSave, researchSlotIndex);
+            var save = CharacterGearSession.ActiveSave;
+            for (var i = 0; i < pendingResearchOffers.Count; i++)
+            {
+                LandResearchService.AddResearchProgress(save, pendingResearchOffers[i].ResearchSlotIndex);
+            }
+
             CharacterGearSession.PersistActive();
+            ClearGridSelection();
             CancelResearchConfirm();
             return true;
         }
+
+        public static int PendingResearchOfferCount => pendingResearchOffers.Count;
 
         public static void DrawDragOverlay()
         {
@@ -478,6 +490,16 @@ namespace F89.UI
             var size = Mathf.Max(24f, dragCellSize);
             var cell = new Rect(mouse.x - size * 0.5f, mouse.y - size * 0.5f, size, size);
             DrawTechTile(cell, dragItem, selected: true);
+            if (dragIndices.Count > 1)
+            {
+                var badgeStyle = HudStyleFactory.CreateLabel(
+                    12,
+                    FontStyle.Bold,
+                    TextAnchor.LowerRight,
+                    Color.white,
+                    wordWrap: false);
+                GUI.Label(cell, dragIndices.Count.ToString(), badgeStyle);
+            }
         }
 
         public static void ResetDragState()
@@ -486,6 +508,7 @@ namespace F89.UI
             dragSource = DragSourceKind.None;
             dragItem = null;
             dragIndex = -1;
+            dragIndices.Clear();
             dragCellSize = 0f;
             dragMoved = false;
         }
@@ -610,8 +633,75 @@ namespace F89.UI
             dragStartGui = mousePosition;
             dragMoved = false;
             selectedEquipmentSlot = null;
-            selectedInventoryIndex = null;
-            selectedVaultIndex = null;
+
+            dragIndices.Clear();
+            dragIndices.Add(index);
+            if (source == DragSourceKind.Inventory
+                && selectedInventoryIndices.Contains(index)
+                && selectedInventoryIndices.Count > 1)
+            {
+                dragIndices.Clear();
+                dragIndices.AddRange(selectedInventoryIndices);
+            }
+            else if (source == DragSourceKind.Vault
+                     && selectedVaultIndices.Contains(index)
+                     && selectedVaultIndices.Count > 1)
+            {
+                dragIndices.Clear();
+                dragIndices.AddRange(selectedVaultIndices);
+            }
+        }
+
+        private static bool IsControlHeld()
+        {
+            var currentEvent = Event.current;
+            return currentEvent != null && currentEvent.control;
+        }
+
+        private static void ClearGridSelection()
+        {
+            selectedInventoryIndices.Clear();
+            selectedVaultIndices.Clear();
+            ctrlGridSelectionActive = false;
+        }
+
+        private static bool IsCtrlGridSelected(bool inventory, int index) =>
+            ctrlGridSelectionActive
+            && (inventory ? selectedInventoryIndices : selectedVaultIndices).Contains(index);
+
+        private static Color InvertRgb(Color color) =>
+            new Color(1f - color.r, 1f - color.g, 1f - color.b, color.a);
+
+        private static bool TryGetGridItem(DragSourceKind source, int index, out LandGearInstance item)
+        {
+            item = null;
+            if (source == DragSourceKind.Inventory)
+            {
+                var loadout = CharacterGearSession.ActiveLoadout;
+                if (loadout == null
+                    || index < 0
+                    || index >= loadout.Inventory.Count)
+                {
+                    return false;
+                }
+
+                item = loadout.Inventory[index];
+                return LandLoadoutSlots.IsValidItem(item);
+            }
+
+            if (source == DragSourceKind.Vault)
+            {
+                var vault = CharacterGearSession.ActiveVault;
+                if (vault == null || !LandVaultStorageService.IsVaultIndexValid(vault, index))
+                {
+                    return false;
+                }
+
+                item = LandGearSaveMapper.ToRuntimeInstance(vault.Items[index]);
+                return LandLoadoutSlots.IsValidItem(item);
+            }
+
+            return false;
         }
 
         private static bool TryBeginBasicTrayDrag(System.Func<int, Rect> getBasicRect, Vector2 mousePosition)
@@ -784,8 +874,63 @@ namespace F89.UI
                 return false;
             }
 
+            var offers = new List<PendingResearchOffer>(dragIndices.Count);
+            if (dragSource == DragSourceKind.Equipment)
+            {
+                if (LandLoadoutSlots.IsValidItem(dragItem)
+                    && TryBuildResearchOffer(
+                        dragSource,
+                        (int)dragEquipmentSlot,
+                        dragItem,
+                        out var equipmentOffer))
+                {
+                    offers.Add(equipmentOffer);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < dragIndices.Count; i++)
+                {
+                    var index = dragIndices[i];
+                    if (!TryGetGridItem(dragSource, index, out var item))
+                    {
+                        continue;
+                    }
+
+                    if (!TryBuildResearchOffer(dragSource, index, item, out var offer))
+                    {
+                        if (pendingResearchWrongCategory || pendingResearchTechTooLow)
+                        {
+                            return true;
+                        }
+
+                        continue;
+                    }
+
+                    offers.Add(offer);
+                }
+            }
+
+            if (offers.Count == 0)
+            {
+                return false;
+            }
+
+            pendingResearchOffers.Clear();
+            pendingResearchOffers.AddRange(offers);
+            pendingResearchConfirm = true;
+            return true;
+        }
+
+        private static bool TryBuildResearchOffer(
+            DragSourceKind source,
+            int index,
+            LandGearInstance item,
+            out PendingResearchOffer offer)
+        {
+            offer = default;
             if (!LandLoadoutEquipService.TryResolveItemSlot(
-                    dragItem,
+                    item,
                     CharacterGearSession.Catalog,
                     out var itemSlot))
             {
@@ -800,7 +945,7 @@ namespace F89.UI
             if (!LandResearchService.IsValidResearchCandidate(
                     CharacterGearSession.ActiveSave,
                     researchSlotIndex,
-                    dragItem,
+                    item,
                     CharacterGearSession.Catalog,
                     out var wrongCategory,
                     out var techTooLow))
@@ -808,23 +953,21 @@ namespace F89.UI
                 if (wrongCategory)
                 {
                     pendingResearchWrongCategory = true;
-                    return true;
                 }
-
-                if (techTooLow)
+                else if (techTooLow)
                 {
                     pendingResearchTechTooLow = true;
-                    return true;
                 }
 
                 return false;
             }
 
-            pendingResearchConfirm = true;
-            pendingResearchSource = dragSource;
-            pendingResearchEquipmentSlot = dragEquipmentSlot;
-            pendingResearchIndex = dragIndex;
-            pendingResearchSlotIndex = researchSlotIndex;
+            offer = new PendingResearchOffer
+            {
+                Source = source,
+                Index = index,
+                ResearchSlotIndex = researchSlotIndex
+            };
             return true;
         }
 
@@ -922,48 +1065,58 @@ namespace F89.UI
             }
         }
 
-        private static bool TryDestroyPendingResearchItem()
+        private static bool TryDestroyPendingResearchItems()
         {
+            if (pendingResearchOffers.Count == 0)
+            {
+                return false;
+            }
+
             var loadout = CharacterGearSession.ActiveLoadout;
             var vault = CharacterGearSession.ActiveVault;
-            switch (pendingResearchSource)
+            var destroyedAny = false;
+            for (var i = 0; i < pendingResearchOffers.Count; i++)
             {
-                case DragSourceKind.Equipment:
-                    if (!LandLoadoutSlots.IsValidItem(LandLoadoutSlots.GetEquipped(loadout, pendingResearchEquipmentSlot)))
-                    {
-                        return false;
-                    }
+                var offer = pendingResearchOffers[i];
+                switch (offer.Source)
+                {
+                    case DragSourceKind.Equipment:
+                        if (LandLoadoutSlots.IsValidItem(
+                                LandLoadoutSlots.GetEquipped(loadout, (LandEquipmentSlot)offer.Index)))
+                        {
+                            LandLoadoutSlots.SetEquipped(loadout, (LandEquipmentSlot)offer.Index, null);
+                            destroyedAny = true;
+                        }
 
-                    LandLoadoutSlots.SetEquipped(loadout, pendingResearchEquipmentSlot, null);
-                    return true;
+                        break;
 
-                case DragSourceKind.Inventory:
-                    if (loadout == null
-                        || pendingResearchIndex < 0
-                        || pendingResearchIndex >= loadout.Inventory.Count
-                        || !LandLoadoutSlots.IsValidItem(loadout.Inventory[pendingResearchIndex]))
-                    {
-                        return false;
-                    }
+                    case DragSourceKind.Inventory:
+                        if (loadout != null
+                            && offer.Index >= 0
+                            && offer.Index < loadout.Inventory.Count
+                            && LandLoadoutSlots.IsValidItem(loadout.Inventory[offer.Index]))
+                        {
+                            loadout.Inventory[offer.Index] = null;
+                            destroyedAny = true;
+                        }
 
-                    loadout.Inventory[pendingResearchIndex] = null;
-                    return true;
+                        break;
 
-                case DragSourceKind.Vault:
-                    if (vault == null
-                        || !LandVaultStorageService.IsVaultIndexValid(vault, pendingResearchIndex)
-                        || !LandLoadoutSlots.IsValidItem(
-                            LandGearSaveMapper.ToRuntimeInstance(vault.Items[pendingResearchIndex])))
-                    {
-                        return false;
-                    }
+                    case DragSourceKind.Vault:
+                        if (vault != null
+                            && LandVaultStorageService.IsVaultIndexValid(vault, offer.Index)
+                            && LandLoadoutSlots.IsValidItem(
+                                LandGearSaveMapper.ToRuntimeInstance(vault.Items[offer.Index])))
+                        {
+                            vault.Items[offer.Index] = null;
+                            destroyedAny = true;
+                        }
 
-                    vault.Items[pendingResearchIndex] = null;
-                    return true;
-
-                default:
-                    return false;
+                        break;
+                }
             }
+
+            return destroyedAny;
         }
 
         private static bool TryDropOnEquipment(System.Func<int, Rect> getEquipmentRect, Vector2 mousePosition)
@@ -1156,21 +1309,25 @@ namespace F89.UI
             return source switch
             {
                 DragSourceKind.Equipment => dragEquipmentSlot == slot,
-                DragSourceKind.Inventory => dragIndex == index,
-                DragSourceKind.Vault => dragIndex == index,
+                DragSourceKind.Inventory => dragIndices.Contains(index),
+                DragSourceKind.Vault => dragIndices.Contains(index),
                 _ => false
             };
         }
 
         private static void DrawFootlockerCell(Rect cell, int index, CharacterVaultSaveData vault)
         {
-            DrawFilledBox(cell, FootlockerSlotColor, GearSlotBorder, selectedVaultIndex == index ? 3f : 1.5f);
+            var ctrlSelected = IsCtrlGridSelected(inventory: false, index);
+            var fill = ctrlSelected ? InvertRgb(FootlockerSlotColor) : FootlockerSlotColor;
+            var border = ctrlSelected ? InvertRgb(GearSlotBorder) : GearSlotBorder;
+            var selected = ctrlSelected || selectedVaultIndices.Contains(index);
+            DrawFilledBox(cell, fill, border, selected ? 3f : 1.5f);
             if (vault != null && !IsDragSourceHidden(DragSourceKind.Vault, index: index))
             {
                 var item = LandGearSaveMapper.ToRuntimeInstance(vault.Items[index]);
                 if (LandLoadoutSlots.IsValidItem(item))
                 {
-                    DrawItemLabel(cell, item, GridItemNameFontSize);
+                    DrawItemLabel(cell, item, GridItemNameFontSize, invertColors: ctrlSelected);
                     LandItemTooltipUi.RegisterHover(cell, item);
                 }
             }
@@ -1261,8 +1418,16 @@ namespace F89.UI
 
         private static void DrawInventoryCell(Rect cell, int index, bool enabled)
         {
+            var ctrlSelected = enabled && IsCtrlGridSelected(inventory: true, index);
             var fill = enabled ? GearSlotFill : new Color(0.08f, 0.12f, 0.18f, 0.55f);
-            DrawFilledBox(cell, fill, GearSlotBorder, selectedInventoryIndex == index ? 3f : 1.5f);
+            if (ctrlSelected)
+            {
+                fill = InvertRgb(fill);
+            }
+
+            var border = ctrlSelected ? InvertRgb(GearSlotBorder) : GearSlotBorder;
+            var selected = ctrlSelected || selectedInventoryIndices.Contains(index);
+            DrawFilledBox(cell, fill, border, selected ? 3f : 1.5f);
             if (!enabled)
             {
                 return;
@@ -1273,7 +1438,7 @@ namespace F89.UI
                 var item = CharacterGearSession.ActiveLoadout.Inventory[index];
                 if (LandLoadoutSlots.IsValidItem(item))
                 {
-                    DrawItemLabel(cell, item, GridItemNameFontSize);
+                    DrawItemLabel(cell, item, GridItemNameFontSize, invertColors: ctrlSelected);
                     LandItemTooltipUi.RegisterHover(cell, item);
                 }
             }
@@ -1289,7 +1454,12 @@ namespace F89.UI
             }
         }
 
-        private static void DrawItemLabel(Rect cell, LandGearInstance item, int baseNameFontSize, string nameOverride = null)
+        private static void DrawItemLabel(
+            Rect cell,
+            LandGearInstance item,
+            int baseNameFontSize,
+            string nameOverride = null,
+            bool invertColors = false)
         {
             var fontSize = FontSizeForTile(cell, 0.18f, 7, 14);
             if (nameOverride != null && !LandItemTileOverlay.HasCategoryOverlay(item, CharacterGearSession.Catalog))
@@ -1298,7 +1468,7 @@ namespace F89.UI
                     fontSize,
                     FontStyle.Bold,
                     TextAnchor.MiddleCenter,
-                    Color.white,
+                    invertColors ? InvertRgb(Color.white) : Color.white,
                     wordWrap: true);
                 GUI.Label(cell, nameOverride, nameStyle);
                 return;
@@ -1309,9 +1479,10 @@ namespace F89.UI
                 item,
                 CharacterGearSession.Catalog,
                 fontSize,
-                Color.white,
+                invertColors ? InvertRgb(Color.white) : Color.white,
                 scaleFonts: false,
-                paintRarityFill: true);
+                paintRarityFill: true,
+                invertColors: invertColors);
         }
 
         private static int FontSizeForTile(Rect cell, float heightRatio, int minSize, int maxSize) =>
@@ -1319,14 +1490,36 @@ namespace F89.UI
 
         private static void HandleInventoryClick(int index)
         {
-            if (selectedVaultIndex.HasValue)
+            if (IsControlHeld())
+            {
+                selectedEquipmentSlot = null;
+                ctrlGridSelectionActive = true;
+                if (selectedInventoryIndices.Contains(index))
+                {
+                    selectedInventoryIndices.Remove(index);
+                }
+                else
+                {
+                    selectedInventoryIndices.Add(index);
+                    selectedVaultIndices.Clear();
+                }
+
+                if (selectedInventoryIndices.Count == 0 && selectedVaultIndices.Count == 0)
+                {
+                    ctrlGridSelectionActive = false;
+                }
+
+                return;
+            }
+
+            if (selectedVaultIndices.Count == 1)
             {
                 LandVaultStorageService.TrySwapInventoryWithVault(
                     CharacterGearSession.ActiveLoadout,
                     index,
                     CharacterGearSession.ActiveVault,
-                    selectedVaultIndex.Value);
-                selectedVaultIndex = null;
+                    GetSingleSelectedVaultIndex());
+                ClearGridSelection();
                 CharacterGearSession.PersistActive();
                 return;
             }
@@ -1339,34 +1532,63 @@ namespace F89.UI
                     selectedEquipmentSlot.Value,
                     CharacterGearSession.Catalog);
                 selectedEquipmentSlot = null;
+                ClearGridSelection();
                 CharacterGearSession.PersistActive();
                 return;
             }
 
-            if (selectedInventoryIndex.HasValue && selectedInventoryIndex.Value != index)
+            if (selectedInventoryIndices.Count == 1 && !selectedInventoryIndices.Contains(index))
             {
+                var fromIndex = GetSingleSelectedInventoryIndex();
                 LandLoadoutEquipService.TrySwapInventorySlots(
                     CharacterGearSession.ActiveLoadout,
-                    new LandInventoryAddress(selectedInventoryIndex.Value),
+                    new LandInventoryAddress(fromIndex),
                     new LandInventoryAddress(index));
-                selectedInventoryIndex = null;
+                ClearGridSelection();
                 CharacterGearSession.PersistActive();
                 return;
             }
 
-            selectedInventoryIndex = selectedInventoryIndex == index ? null : index;
+            if (selectedInventoryIndices.Count == 1 && selectedInventoryIndices.Contains(index))
+            {
+                ClearGridSelection();
+                return;
+            }
+
+            ClearGridSelection();
+            selectedInventoryIndices.Add(index);
+        }
+
+        private static int GetSingleSelectedInventoryIndex()
+        {
+            foreach (var index in selectedInventoryIndices)
+            {
+                return index;
+            }
+
+            return -1;
+        }
+
+        private static int GetSingleSelectedVaultIndex()
+        {
+            foreach (var index in selectedVaultIndices)
+            {
+                return index;
+            }
+
+            return -1;
         }
 
         private static void HandleEquipmentClick(LandEquipmentSlot slot)
         {
-            if (selectedInventoryIndex.HasValue)
+            if (selectedInventoryIndices.Count == 1)
             {
                 LandLoadoutEquipService.TryEquipFromInventory(
                     CharacterGearSession.ActiveLoadout,
-                    new LandInventoryAddress(selectedInventoryIndex.Value),
+                    new LandInventoryAddress(GetSingleSelectedInventoryIndex()),
                     slot,
                     CharacterGearSession.Catalog);
-                selectedInventoryIndex = null;
+                ClearGridSelection();
                 CharacterGearSession.PersistActive();
                 return;
             }
@@ -1376,27 +1598,59 @@ namespace F89.UI
 
         private static void HandleVaultClick(int index)
         {
-            if (selectedInventoryIndex.HasValue)
+            if (IsControlHeld())
+            {
+                selectedEquipmentSlot = null;
+                ctrlGridSelectionActive = true;
+                if (selectedVaultIndices.Contains(index))
+                {
+                    selectedVaultIndices.Remove(index);
+                }
+                else
+                {
+                    selectedVaultIndices.Add(index);
+                    selectedInventoryIndices.Clear();
+                }
+
+                if (selectedInventoryIndices.Count == 0 && selectedVaultIndices.Count == 0)
+                {
+                    ctrlGridSelectionActive = false;
+                }
+
+                return;
+            }
+
+            if (selectedInventoryIndices.Count == 1)
             {
                 LandVaultStorageService.TrySwapInventoryWithVault(
                     CharacterGearSession.ActiveLoadout,
-                    selectedInventoryIndex.Value,
+                    GetSingleSelectedInventoryIndex(),
                     CharacterGearSession.ActiveVault,
                     index);
-                selectedInventoryIndex = null;
+                ClearGridSelection();
                 CharacterGearSession.PersistActive();
                 return;
             }
 
-            if (selectedVaultIndex.HasValue && selectedVaultIndex.Value != index)
+            if (selectedVaultIndices.Count == 1 && !selectedVaultIndices.Contains(index))
             {
-                LandVaultStorageService.TrySwapVaultSlots(CharacterGearSession.ActiveVault, selectedVaultIndex.Value, index);
-                selectedVaultIndex = null;
+                LandVaultStorageService.TrySwapVaultSlots(
+                    CharacterGearSession.ActiveVault,
+                    GetSingleSelectedVaultIndex(),
+                    index);
+                ClearGridSelection();
                 CharacterGearSession.PersistActive();
                 return;
             }
 
-            selectedVaultIndex = selectedVaultIndex == index ? null : index;
+            if (selectedVaultIndices.Count == 1 && selectedVaultIndices.Contains(index))
+            {
+                ClearGridSelection();
+                return;
+            }
+
+            ClearGridSelection();
+            selectedVaultIndices.Add(index);
         }
 
         private static void DrawFilledBox(Rect rect, Color fill, Color border, float borderThickness)

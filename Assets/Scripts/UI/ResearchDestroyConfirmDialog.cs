@@ -19,7 +19,7 @@ namespace F89.UI
 
         private static GUIStyle messageStyle;
 
-        public static Result Draw(bool visible)
+        public static Result Draw(bool visible, int itemCount = 1)
         {
             if (!visible)
             {
@@ -43,9 +43,12 @@ namespace F89.UI
             GUI.color = Color.black;
             HudGuiUtility.DrawWireBox(dialogRect, 2f);
 
+            var message = itemCount > 1
+                ? $"Destroy these {itemCount} items for R&D? They cannot be recovered."
+                : "Destroy this item for R&D? It cannot be recovered.";
             GUI.Label(
                 new Rect(dialogRect.x + 24f, dialogRect.y + 28f, dialogRect.width - 48f, 70f),
-                "Destroy this item for R&D? It cannot be recovered.",
+                message,
                 messageStyle);
 
             var choiceY = dialogRect.yMax - ChoiceHeight - 24f;

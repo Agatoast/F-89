@@ -103,6 +103,17 @@ namespace F89.Flight
                     continue;
                 }
 
+                if (TryGetHostOutpostName(target, out var hostOutpost)
+                    && IsClearedOutpostForAutopilotTransit(hostOutpost))
+                {
+                    continue;
+                }
+
+                if (IsTargetOnCarrier(target))
+                {
+                    continue;
+                }
+
                 if (IsWithinMiles(worldPosition, target.transform.position, rangeMiles, worldMap, ticSizeWorldUnits))
                 {
                     return true;
@@ -131,11 +142,51 @@ namespace F89.Flight
             var building = target.GetComponent<OutpostBuilding>();
             if (building != null)
             {
+                if (TryGetHostOutpostName(target, out var hostOutpost)
+                    && IsClearedOutpostForAutopilotTransit(hostOutpost))
+                {
+                    return false;
+                }
+
                 return building.BuildingType == OutpostBuildingType.Bunker && !building.IsDestroyed;
             }
 
             return true;
         }
+
+        private static bool IsTargetOnCarrier(LockableTarget target)
+        {
+            if (target == null)
+            {
+                return false;
+            }
+
+            var hostBase = target.GetComponentInParent<AntarcticaBase>();
+            return hostBase != null && hostBase.SiteKind == BaseSiteKind.Carrier;
+        }
+
+        private static bool TryGetHostOutpostName(LockableTarget target, out string outpostName)
+        {
+            outpostName = string.Empty;
+            if (target == null)
+            {
+                return false;
+            }
+
+            var baseSite = target.GetComponentInParent<AntarcticaBase>();
+            if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Land)
+            {
+                return false;
+            }
+
+            outpostName = baseSite.BaseName;
+            return !string.IsNullOrWhiteSpace(outpostName);
+        }
+
+        /// <summary>Cleared/neutral outposts no longer block departure on autopilot.</summary>
+        private static bool IsClearedOutpostForAutopilotTransit(string outpostName) =>
+            AntarcticaOutpostState.IsNeutralOutpost(outpostName)
+            || AntarcticaOutpostState.IsFriendlyOccupied(outpostName);
 
         public static bool HasHostileBaseWithinMiles(
             Vector3 worldPosition,
@@ -156,7 +207,17 @@ namespace F89.Flight
                     continue;
                 }
 
+                if (baseSite.SiteKind == BaseSiteKind.Carrier)
+                {
+                    continue;
+                }
+
                 if (baseSite.Control != BaseControl.Hostile)
+                {
+                    continue;
+                }
+
+                if (IsClearedOutpostForAutopilotTransit(baseSite.BaseName))
                 {
                     continue;
                 }

@@ -19,7 +19,7 @@ namespace F89.UI
 
         public static Color Current => Colors[colorIndex];
 
-        public static Color Default => Colors[0];
+        public static Color Default => MfdGreen;
 
         /// <summary>Fixed color for MFD panels. Ignores HUD palette cycling (`).</summary>
         public static Color Mfd => MfdGreen;

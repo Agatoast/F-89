@@ -11,6 +11,14 @@ namespace F89.Flight
     {
         private void Start()
         {
+            if (FlightMissionStartBootstrap.SortieStartupComplete
+                || FlightMissionLaunchState.HasPendingCarrierLaunch
+                || !string.IsNullOrEmpty(FlightMissionLaunchState.LaunchFromOutpostName)
+                || !FlightGroundReturnService.ShouldApplySortieReturn())
+            {
+                return;
+            }
+
             if (AircraftLandingController.IsTakeoffActive
                 || AircraftLandingController.IsParkedAtRunway)
             {

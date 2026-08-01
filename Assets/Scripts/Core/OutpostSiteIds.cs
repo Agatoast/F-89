@@ -44,24 +44,19 @@ namespace F89.Core
             var code = string.IsNullOrWhiteSpace(site.SiteCode)
                 ? FromLabel(site.Label)
                 : site.SiteCode;
-            var miles = new Vector2(site.XMiles, site.ZMiles);
-            var grid = new Vector2Int(site.GridCellX, site.GridCellZ);
-            return FormatIdentity(code, site.Label, miles, grid);
+            var miles = CampaignMapLayoutState.GetLockedMiles(site);
+            return FormatIdentity(code, site.Label, miles);
         }
 
         public static string FormatIdentity(
             string siteCode,
             string label,
-            Vector2 miles,
-            Vector2Int gridCell)
+            Vector2 miles)
         {
             var code = string.IsNullOrWhiteSpace(siteCode) ? FromLabel(label) : siteCode.Trim().ToUpperInvariant();
             var name = string.IsNullOrWhiteSpace(label) ? code : label.Trim();
             var milesLabel = CampaignMapCoordinates.FormatMilesLabel(miles);
-            var gridLabel = CampaignMapCoordinates.FormatGridCellLabel(gridCell);
-            return string.IsNullOrEmpty(gridLabel)
-                ? $"{code}  {name}  {milesLabel}"
-                : $"{code}  {name}  {milesLabel}  {gridLabel}";
+            return $"{code}  {name}  {milesLabel}";
         }
 
         private static string StripStationSuffix(string label)

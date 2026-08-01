@@ -19,14 +19,11 @@ namespace F89.Testing
         private const int CarrierCount = 1;
         private const int ExpectedBaseCount = CatalogBaseCount + LandBaseCount - ExcludedLandBaseCount
             + FixedCarrierRelativeBaseCount + FixedAnchorRelativeBaseCount + CarrierCount;
-        private const int BasesLayoutVersion = 54;
+        private const int BasesLayoutVersion = 58;
         private const float FixedRelativeBaseOffsetMiles = 200f;
         private const float AnchorRelativeBaseSnapSearchMiles = 45f;
         private const float SolidIceSnapSearchMiles = AntarcticaLandMask.BasePlacementSnapSearchMiles;
         private const float CarrierPositionToleranceMiles = 1f;
-        private const float CarrierOceanSearchNorthMiles = 1000f;
-        private const float CarrierOceanSearchEastWestMiles = 48f;
-        private const float CarrierNorthOffsetMiles = 400f;
         private const string CarrierSouthBaseName = "Outpost South";
         private const string Outpost13BaseName = "Outpost 13";
         private const string Outpost13SeedBaseName = "Outpost 13 SE";
@@ -67,7 +64,8 @@ namespace F89.Testing
             var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
             var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap, profile);
 
-            if (LandCombatTestCheats.ResetDestroyedOutpostsOnDevEntry)
+            if (LandCombatTestCheats.ResetDestroyedOutpostsOnDevEntry
+                && !CampaignWorldReset.ShouldPreserveActiveSortieSpawn())
             {
                 CampaignWorldReset.ResetMapForFreshPlay();
             }
@@ -82,10 +80,7 @@ namespace F89.Testing
                 {
                     var marker = existing.GetComponent<AntarcticaBasesRootMarker>();
                     var lockedCarrierMiles = ResolveLockedCarrierMiles(marker);
-                    AntarcticaWorldLocations.SetCarrierPositionMiles(lockedCarrierMiles);
-                    EnsureCarrierAtLockedPosition(worldUnitsPerMile, lockedCarrierMiles);
-                    EnsureAllCarrierVisuals(worldUnitsPerMile);
-                    EnsureCarrierSpawned(existing.transform, mapSizeMiles, worldUnitsPerMile);
+                    EnsureSingleCarrierAtLockedSite(worldUnitsPerMile, lockedCarrierMiles);
                     ApplyLockedCampaignLayout(existing.transform, worldUnitsPerMile);
                     SyncAllLandBaseWorldState(worldUnitsPerMile);
                     EnsureOutpostBuildingClusters(worldUnitsPerMile, profile);
@@ -105,15 +100,13 @@ namespace F89.Testing
             var layoutMarker = root.AddComponent<AntarcticaBasesRootMarker>();
             layoutMarker.layoutVersion = BasesLayoutVersion;
 
-            var carrierSeedMiles = AntarcticaWorldLocations.DefaultCarrierPositionMiles;
-            var carrierPositionMiles = ResolveCarrierPositionMiles(carrierSeedMiles, mapSizeMiles);
-            AntarcticaWorldLocations.SetCarrierPositionMiles(carrierPositionMiles);
+            var carrierPositionMiles = ResolveLockedCarrierMiles(layoutMarker);
             layoutMarker.carrierPositionMiles = carrierPositionMiles;
 
             SpawnCarrier(root.transform, mission, carrierPositionMiles, worldUnitsPerMile);
             SpawnCampaignLayoutOutposts(root.transform, worldUnitsPerMile);
             MarkMissionObjective(root.transform, mission.firstObjectiveBaseName);
-            EnsureCarrierAtLockedPosition(worldUnitsPerMile, carrierPositionMiles);
+            EnsureSingleCarrierAtLockedSite(worldUnitsPerMile, carrierPositionMiles);
             SyncAllLandBaseWorldState(worldUnitsPerMile);
             EnsureOutpostBuildingClusters(worldUnitsPerMile, profile);
             AntarcticaOutpostState.ApplyFriendlyControlToAllBases();
@@ -181,30 +174,16 @@ namespace F89.Testing
             }
         }
 
-        private static void EnsureCarrierSpawned(Transform root, float mapSizeMiles, float worldUnitsPerMile)
+        private static void EnsureCarrierSpawned(Transform root, float worldUnitsPerMile)
         {
-            if (FindCarrierBase() != null)
-            {
-                return;
-            }
-
+            var lockedCarrierMiles = AntarcticaWorldLocations.LockedCarrierPositionMiles;
             var marker = root.GetComponent<AntarcticaBasesRootMarker>();
-            var mission = AntarcticaMissionConfig.LoadOrDefault();
-            var carrierMiles = ResolveLockedCarrierMiles(marker);
-            if (carrierMiles == Vector2.zero)
-            {
-                carrierMiles = ResolveCarrierPositionMiles(
-                    AntarcticaWorldLocations.DefaultCarrierPositionMiles,
-                    mapSizeMiles);
-            }
-
-            AntarcticaWorldLocations.SetCarrierPositionMiles(carrierMiles);
             if (marker != null)
             {
-                marker.carrierPositionMiles = carrierMiles;
+                marker.carrierPositionMiles = lockedCarrierMiles;
             }
 
-            SpawnCarrier(root, mission, carrierMiles, worldUnitsPerMile);
+            EnsureSingleCarrierAtLockedSite(worldUnitsPerMile, lockedCarrierMiles);
         }
 
         private static void ApplyLockedCampaignLayout(Transform parent, float worldUnitsPerMile)
@@ -305,17 +284,6 @@ namespace F89.Testing
             return FindCarrierBase() != null;
         }
 
-        private static void EnsureAllCarrierVisuals(float worldUnitsPerMile)
-        {
-            var carrier = FindCarrierBase();
-            if (carrier == null)
-            {
-                return;
-            }
-
-            CarrierWorldVisual.Attach(carrier.gameObject, worldUnitsPerMile);
-        }
-
         private static void SyncAllLandBaseWorldState(float worldUnitsPerMile)
         {
             RefreshAllOutpostWorldState(worldUnitsPerMile);
@@ -364,18 +332,42 @@ namespace F89.Testing
             return true;
         }
 
-        public static bool TryMovePlayerToCarrier(Transform playerTransform)
+        public static bool TryMovePlayerToCarrier(
+            Transform playerTransform,
+            WorldMapConfig worldMap = null,
+            FlightProfile profile = null)
         {
             if (playerTransform == null)
             {
                 return false;
             }
 
-            var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
-            var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
-            if (!TryGetPlayerSpawn(worldMap, profile, out var spawnPosition, out var spawnRotation))
+            worldMap ??= Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+            profile ??= Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
+            var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap, profile);
+            if (worldUnitsPerMile <= 0f)
             {
                 return false;
+            }
+
+            if (!TryResolveCarrierMiles(out var carrierMiles))
+            {
+                return false;
+            }
+
+            Vector3 spawnPosition;
+            Quaternion spawnRotation;
+            var carrier = FindCarrierBase();
+            if (carrier != null)
+            {
+                carrier.SetPositionMiles(carrierMiles, worldUnitsPerMile);
+                spawnPosition = carrier.transform.position;
+                spawnRotation = ResolveSpawnRotation(spawnPosition);
+            }
+            else
+            {
+                spawnPosition = MilesToWorld(carrierMiles, worldMap, profile);
+                spawnRotation = ResolveSpawnRotation(spawnPosition);
             }
 
             playerTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
@@ -392,6 +384,83 @@ namespace F89.Testing
             return true;
         }
 
+        public static bool IsNearCarrierDeck(
+            Transform playerTransform,
+            WorldMapConfig worldMap,
+            FlightProfile profile)
+        {
+            if (playerTransform == null)
+            {
+                return false;
+            }
+
+            worldMap ??= Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+            profile ??= Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
+            var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap, profile);
+            if (worldUnitsPerMile <= 0f)
+            {
+                return false;
+            }
+
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            return AntarcticaWorldLocations.IsWithinCarrierDeckRange(
+                playerTransform.position,
+                worldMap,
+                ticSize,
+                F89.Flight.AircraftLanding.CarrierLandingRangeMiles);
+        }
+
+        public static bool ForcePlayerToDefaultCarrier(
+            Transform playerTransform,
+            WorldMapConfig worldMap,
+            FlightProfile profile)
+        {
+            if (playerTransform == null)
+            {
+                return false;
+            }
+
+            var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap, profile);
+            if (worldUnitsPerMile <= 0f)
+            {
+                return false;
+            }
+
+            if (!TryResolveCarrierMiles(out var carrierMiles))
+            {
+                carrierMiles = AntarcticaWorldLocations.LockedCarrierPositionMiles;
+            }
+
+            Vector3 spawnPosition;
+            Quaternion spawnRotation;
+            var carrier = FindCarrierBase();
+            if (carrier != null)
+            {
+                carrier.SetPositionMiles(carrierMiles, worldUnitsPerMile);
+                spawnPosition = carrier.transform.position;
+            }
+            else
+            {
+                spawnPosition = MilesToWorld(carrierMiles, worldMap, profile);
+            }
+
+            spawnRotation = ResolveSpawnRotation(spawnPosition);
+            playerTransform.SetPositionAndRotation(spawnPosition, spawnRotation);
+
+            var body = playerTransform.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.position = spawnPosition;
+                body.rotation = spawnRotation;
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+
+            Debug.LogWarning(
+                $"F-89: Forced player spawn to carrier miles ({carrierMiles.x:0}, {carrierMiles.y:0}).");
+            return true;
+        }
+
         public static bool TryGetPlayerSpawn(
             WorldMapConfig worldMap,
             FlightProfile profile,
@@ -401,6 +470,11 @@ namespace F89.Testing
             worldPosition = Vector3.zero;
             worldRotation = Quaternion.identity;
 
+            if (FlightGroundReturnService.ShouldSkipCarrierSpawn())
+            {
+                return FlightGroundReturnService.TryGetPendingReturnSpawn(out worldPosition, out worldRotation);
+            }
+
             var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap, profile);
             if (worldUnitsPerMile <= 0f)
             {
@@ -408,7 +482,7 @@ namespace F89.Testing
                 return false;
             }
 
-            if (!TryGetCarrierSpawnMiles(out var carrierMiles))
+            if (!TryResolveCarrierMiles(out var carrierMiles))
             {
                 Debug.LogWarning("F-89: Carrier base not found — player spawn left at current position.");
                 return false;
@@ -420,43 +494,21 @@ namespace F89.Testing
             if (carrier != null)
             {
                 carrier.SetPositionMiles(carrierMiles, worldUnitsPerMile);
-                AntarcticaWorldLocations.SetCarrierPositionMiles(carrierMiles);
             }
 
-            worldPosition = MilesToWorld(carrierMiles, worldUnitsPerMile);
+            worldPosition = MilesToWorld(carrierMiles, worldMap, profile);
             worldRotation = ResolveSpawnRotation(worldPosition);
             return true;
         }
 
-        private static bool TryGetCarrierSpawnMiles(out Vector2 carrierMiles)
-        {
-            var carrier = FindCarrierBase();
-            if (carrier != null)
-            {
-                carrierMiles = carrier.PositionMiles;
-                if (carrierMiles.sqrMagnitude > 0.0001f)
-                {
-                    return true;
-                }
-            }
-
-            carrierMiles = AntarcticaWorldLocations.CarrierPositionMiles;
-            if (carrierMiles.sqrMagnitude > 0.0001f)
-            {
-                return true;
-            }
-
-            carrierMiles = AntarcticaWorldLocations.DefaultCarrierPositionMiles;
-            return carrierMiles.sqrMagnitude > 0.0001f;
-        }
-
         public static Vector2 GetLockedCarrierPositionMiles()
         {
-            return AntarcticaWorldLocations.CarrierPositionMiles;
+            return AntarcticaWorldLocations.LockedCarrierPositionMiles;
         }
 
         public static AntarcticaBase FindCarrierBase()
         {
+            PurgeStrayCarriers();
             AntarcticaBase carrier = null;
             var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
             foreach (var baseSite in bases)
@@ -501,17 +553,19 @@ namespace F89.Testing
 
         private static Vector2 ResolveLockedCarrierMiles(AntarcticaBasesRootMarker marker)
         {
-            var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
-            var mapSizeMiles = worldMap != null ? worldMap.antarcticaSizeMiles : 3000f;
-            var resolvedMiles = ResolveCarrierPositionMiles(
-                AntarcticaWorldLocations.DefaultCarrierPositionMiles,
-                mapSizeMiles);
+            var locked = AntarcticaWorldLocations.LockedCarrierPositionMiles;
             if (marker != null)
             {
-                marker.carrierPositionMiles = resolvedMiles;
+                marker.carrierPositionMiles = locked;
             }
 
-            return resolvedMiles;
+            return locked;
+        }
+
+        private static bool TryResolveCarrierMiles(out Vector2 carrierMiles)
+        {
+            carrierMiles = AntarcticaWorldLocations.LockedCarrierPositionMiles;
+            return true;
         }
 
         public static AntarcticaBase FindPrimaryMissionObjective()
@@ -528,70 +582,53 @@ namespace F89.Testing
             return null;
         }
 
-        private static void EnsureCarrierAtLockedPosition(float worldUnitsPerMile, Vector2 lockedCarrierMiles)
+        private static void EnsureSingleCarrierAtLockedSite(float worldUnitsPerMile, Vector2 lockedCarrierMiles)
         {
+            PurgeStrayCarriers();
+
+            var root = GameObject.Find(RootName);
+            var mission = AntarcticaMissionConfig.LoadOrDefault();
             var carrier = FindCarrierBase();
+            if (carrier == null && root != null)
+            {
+                SpawnCarrier(root.transform, mission, lockedCarrierMiles, worldUnitsPerMile);
+                carrier = FindCarrierBase();
+            }
+
             if (carrier == null)
             {
                 return;
             }
 
-            var expectedWorld = MilesToWorld(lockedCarrierMiles, worldUnitsPerMile);
-            var currentMiles = WorldToMiles(carrier.transform.position, worldUnitsPerMile);
-            if (Vector2.Distance(currentMiles, lockedCarrierMiles) <= CarrierPositionToleranceMiles)
-            {
-                return;
-            }
-
-            carrier.transform.position = expectedWorld;
             carrier.SetPositionMiles(lockedCarrierMiles, worldUnitsPerMile);
+            CarrierWorldVisual.Attach(carrier.gameObject, worldUnitsPerMile);
 
-            var root = GameObject.Find(RootName);
             var marker = root != null ? root.GetComponent<AntarcticaBasesRootMarker>() : null;
             if (marker != null)
             {
                 marker.carrierPositionMiles = lockedCarrierMiles;
             }
-
-            Debug.Log(
-                $"F-89: Moved carrier to locked position ({lockedCarrierMiles.x:0}, {lockedCarrierMiles.y:0}) MI.");
         }
 
-        private static Vector2 ResolveCarrierPositionMiles(Vector2 seedMiles, float mapSizeMiles)
+        private static void PurgeStrayCarriers()
         {
-            var resolvedMiles = seedMiles;
-            if (AntarcticaLandMask.TryResolveVisibleOceanNorthOf(
-                    seedMiles,
-                    mapSizeMiles,
-                    CarrierOceanSearchNorthMiles,
-                    CarrierOceanSearchEastWestMiles,
-                    out var oceanMiles))
+            var locked = AntarcticaWorldLocations.LockedCarrierPositionMiles;
+            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            for (var i = 0; i < bases.Length; i++)
             {
-                resolvedMiles = oceanMiles;
-            }
-            else if (!AntarcticaLandMask.IsFlightOceanMiles(seedMiles, mapSizeMiles))
-            {
-                Debug.LogWarning(
-                    $"F-89: Could not georef carrier at ({seedMiles.x:0}, {seedMiles.y:0}) MI onto flight ocean.");
-            }
+                var baseSite = bases[i];
+                if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Carrier)
+                {
+                    continue;
+                }
 
-            resolvedMiles.y -= CarrierNorthOffsetMiles;
-            if (!AntarcticaLandMask.IsFlightOceanMiles(resolvedMiles, mapSizeMiles)
-                && !AntarcticaLandMask.TryFindNearestFlightOcean(
-                    resolvedMiles,
-                    mapSizeMiles,
-                    CarrierOceanSearchEastWestMiles,
-                    out resolvedMiles))
-            {
-                Debug.LogWarning(
-                    $"F-89: Carrier offset landed on flight ice near ({resolvedMiles.x:0}, {resolvedMiles.y:0}) MI.");
+                if (Vector2.Distance(baseSite.PositionMiles, locked) > CarrierPositionToleranceMiles)
+                {
+                    Debug.LogWarning(
+                        $"F-89: Removing stray carrier at ({baseSite.PositionMiles.x:0}, {baseSite.PositionMiles.y:0}) MI.");
+                    Object.Destroy(baseSite.gameObject);
+                }
             }
-
-            var landBlend = AntarcticaLandMask.GetDisplayLandBlendMiles(resolvedMiles, mapSizeMiles);
-            Debug.Log(
-                $"F-89: Carrier georef at ({resolvedMiles.x:0}, {resolvedMiles.y:0}) MI " +
-                $"(flight land blend {landBlend:0.00}, seed ({seedMiles.x:0}, {seedMiles.y:0}) MI).");
-            return resolvedMiles;
         }
 
         private static void SpawnCarrier(
@@ -843,14 +880,16 @@ namespace F89.Testing
             EnsureBaseLockableTarget(baseObject, definition.baseName, definition.control, BaseSiteKind.Land);
         }
 
-        private static Vector3 MilesToWorld(Vector2 miles, float worldUnitsPerMile)
+        private static Vector3 MilesToWorld(Vector2 miles, WorldMapConfig worldMap, FlightProfile profile)
         {
-            return WorldMapConfig.MileOffsetToWorld(miles, worldUnitsPerMile);
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            return CampaignMapCoordinates.MilesToWorld(miles, worldMap, ticSize);
         }
 
-        private static Vector2 WorldToMiles(Vector3 worldPosition, float worldUnitsPerMile)
+        private static Vector2 WorldToMiles(Vector3 worldPosition, WorldMapConfig worldMap, FlightProfile profile)
         {
-            return WorldMapConfig.WorldToMileOffset(worldPosition, worldUnitsPerMile);
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            return CampaignMapCoordinates.WorldToMiles(worldPosition, worldMap, ticSize);
         }
 
         private static float ResolveWorldUnitsPerMile(WorldMapConfig worldMap, FlightProfile profile)

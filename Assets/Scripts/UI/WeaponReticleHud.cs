@@ -67,8 +67,7 @@ namespace F89.UI
             if (Event.current == null
                 || GamePauseController.IsPaused
                 || AntarcticaMapOverlay.IsOpen
-                || weaponController == null
-                || inputSource == null)
+                || weaponController == null)
             {
                 return;
             }
@@ -78,24 +77,33 @@ namespace F89.UI
                 return;
             }
 
+            var previousMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.identity;
+
             EnsureTextures();
             var hudColor = FlightHudColorPalette.Current;
+            var aimScreenPosition = inputSource != null
+                ? inputSource.Current.aimScreenPosition
+                : (Vector2)Input.mousePosition;
 
             if (weaponController.ActiveWeapon == SelectedWeapon.None)
             {
-                DrawGauReticleAtScreenPosition(inputSource.Current.aimScreenPosition, hudColor);
+                DrawGauReticleAtScreenPosition(aimScreenPosition, hudColor);
+                GUI.matrix = previousMatrix;
                 return;
             }
 
             if (weaponController.ActiveWeapon == SelectedWeapon.Gau27a)
             {
                 DrawGauReticle(hudColor);
+                GUI.matrix = previousMatrix;
                 return;
             }
 
             var lockController = weaponController.LockController;
             if (lockController == null || !lockController.ReticleVisible)
             {
+                GUI.matrix = previousMatrix;
                 return;
             }
 
@@ -107,26 +115,31 @@ namespace F89.UI
 
             if (weaponController.ActiveWeapon == SelectedWeapon.Aim9z)
             {
-                DrawAim9zReticle(inputSource.Current.aimScreenPosition, reticleColor);
+                DrawAim9zReticle(aimScreenPosition, reticleColor);
+                GUI.matrix = previousMatrix;
                 return;
             }
 
             if (weaponController.ActiveWeapon == SelectedWeapon.Agm88jSiaw)
             {
-                DrawSiawReticle(inputSource.Current.aimScreenPosition, reticleColor);
+                DrawSiawReticle(aimScreenPosition, reticleColor);
+                GUI.matrix = previousMatrix;
                 return;
             }
 
             if (weaponController.ActiveWeapon == SelectedWeapon.Agm114Hellfire)
             {
-                DrawHellfireReticle(inputSource.Current.aimScreenPosition, reticleColor);
+                DrawHellfireReticle(aimScreenPosition, reticleColor);
+                GUI.matrix = previousMatrix;
                 return;
             }
 
             if (weaponController.ActiveWeapon == SelectedWeapon.Gbu12Paveway)
             {
-                DrawGbuReticle(inputSource.Current.aimScreenPosition, reticleColor);
+                DrawGbuReticle(aimScreenPosition, reticleColor);
             }
+
+            GUI.matrix = previousMatrix;
         }
 
         private void DrawHellfireReticle(Vector2 screenBottomLeft, Color color)

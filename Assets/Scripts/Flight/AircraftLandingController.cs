@@ -24,8 +24,9 @@ namespace F89.Flight
         private float currentVisualScale = 1f;
         private bool sequenceActive;
         private bool carrierLanding;
-        private bool runwayLanding;
-        private AntarcticaBase runwayBaseSite;
+        private bool friendlyBaseLanding;
+        private bool outpostGroundLanding;
+        private AntarcticaBase outpostBaseSite;
         private bool runwayDeckMenuVisible;
         private RunwayDeckConfirmDialog.Action pendingRunwayConfirm;
         private bool endMissionFailureConfirmVisible;
@@ -52,7 +53,7 @@ namespace F89.Flight
             activeInstance != null && activeInstance.runwayDeckMenuVisible;
         public static bool IsRunwayRefuelPromptVisible => IsRunwayDeckMenuVisible;
         public static bool IsParkedAtRunway =>
-            activeInstance != null && activeInstance.landingComplete && activeInstance.runwayLanding;
+            activeInstance != null && activeInstance.landingComplete && activeInstance.friendlyBaseLanding;
         public static float VisualScaleMultiplier => activeInstance?.currentVisualScale ?? 1f;
 
         private void Awake()
@@ -123,15 +124,27 @@ namespace F89.Flight
             BeginLanding();
         }
 
-        public void BeginRunwayLanding(AntarcticaBase baseSite, Transform runwayTransform)
+        public void BeginFriendlyBaseLanding(AntarcticaBase baseSite)
         {
-            if (sequenceActive || landingComplete || baseSite == null || runwayTransform == null)
+            if (sequenceActive || landingComplete || baseSite == null)
             {
                 return;
             }
 
-            runwayBaseSite = baseSite;
-            runwayLanding = true;
+            outpostBaseSite = baseSite;
+            friendlyBaseLanding = true;
+            BeginLanding();
+        }
+
+        public void BeginOutpostGroundLanding(AntarcticaBase baseSite)
+        {
+            if (sequenceActive || landingComplete || baseSite == null)
+            {
+                return;
+            }
+
+            outpostBaseSite = baseSite;
+            outpostGroundLanding = true;
             BeginLanding();
         }
 
@@ -145,15 +158,22 @@ namespace F89.Flight
             ClearCarrierApproachPrompt(unlockFlight: false);
             carrierLandingStart = transform.position;
             carrierLandingStart.y = 0f;
-            if (AircraftLanding.TryGetCarrierBase(out var carrier))
+            if (aircraft?.WorldMap != null && aircraft.Profile != null)
+            {
+                carrierLandingTarget = AntarcticaWorldLocations.GetLockedCarrierWorldPosition(
+                    aircraft.WorldMap,
+                    aircraft.Profile.ticSizeWorldUnits);
+            }
+            else if (AircraftLanding.TryGetCarrierBase(out var carrier))
             {
                 carrierLandingTarget = carrier.transform.position;
-                carrierLandingTarget.y = 0f;
             }
             else
             {
                 carrierLandingTarget = carrierLandingStart;
             }
+
+            carrierLandingTarget.y = 0f;
 
             carrierLanding = true;
             BeginLanding();
@@ -289,10 +309,6 @@ namespace F89.Flight
                 {
                     pendingRunwayConfirm = RunwayDeckConfirmDialog.Action.Refuel;
                 }
-                else if (deckResult == RunwayDeckMenuDialog.Result.Dismount)
-                {
-                    pendingRunwayConfirm = RunwayDeckConfirmDialog.Action.Dismount;
-                }
                 else if (deckResult == RunwayDeckMenuDialog.Result.TakeOff)
                 {
                     pendingRunwayConfirm = RunwayDeckConfirmDialog.Action.TakeOff;
@@ -324,9 +340,9 @@ namespace F89.Flight
             pendingRunwayConfirm = RunwayDeckConfirmDialog.Action.None;
 
             var outpostName = OutpostRunwayDeckState.ParkedOutpostName;
-            if (string.IsNullOrWhiteSpace(outpostName) && runwayBaseSite != null)
+            if (string.IsNullOrWhiteSpace(outpostName) && outpostBaseSite != null)
             {
-                outpostName = runwayBaseSite.BaseName;
+                outpostName = outpostBaseSite.BaseName;
             }
 
             var result = CampaignMissionEndFlow.FinishEndMission(outpostName, applyCampaignFailurePenalty);
@@ -346,9 +362,7 @@ namespace F89.Flight
                     break;
                 case RunwayDeckConfirmDialog.Action.Refuel:
                     aircraft?.Refuel();
-                    break;
-                case RunwayDeckConfirmDialog.Action.Dismount:
-                    BeginGroundCombatFromRunway();
+                    DeckLandingServiceState.MarkRefuelUsed();
                     break;
                 case RunwayDeckConfirmDialog.Action.TakeOff:
                     LandMissionHandoffState.ClearRunwayDeckReturnIntent();
@@ -482,9 +496,9 @@ namespace F89.Flight
                     }
                 }
             }
-            else if (runwayLanding)
+            else if (outpostGroundLanding || friendlyBaseLanding)
             {
-                // VTOL descent in place — same as a normal land; runway deck menu follows.
+                // VTOL descent in place at outpost.
             }
 
             if (progress >= 1f)
@@ -520,7 +534,7 @@ namespace F89.Flight
                 return;
             }
 
-            if (runwayLanding)
+            if (outpostGroundLanding || friendlyBaseLanding)
             {
                 body.linearVelocity = Vector3.zero;
                 body.angularVelocity = Vector3.zero;
@@ -560,15 +574,24 @@ namespace F89.Flight
 
             if (carrierLanding)
             {
+                var snapshot = CaptureSortieSnapshot(gameObject);
+                LandMissionHandoffState.UpdateStoredFlightSnapshot(snapshot);
+                DeckLandingServiceState.ResetForNewLanding();
                 LandMissionCompleteState.BeginCarrierLanding();
                 Time.timeScale = 1f;
                 SceneManager.LoadScene(GameScenes.MissionComplete);
                 return;
             }
 
-            if (runwayLanding)
+            if (friendlyBaseLanding)
             {
-                CompleteRunwayLanding();
+                CompleteFriendlyBaseDeck();
+                return;
+            }
+
+            if (outpostGroundLanding)
+            {
+                CompleteOutpostGroundLanding();
                 return;
             }
 
@@ -581,60 +604,68 @@ namespace F89.Flight
                 return;
             }
 
-            var snapshot = CaptureSortieSnapshot(gameObject);
-            LandMissionHandoffState.BeginEnterFromFlight(snapshot);
+            OutpostRunwayDeckState.Clear();
+            var openFieldSnapshot = CaptureSortieSnapshot(gameObject);
+            openFieldSnapshot.IsOpenFieldLanding = true;
+            openFieldSnapshot.ReturnToRunwayDeck = false;
+            LandingMileFlagState.ApplyToSnapshot(ref openFieldSnapshot);
+            LandMissionHandoffState.BeginEnterFromFlight(openFieldSnapshot);
             Time.timeScale = 1f;
             SceneManager.LoadScene(GameScenes.GroundAttack);
         }
 
-        private void CompleteRunwayLanding()
+        private void CompleteFriendlyBaseDeck()
         {
-            var outpostName = runwayBaseSite != null ? runwayBaseSite.BaseName : string.Empty;
-            var friendly = AntarcticaOutpostState.IsFriendlyOccupied(outpostName);
-            OutpostRunwayDeckState.BeginParked(outpostName, friendly);
-            activeInstance = this;
-            Time.timeScale = 1f;
-
-            if (!friendly && OutpostSurfaceAccess.HasBunkerGroundAccess(outpostName))
+            var outpostName = outpostBaseSite != null ? outpostBaseSite.BaseName : string.Empty;
+            OutpostRunwayDeckState.BeginParked(outpostName, friendly: true);
+            DeckLandingServiceState.ResetForNewLanding();
+            if (!string.IsNullOrWhiteSpace(outpostName))
             {
-                BeginGroundCombatFromRunway();
-                return;
+                LandBossMissionAssignment.PersistLaunchOutpost(CharacterSessionState.ActiveSave, outpostName);
             }
 
+            activeInstance = this;
+            Time.timeScale = 1f;
             runwayDeckMenuVisible = true;
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
         }
 
-        private void ExecuteRunwayRearm()
+        private void CompleteOutpostGroundLanding()
         {
-            var outpostName = OutpostRunwayDeckState.ParkedOutpostName;
-            runwayDeckMenuVisible = false;
-            CharacterGearSession.PersistActive();
-            FriendlyOutpostTakeoffState.Begin(outpostName);
-            Time.timeScale = 1f;
-            SceneManager.LoadScene(GameScenes.AircraftLoadout);
-        }
-
-        private void BeginGroundCombatFromRunway()
-        {
-            runwayDeckMenuVisible = false;
-            pendingRunwayConfirm = RunwayDeckConfirmDialog.Action.None;
+            var outpostName = outpostBaseSite != null ? outpostBaseSite.BaseName : string.Empty;
+            OutpostRunwayDeckState.Clear();
             var snapshot = CaptureSortieSnapshot(gameObject);
-            snapshot.ReturnToRunwayDeck = true;
+            snapshot.IsOpenFieldLanding = false;
+            snapshot.ReturnToRunwayDeck = false;
+            snapshot.OutpostName = outpostName;
+            LandingMileFlagState.ApplyToSnapshot(ref snapshot);
             LandMissionHandoffState.BeginEnterFromFlight(snapshot);
             Time.timeScale = 1f;
             SceneManager.LoadScene(GameScenes.GroundAttack);
         }
 
-        /// <summary>Restores parked runway deck after ground combat at this outpost.</summary>
+        private void ExecuteRunwayRearm()
+        {
+            var outpostName = OutpostRunwayDeckState.ParkedOutpostName;
+            var snapshot = CaptureSortieSnapshot(gameObject);
+            snapshot.ReturnToRunwayDeck = true;
+            LandMissionHandoffState.UpdateStoredFlightSnapshot(snapshot);
+            runwayDeckMenuVisible = false;
+            CharacterGearSession.PersistActive();
+            FriendlyOutpostTakeoffState.BeginDeckRearm(outpostName);
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(GameScenes.AircraftLoadout);
+        }
+
+        /// <summary>Restores parked friendly-base deck after loadout rearm.</summary>
         public void RestoreRunwayDeckParked(LandSortieSnapshot snapshot)
         {
             activeInstance = this;
             sequenceActive = false;
             takeoffActive = false;
             landingComplete = true;
-            runwayLanding = true;
+            friendlyBaseLanding = true;
             runwayDeckMenuVisible = true;
             pendingRunwayConfirm = RunwayDeckConfirmDialog.Action.None;
             currentVisualScale = TargetVisualScale;
@@ -650,18 +681,13 @@ namespace F89.Flight
                 visualPivot.localScale = initialVisualScale * TargetVisualScale;
             }
 
-            runwayBaseSite = ResolveRunwayBaseSite(snapshot.OutpostName);
+            outpostBaseSite = ResolveOutpostBaseSite(snapshot.OutpostName);
             var outpostName = snapshot.OutpostName;
-            var friendly = AntarcticaOutpostState.IsFriendlyOccupied(outpostName);
-            OutpostRunwayDeckState.BeginParked(outpostName, friendly);
+            OutpostRunwayDeckState.BeginParked(outpostName, friendly: true);
 
             if (OutpostRunwayDeckState.ConsumePendingDeckRefuelOnRestore())
             {
                 pendingRunwayConfirm = RunwayDeckConfirmDialog.Action.Refuel;
-            }
-            else if (OutpostRunwayDeckState.ConsumePendingDeckRearmOnRestore())
-            {
-                pendingRunwayConfirm = RunwayDeckConfirmDialog.Action.Rearm;
             }
 
             aircraft?.SetLandingLocked(true);
@@ -675,7 +701,7 @@ namespace F89.Flight
             Cursor.lockState = CursorLockMode.None;
         }
 
-        private static AntarcticaBase ResolveRunwayBaseSite(string outpostName)
+        private static AntarcticaBase ResolveOutpostBaseSite(string outpostName)
         {
             if (string.IsNullOrWhiteSpace(outpostName))
             {
@@ -725,7 +751,6 @@ namespace F89.Flight
                 ResolveLandingOutpost(ref snapshot, aircraftController);
                 snapshot.HasOutpostBunker = !string.IsNullOrWhiteSpace(snapshot.OutpostName)
                     && OutpostSurfaceAccess.HasBunkerGroundAccess(snapshot.OutpostName);
-                CaptureLandingGridCell(ref snapshot, aircraftController);
             }
             else
             {
@@ -751,6 +776,10 @@ namespace F89.Flight
                 snapshot.FlaresRemaining = flares.FlaresRemaining;
             }
 
+            LandingMileFlagState.SetFromWorldPosition(
+                snapshot.AircraftWorldPosition,
+                snapshot.AircraftWorldRotation);
+            LandingMileFlagState.ApplyToSnapshot(ref snapshot);
             return snapshot;
         }
 
@@ -772,9 +801,9 @@ namespace F89.Flight
                 return;
             }
 
-            if (activeInstance?.runwayBaseSite != null)
+            if (activeInstance?.outpostBaseSite != null)
             {
-                snapshot.OutpostName = activeInstance.runwayBaseSite.BaseName;
+                snapshot.OutpostName = activeInstance.outpostBaseSite.BaseName;
                 return;
             }
 
@@ -783,32 +812,6 @@ namespace F89.Flight
                 aircraftController.WorldMap,
                 ticSize,
                 out snapshot.OutpostName);
-        }
-
-        private static void CaptureLandingGridCell(ref LandSortieSnapshot snapshot, AircraftController aircraftController)
-        {
-            if (aircraftController?.WorldMap == null)
-            {
-                return;
-            }
-
-            var ticSize = aircraftController.Profile != null
-                ? aircraftController.Profile.ticSizeWorldUnits
-                : 1f;
-            var worldMap = aircraftController.WorldMap;
-            if (!worldMap.TryWorldPositionToGridCell(snapshot.AircraftWorldPosition, ticSize, out var cell))
-            {
-                return;
-            }
-
-            snapshot.HasLandingGridCell = true;
-            snapshot.LandingGridCellX = cell.x;
-            snapshot.LandingGridCellZ = cell.y;
-            snapshot.GridCoordinateVersion = 1;
-            snapshot.LandingGridWorldCenter = worldMap.GridCellToWorldCenter(
-                cell,
-                ticSize,
-                snapshot.AircraftWorldPosition.y);
         }
 
         private void UpdateTakeoffVisual()
@@ -835,7 +838,7 @@ namespace F89.Flight
             }
 
             var progress = Mathf.Clamp01((Time.time - sequenceStartTime) / ShrinkDurationSeconds);
-            var targetSpeedMph = Mathf.Lerp(0f, AircraftLanding.MaxLandingSpeedMph, progress);
+            var targetSpeedMph = Mathf.Lerp(0f, FlightMissionLaunchState.VtolTakeoffSpeedMph, progress);
             aircraft.ApplyTakeoffSpeed(targetSpeedMph);
         }
 
@@ -843,8 +846,11 @@ namespace F89.Flight
         {
             takeoffActive = false;
             landingComplete = false;
-            runwayLanding = false;
+            friendlyBaseLanding = false;
+            outpostGroundLanding = false;
             runwayDeckMenuVisible = false;
+            carrierApproachPromptVisible = false;
+            carrierApproachDeclined = false;
             currentVisualScale = 1f;
 
             if (visualPivot != null)
@@ -855,8 +861,11 @@ namespace F89.Flight
             if (aircraft != null)
             {
                 aircraft.SetLandingLocked(false);
-                aircraft.ApplyTakeoffSpeed(AircraftLanding.MaxLandingSpeedMph);
+                aircraft.ApplyTakeoffSpeed(FlightMissionLaunchState.VtolTakeoffSpeedMph);
             }
+
+            FlightAudio.SetInFlight(true);
+            CombatThreatRange.InvalidateCaches();
 
             if (input != null)
             {
@@ -872,6 +881,8 @@ namespace F89.Flight
 
             LandMissionHandoffState.ConfirmReturnApplied();
             OutpostRunwayDeckState.Clear();
+            OpenFieldLandingState.Clear();
+            LandingMileFlagState.ClearAfterTakeoff();
         }
     }
 }

@@ -62,7 +62,11 @@ namespace F89.UI
 
         private void Update()
         {
-            LandCombatHud.HandleHotkeys();
+            if (!LandBunkerExit.IsLeaveConfirmVisible)
+            {
+                LandCombatHud.HandleHotkeys();
+            }
+
             TryScheduleDownedExit();
             TryFinishBossIntro();
         }
@@ -140,6 +144,21 @@ namespace F89.UI
 
         private void OnGUI()
         {
+            if (LandBunkerExit.IsLeaveConfirmVisible)
+            {
+                var leaveResult = BunkerLeaveConfirmDialog.Draw(true);
+                if (leaveResult == BunkerLeaveConfirmDialog.Result.Confirmed)
+                {
+                    LandBunkerExit.ConfirmLeave();
+                }
+                else if (leaveResult == BunkerLeaveConfirmDialog.Result.Cancelled)
+                {
+                    LandBunkerExit.CancelLeave();
+                }
+
+                return;
+            }
+
             if (LandBossEncounter.IsIntroActive)
             {
                 DrawBossCountdown();

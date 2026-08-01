@@ -24,7 +24,7 @@ namespace F89.UI
             {
                 CharacterGearSession.PersistActive();
                 CharacterSaveRepository.SyncVehicleKillCredit(save);
-                MissionScoreState.FinalizeToSave(save);
+                MissionScoreState.AbandonMissionWithoutScoring();
             }
 
             if (outcome == CrashLandingOutcome.NotRescued && save != null)
@@ -40,7 +40,6 @@ namespace F89.UI
 
             if (primaryIncomplete && save != null)
             {
-                CharacterSaveRepository.ApplyTotalScoreFractionPenalty(save, 0.5f);
                 LandBossMissionAssignment.ResolveAssignedMissionWithoutVictory(save);
                 if (PilotCareerRanks.TryDemoteToScoreFloor(save, out var previousRank, out var newRank))
                 {

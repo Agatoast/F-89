@@ -1,7 +1,7 @@
 using F89.Core;
+using F89.LandCombat;
 using F89.Weapons;
 using UnityEngine;
-
 namespace F89.Flight
 {
     /// <summary>
@@ -13,16 +13,29 @@ namespace F89.Flight
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
+            if (LandingMileFlagState.TryResolveWorldPosition(out position, out rotation))
+            {
+                return true;
+            }
+
             if (!LandMissionHandoffState.TryGetPendingReturnSnapshot(out var snapshot))
             {
                 return false;
             }
 
-            position = snapshot.HasLandingGridCell
-                ? snapshot.LandingGridWorldCenter
-                : snapshot.AircraftWorldPosition;
+            position = FlightSpawnValidation.ResolveSortieReturnPosition(
+                snapshot,
+                Resources.Load<WorldMapConfig>("F89_WorldMapConfig"),
+                Resources.Load<FlightProfile>("F89_DefaultFlightProfile")?.ticSizeWorldUnits ?? 1f);
             rotation = snapshot.AircraftWorldRotation;
             return true;
+        }
+
+        public static bool ShouldApplySortieReturn()
+        {
+            return LandingMileFlagState.HasActiveFlag
+                || LandMissionHandoffState.HasPendingReturn
+                || LandMissionHandoffState.ShouldSuppressCarrierRespawn;
         }
 
         public static bool TryApplyPendingReturn(GameObject player)
@@ -32,38 +45,73 @@ namespace F89.Flight
                 return false;
             }
 
-            if (LandMissionHandoffState.TryConsumeReturnToFlight(out var returnSnapshot, out _))
+            if (AircraftLandingController.IsTakeoffActive)
             {
-                if (ShouldReturnToRunwayDeck(returnSnapshot))
-                {
-                    return ApplyReturnToRunwayDeck(player, returnSnapshot);
-                }
-
-                return ApplyReturnTakeoff(player, returnSnapshot);
+                return true;
             }
 
-            if (LandMissionHandoffState.ShouldSuppressCarrierRespawn
-                && LandMissionHandoffState.GetStoredFlightSnapshot().IsValid)
+            if (AircraftLandingController.IsParkedAtRunway
+                && !LandMissionHandoffState.HasPendingGroundReturn
+                && !LandingMileFlagState.HasActiveFlag)
             {
-                // Scene bootstrap and AircraftController.Start both run during the same
-                // return. The first restores the grid square and starts VTOL; the second
-                // must not reset that sequence or re-position the aircraft.
-                if (AircraftLandingController.IsTakeoffActive
-                    || AircraftLandingController.IsParkedAtRunway)
-                {
-                    return true;
-                }
-
-                var stored = LandMissionHandoffState.GetStoredFlightSnapshot();
-                if (ShouldReturnToRunwayDeck(stored))
-                {
-                    return ApplyReturnToRunwayDeck(player, stored);
-                }
-
-                return ApplyReturnTakeoff(player, stored);
+                return true;
             }
 
-            return false;
+            if (!LandMissionHandoffState.TryGetPendingReturnSnapshot(out var snapshot)
+                || !snapshot.IsValid)
+            {
+                if (!LandingMileFlagState.HasActiveFlag)
+                {
+                    return false;
+                }
+
+                snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
+                if (!snapshot.IsValid)
+                {
+                    snapshot = new LandSortieSnapshot
+                    {
+                        IsValid = true,
+                        ReturnSceneName = GameScenes.FlightTest,
+                        RestoreWithImmediateTakeoff = true
+                    };
+                }
+
+                snapshot.RestoreWithImmediateTakeoff = true;
+                LandingMileFlagState.TryApplyToSnapshot(ref snapshot);
+            }
+            else
+            {
+                LandingMileFlagState.TryApplyToSnapshot(ref snapshot);
+            }
+
+            if (!ApplyReturnFromSnapshot(player, snapshot))
+            {
+                Debug.LogWarning(
+                    "[LandCombat] Ground return could not be applied — leaving aircraft at current position.");
+                return false;
+            }
+
+            if (LandMissionHandoffState.HasPendingReturn)
+            {
+                LandMissionHandoffState.TryConsumeReturnToFlight(out _, out _);
+            }
+
+            return true;
+        }
+
+        private static bool ApplyReturnFromSnapshot(GameObject player, LandSortieSnapshot snapshot)
+        {
+            if (snapshot.RestoreWithImmediateTakeoff)
+            {
+                return ApplyReturnTakeoff(player, snapshot);
+            }
+
+            if (ShouldReturnToRunwayDeck(snapshot))
+            {
+                return ApplyReturnToRunwayDeck(player, snapshot);
+            }
+
+            return ApplyReturnTakeoff(player, snapshot);
         }
 
         private static bool ShouldReturnToRunwayDeck(LandSortieSnapshot snapshot)
@@ -79,41 +127,98 @@ namespace F89.Flight
                 return false;
             }
 
-            NormalizeLegacyGridLabel(player, ref snapshot);
-            var returnPosition = snapshot.HasLandingGridCell
-                ? snapshot.LandingGridWorldCenter
-                : snapshot.AircraftWorldPosition;
-            player.transform.SetPositionAndRotation(returnPosition, snapshot.AircraftWorldRotation);
+            LandingMileFlagState.TryApplyToSnapshot(ref snapshot);
+            EnsureOpenFieldMiles(ref snapshot);
+
+            var aircraft = player.GetComponent<AircraftController>();
+            var worldMap = aircraft?.WorldMap ?? Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+            var profile = aircraft?.Profile ?? Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+
+            if (!TryResolveLandingTakeoffPosition(snapshot, worldMap, ticSize, out var returnPosition, out var returnRotation))
+            {
+                Debug.LogWarning("[LandCombat] Ground return skipped — landing miles were unavailable.");
+                return false;
+            }
+
+            returnPosition.y = 0f;
+            player.transform.SetPositionAndRotation(returnPosition, returnRotation);
 
             var body = player.GetComponent<Rigidbody>();
             if (body != null)
             {
+                body.position = returnPosition;
+                body.rotation = returnRotation;
                 body.linearVelocity = Vector3.zero;
                 body.angularVelocity = Vector3.zero;
             }
 
             RestoreAircraftState(player, snapshot);
+            VtolTakeoffLaunch.BeginAt(player, returnPosition);
 
-            var landing = player.GetComponent<AircraftLandingController>();
-            if (landing == null)
-            {
-                landing = player.AddComponent<AircraftLandingController>();
-            }
-
-            landing.PrepareForGroundReturn(returnPosition);
-            landing.BeginTakeoff();
-
-            // Keep carrier spawn suppressed until takeoff finishes (ConfirmReturnApplied).
             EnsureApplier(player);
-            // The saved landing square has been consumed by this active flight scene.
-            // Do not carry it into a later game launch after this takeoff.
             LandMissionHandoffState.ClearPersistedReturnAfterApplication();
 
-            var locationLabel = snapshot.HasLandingGridCell
-                ? $"landing grid {snapshot.LandingGridCellX},{snapshot.LandingGridCellZ}"
-                : $"landing spot {snapshot.AircraftWorldPosition}";
-            Debug.Log($"[LandCombat] Restored flight at {locationLabel} (fuel {snapshot.FuelNormalized:P0}).");
+            Debug.Log(
+                $"[LandCombat] Restored flight at {CampaignMapCoordinates.FormatMilesLabel(CampaignMapCoordinates.WorldToMiles(returnPosition, worldMap, ticSize))} "
+                + $"(fuel {snapshot.FuelNormalized:P0}).");
             return true;
+        }
+
+        private static bool TryResolveLandingTakeoffPosition(
+            LandSortieSnapshot snapshot,
+            WorldMapConfig worldMap,
+            float ticSize,
+            out Vector3 returnPosition,
+            out Quaternion returnRotation)
+        {
+            returnPosition = Vector3.zero;
+            returnRotation = snapshot.AircraftWorldRotation;
+
+            if (LandingMileFlagState.TryResolveFromSnapshot(snapshot, out returnPosition, out returnRotation)
+                || LandingMileFlagState.TryResolveWorldPosition(out returnPosition, out returnRotation))
+            {
+                return true;
+            }
+
+            if (snapshot.HasLandingMiles)
+            {
+                returnPosition = CampaignMapCoordinates.MilesToWorld(
+                    new Vector2(snapshot.LandingMileX, snapshot.LandingMileY),
+                    worldMap,
+                    ticSize);
+                returnRotation = Quaternion.Euler(0f, snapshot.LandingRotationY, 0f);
+                return true;
+            }
+
+            if (snapshot.IsOpenFieldLanding && OpenFieldLandingState.LandingMiles.sqrMagnitude > 0.01f)
+            {
+                returnPosition = CampaignMapCoordinates.MilesToWorld(OpenFieldLandingState.LandingMiles, worldMap, ticSize);
+                returnRotation = Quaternion.Euler(0f, snapshot.LandingRotationY, 0f);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void EnsureOpenFieldMiles(ref LandSortieSnapshot snapshot)
+        {
+            if (!snapshot.IsOpenFieldLanding)
+            {
+                return;
+            }
+
+            if (OpenFieldLandingState.LandingMiles.sqrMagnitude <= 0.01f)
+            {
+                return;
+            }
+
+            snapshot.HasLandingMiles = true;
+            snapshot.LandingMileX = OpenFieldLandingState.LandingMiles.x;
+            snapshot.LandingMileY = OpenFieldLandingState.LandingMiles.y;
+            LandingMileFlagState.SetFromMiles(
+                OpenFieldLandingState.LandingMiles,
+                snapshot.LandingRotationY);
         }
 
         public static bool ApplyReturnToRunwayDeck(GameObject player, LandSortieSnapshot snapshot)
@@ -124,10 +229,11 @@ namespace F89.Flight
                 return false;
             }
 
-            NormalizeLegacyGridLabel(player, ref snapshot);
-            var returnPosition = snapshot.HasLandingGridCell
-                ? snapshot.LandingGridWorldCenter
-                : snapshot.AircraftWorldPosition;
+            var aircraft = player.GetComponent<AircraftController>();
+            var worldMap = aircraft?.WorldMap;
+            var ticSize = aircraft?.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
+            var returnPosition = FlightSpawnValidation.ResolveSortieReturnPosition(snapshot, worldMap, ticSize);
+            returnPosition.y = 0f;
             player.transform.SetPositionAndRotation(returnPosition, snapshot.AircraftWorldRotation);
 
             var body = player.GetComponent<Rigidbody>();
@@ -155,32 +261,10 @@ namespace F89.Flight
             return true;
         }
 
-        private static void NormalizeLegacyGridLabel(GameObject player, ref LandSortieSnapshot snapshot)
-        {
-            if (!snapshot.HasLandingGridCell || snapshot.GridCoordinateVersion >= 1)
-            {
-                return;
-            }
-
-            var aircraft = player.GetComponent<AircraftController>();
-            var ticSize = aircraft?.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f;
-            if (aircraft?.WorldMap == null
-                || !aircraft.WorldMap.TryWorldPositionToGridCell(
-                    snapshot.LandingGridWorldCenter,
-                    ticSize,
-                    out var canonicalCell))
-            {
-                return;
-            }
-
-            snapshot.LandingGridCellX = canonicalCell.x;
-            snapshot.LandingGridCellZ = canonicalCell.y;
-            snapshot.GridCoordinateVersion = 1;
-        }
-
         public static bool ShouldSkipCarrierSpawn()
         {
-            return LandMissionHandoffState.ShouldSuppressCarrierRespawn
+            return LandingMileFlagState.HasActiveFlag
+                || LandMissionHandoffState.ShouldSuppressCarrierRespawn
                 || LandMissionHandoffState.HasPendingGroundReturn;
         }
 

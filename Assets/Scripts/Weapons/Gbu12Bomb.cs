@@ -46,7 +46,11 @@ namespace F89.Weapons
             var renderer = bombObject.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.sharedMaterial.color = new Color(0.45f, 0.42f, 0.38f);
+                var material = F89RenderMaterials.CreateUnlit(new Color(0.45f, 0.42f, 0.38f));
+                if (material != null)
+                {
+                    renderer.sharedMaterial = material;
+                }
             }
 
             var bomb = bombObject.AddComponent<Gbu12Bomb>();

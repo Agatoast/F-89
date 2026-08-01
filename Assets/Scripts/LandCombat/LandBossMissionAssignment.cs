@@ -1,3 +1,4 @@
+using System;
 using F89.Core;
 
 namespace F89.LandCombat
@@ -30,6 +31,16 @@ namespace F89.LandCombat
 
         public static bool HasActiveAssignment(CharacterSaveData save) =>
             save != null && save.AssignedBossNumber >= 1 && save.AssignedBossNumber <= BossMissionCount;
+
+        public static bool IsActiveMissionOutpost(CharacterSaveData save, string outpostName)
+        {
+            if (!HasActiveAssignment(save) || string.IsNullOrWhiteSpace(outpostName))
+            {
+                return false;
+            }
+
+            return string.Equals(save.AssignedBossOutpostName, outpostName, StringComparison.Ordinal);
+        }
 
         /// <summary>True when the assigned primary air objectives are already complete.</summary>
         public static bool IsPrimaryMissionComplete(CharacterSaveData save)

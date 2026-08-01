@@ -37,13 +37,19 @@ namespace F89.LandCombat
             LandGroundSceneController.ResetSession();
             LandGroundTerrainBuilder.BuildArena();
 
-            // Fresh sortie: player at landed plane; objectives in one random bearing.
+            // Fresh sortie or open-field landing: player at landed plane; no objectives.
             var planePosition = Vector3.zero;
             LandLandedPlane.SpawnAt(planePosition);
             var playerPosition = planePosition
                 + new Vector3(LandGameConstants.LandedPlaneOffsetWorldUnits, 0f, 0f);
             BuildPlayer(playerPosition);
             BindTerrainFollow();
+            if (OpenFieldLandingState.IsActive)
+            {
+                LogOpenFieldArena(planePosition);
+                return;
+            }
+
             if (LandOutpostLandingState.HasActiveOutpost)
             {
                 SpawnOutpostSurface(
@@ -247,7 +253,7 @@ namespace F89.LandCombat
 
         private static void EnsureOutpostSurfaceIfNeeded()
         {
-            if (!LandOutpostLandingState.HasActiveOutpost)
+            if (OpenFieldLandingState.IsActive || !LandOutpostLandingState.HasActiveOutpost)
             {
                 return;
             }
@@ -355,6 +361,15 @@ namespace F89.LandCombat
                     $"F-89 Land: {outpostName} runway surface — {guardsSpawned}/{guardCount} guards"
                     + "; bunker access available.");
             }
+        }
+
+        private static void LogOpenFieldArena(Vector3 planeWorldPosition)
+        {
+            var miles = OpenFieldLandingState.LandingMiles;
+            var label = miles.sqrMagnitude > 0.01f
+                ? CampaignMapCoordinates.FormatMilesLabel(miles)
+                : planeWorldPosition.ToString();
+            Debug.Log($"F-89 Land: Open-field landing at {label} — empty arena, plane only.");
         }
     }
 }

@@ -161,21 +161,17 @@ namespace F89.Core
             var renderer = runway.GetComponent<Renderer>();
             if (renderer != null)
             {
-                var shader = Shader.Find("Unlit/Transparent");
-                if (shader == null)
+                var material = F89RenderMaterials.CreateUnlitTransparentTextured(texture, Color.white);
+                if (material != null)
                 {
-                    shader = Shader.Find("Unlit/Texture");
+                    if (material.HasProperty("_Glossiness"))
+                    {
+                        material.SetFloat("_Glossiness", 0f);
+                    }
+
+                    renderer.sharedMaterial = material;
                 }
 
-                var material = new Material(shader);
-                material.mainTexture = texture;
-                material.color = Color.white;
-                if (material.HasProperty("_Glossiness"))
-                {
-                    material.SetFloat("_Glossiness", 0f);
-                }
-
-                renderer.sharedMaterial = material;
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 renderer.receiveShadows = false;
             }
@@ -235,10 +231,11 @@ namespace F89.Core
                 var renderer = bunker.GetComponent<Renderer>();
                 if (renderer != null)
                 {
-                    renderer.sharedMaterial = new Material(renderer.sharedMaterial)
+                    var material = F89RenderMaterials.CreateUnlit(new Color(0.22f, 0.22f, 0.24f));
+                    if (material != null)
                     {
-                        color = new Color(0.22f, 0.22f, 0.24f)
-                    };
+                        renderer.sharedMaterial = material;
+                    }
                 }
 
                 return;
@@ -356,10 +353,11 @@ namespace F89.Core
             var renderer = tower.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.sharedMaterial = new Material(renderer.sharedMaterial)
+                var material = F89RenderMaterials.CreateUnlit(new Color(0.38f, 0.40f, 0.44f));
+                if (material != null)
                 {
-                    color = new Color(0.38f, 0.40f, 0.44f)
-                };
+                    renderer.sharedMaterial = material;
+                }
             }
         }
 

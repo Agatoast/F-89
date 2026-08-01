@@ -16,6 +16,133 @@ namespace F89.Enemies
             var isFlier = definition != null && definition.isFlier;
             var isTroop = definition != null && definition.isTroop;
 
+            if (isFlier
+                && definition != null
+                && definition.IsHostile
+                && string.Equals(
+                    definition.abbreviation,
+                    UrTdpSpriteSheet.Abbreviation,
+                    System.StringComparison.OrdinalIgnoreCase)
+                && UrTdpSpriteSheet.TryGetFrames(out var tdpFrames))
+            {
+                AttachAnimatedTopDownVisual(parent, tdpFrames, footprint, UrTdpSpriteSheet.AnimationFps);
+                return;
+            }
+
+            if (!isTroop
+                && !isFlier
+                && definition != null
+                && TryGetVehicleSprite(definition, out var sprite))
+            {
+                AttachSideSpriteVisual(parent, sprite, footprint);
+                return;
+            }
+
+            AttachPrimitiveVisual(parent, definition, footprint, isFlier, isTroop);
+        }
+
+        private static bool TryGetVehicleSprite(VehicleUnitDefinition definition, out Sprite sprite)
+        {
+            sprite = null;
+            if (definition == null || string.IsNullOrWhiteSpace(definition.abbreviation))
+            {
+                return false;
+            }
+
+            if (definition.IsHostile)
+            {
+                return UrVehicleSpriteSheet.TryGetSideSprite(definition.abbreviation, out sprite);
+            }
+
+            return UsVehicleSpriteSheet.TryGetSideSprite(definition.abbreviation, out sprite);
+        }
+
+        private static void AttachSideSpriteVisual(Transform parent, Sprite sprite, float footprint)
+        {
+            var visualObject = new GameObject("VehicleVisual");
+            visualObject.transform.SetParent(parent, false);
+            // Side art faces left; lay flat and yaw so nose aligns with parent +Z.
+            visualObject.transform.localRotation = Quaternion.Euler(90f, 90f, 0f);
+            visualObject.transform.localPosition = new Vector3(0f, 0.02f, 0f);
+
+            var renderer = CreateSpriteRenderer(visualObject, sprite);
+            ScaleSpriteToFootprint(visualObject.transform, sprite, footprint);
+        }
+
+        private static void AttachAnimatedTopDownVisual(
+            Transform parent,
+            Sprite[] frames,
+            float footprint,
+            float animationFps)
+        {
+            var first = frames[0];
+            for (var i = 0; i < frames.Length; i++)
+            {
+                if (frames[i] != null)
+                {
+                    first = frames[i];
+                    break;
+                }
+            }
+
+            if (first == null)
+            {
+                return;
+            }
+
+            var visualObject = new GameObject("VehicleVisual");
+            visualObject.transform.SetParent(parent, false);
+            // Top-down saucer art — lay flat on the map plane.
+            visualObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            visualObject.transform.localPosition = Vector3.zero;
+
+            var renderer = CreateSpriteRenderer(visualObject, first);
+            ScaleSpriteToFootprint(visualObject.transform, first, footprint);
+
+            var animator = visualObject.AddComponent<VehicleSpriteAnimator>();
+            animator.Configure(renderer, frames, animationFps);
+        }
+
+        private static SpriteRenderer CreateSpriteRenderer(GameObject visualObject, Sprite sprite)
+        {
+            var renderer = visualObject.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.color = Color.white;
+            renderer.sortingOrder = 4;
+            var material = F89RenderMaterials.CreateSpriteMaterial();
+            if (material != null)
+            {
+                renderer.sharedMaterial = material;
+            }
+
+            return renderer;
+        }
+
+        private static void ScaleSpriteToFootprint(Transform visual, Sprite sprite, float footprint)
+        {
+            if (sprite == null)
+            {
+                return;
+            }
+
+            var bounds = sprite.bounds.size;
+            var reference = Mathf.Max(bounds.x, bounds.y);
+            if (reference <= 0.0001f)
+            {
+                return;
+            }
+
+            var scale = footprint / reference;
+            visual.localScale = new Vector3(scale, scale, scale);
+        }
+
+        private static void AttachPrimitiveVisual(
+            Transform parent,
+            VehicleUnitDefinition definition,
+            float footprint,
+            bool isFlier,
+            bool isTroop)
+        {
             GameObject visualObject;
             if (isTroop)
             {
@@ -45,10 +172,11 @@ namespace F89.Enemies
             var renderer = visualObject.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.sharedMaterial = new Material(renderer.sharedMaterial)
+                var material = F89RenderMaterials.CreateUnlit(GetUnitColor(definition));
+                if (material != null)
                 {
-                    color = GetUnitColor(definition)
-                };
+                    renderer.sharedMaterial = material;
+                }
             }
         }
 

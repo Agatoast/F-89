@@ -18,13 +18,12 @@ namespace F89.Core
         public int[] UrTroopKillsByLevel = new int[UrKillCredit.LevelCount];
         public int BestMissionScore;
         public int TotalScore;
-        /// <summary>Adjustments from bail-outs, demotions, and mission failures (usually negative).</summary>
-        public int CareerScoreModifier;
+        /// <summary>Character ended by court-martial after excessive friendly fire on a mission.</summary>
+        public bool IsCourtMartialed;
+        public string CourtMartialedUtc = string.Empty;
         /// <summary>Character died in action and can no longer be flown.</summary>
         public bool IsKilledInAction;
         public string KilledInActionUtc = string.Empty;
-        /// <summary>Set after one-time migration from DestroyedWorldTargetIds into kill folders.</summary>
-        public bool UrKillCreditBackfilled;
         public string PortraitId = string.Empty;
         public string VehicleKillSummary = string.Empty;
         public string TroopKillSummary = string.Empty;
@@ -87,8 +86,18 @@ namespace F89.Core
                 ? $"Enemy troops killed: {EnemyTroopsKilled:N0}"
                 : TroopKillSummary;
 
-        public string DisplayRankAndName =>
-            IsKilledInAction ? $"(KIA) {DisplayRank} {Name}" : $"{DisplayRank} {Name}";
+        public string DisplayRankAndName
+        {
+            get
+            {
+                if (IsCourtMartialed)
+                {
+                    return $"(COURT-MARTIAL) {DisplayRank} {Name}";
+                }
+
+                return IsKilledInAction ? $"(KIA) {DisplayRank} {Name}" : $"{DisplayRank} {Name}";
+            }
+        }
 
         public string ListLabel => $"{DisplayRankAndName}  {LastPlayedLabel}";
 

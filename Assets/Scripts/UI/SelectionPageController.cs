@@ -215,7 +215,7 @@ namespace F89.UI
             var pictureRect = SelectionPageLayout.GetDossierPictureRect();
             var portraitTexture = save != null ? CharacterPortraitService.GetPortraitTexture(save) : null;
             SelectionPageStyles.DrawDossierPortrait(pictureRect, portraitTexture, portraitFrameTexture);
-            if (save != null && !save.IsKilledInAction && SelectionPageStyles.DrawInvisibleButton(pictureRect))
+            if (save != null && !save.IsKilledInAction && !save.IsCourtMartialed && SelectionPageStyles.DrawInvisibleButton(pictureRect))
             {
                 OpenSelectPortraitDialog();
             }
@@ -304,7 +304,7 @@ namespace F89.UI
             }
 
             var rect = SelectionPageLayout.GetSelectButtonRect();
-            var label = save.IsKilledInAction ? "VIEW CHARACTER" : "SELECT CHARACTER";
+            var label = save.IsKilledInAction || save.IsCourtMartialed ? "VIEW CHARACTER" : "SELECT CHARACTER";
             if (StartPageMenuStyles.DrawMenuButton(rect, label, panelAlpha: 1f))
             {
                 OpenSelectedCharacterPage();
@@ -322,7 +322,7 @@ namespace F89.UI
             CharacterSessionState.ActiveSave = save;
             CharacterGearSession.Bind(save, forceReload: true);
             CharacterSaveRepository.SetLastSelectedSaveId(save.Id);
-            if (!save.IsKilledInAction)
+            if (!save.IsKilledInAction && !save.IsCourtMartialed)
             {
                 CharacterSaveRepository.TouchLastPlayed(save);
             }

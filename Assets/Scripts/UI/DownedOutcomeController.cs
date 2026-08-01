@@ -31,7 +31,7 @@ namespace F89.UI
         {
             if (!LandDownedOutcomeState.HasPendingOutcome)
             {
-                FinishToMainMenu();
+                FinishAfterDowned(LandDownedOutcome.None);
                 return;
             }
 
@@ -78,17 +78,17 @@ namespace F89.UI
 
         private static void Continue()
         {
+            var outcome = LandDownedOutcomeState.Outcome;
             if (LandDownedOutcomeState.Advance())
             {
                 return;
             }
 
-            FinishToMainMenu();
+            FinishAfterDowned(outcome);
         }
 
-        private static void FinishToMainMenu()
+        private static void FinishAfterDowned(LandDownedOutcome outcome)
         {
-            var outcome = LandDownedOutcomeState.Outcome;
             var save = CharacterSessionState.ActiveSave;
             var isKia = outcome == LandDownedOutcome.Death || outcome == LandDownedOutcome.FrozenToDeath;
             if (save != null && isKia)

@@ -9,7 +9,7 @@ namespace F89.Enemies
             Transform unitTransform,
             Vector3 deltaWorld,
             WorldMapConfig worldMap,
-            float worldUnitsPerMile)
+            float ticSizeWorldUnits)
         {
             if (unitTransform == null || worldMap == null || deltaWorld.sqrMagnitude < 0.000001f)
             {
@@ -18,7 +18,7 @@ namespace F89.Enemies
 
             var mapSizeMiles = worldMap.antarcticaSizeMiles;
             var fullDelta = unitTransform.position + deltaWorld;
-            if (IsAllowedWorldPosition(fullDelta, worldMap, worldUnitsPerMile, mapSizeMiles))
+            if (IsAllowedWorldPosition(fullDelta, worldMap, ticSizeWorldUnits, mapSizeMiles))
             {
                 unitTransform.position = fullDelta;
                 return true;
@@ -30,7 +30,7 @@ namespace F89.Enemies
             {
                 var escape = push * Mathf.Min(penetration, deltaWorld.magnitude + penetration * 0.25f);
                 var escaped = unitTransform.position + escape;
-                if (IsAllowedWorldPosition(escaped, worldMap, worldUnitsPerMile, mapSizeMiles))
+                if (IsAllowedWorldPosition(escaped, worldMap, ticSizeWorldUnits, mapSizeMiles))
                 {
                     unitTransform.position = escaped;
                     return true;
@@ -42,7 +42,7 @@ namespace F89.Enemies
             if (deltaX.sqrMagnitude > 0.000001f)
             {
                 var xOnly = unitTransform.position + deltaX;
-                if (IsAllowedWorldPosition(xOnly, worldMap, worldUnitsPerMile, mapSizeMiles))
+                if (IsAllowedWorldPosition(xOnly, worldMap, ticSizeWorldUnits, mapSizeMiles))
                 {
                     unitTransform.position = xOnly;
                     return true;
@@ -52,7 +52,7 @@ namespace F89.Enemies
             if (deltaZ.sqrMagnitude > 0.000001f)
             {
                 var zOnly = unitTransform.position + deltaZ;
-                if (IsAllowedWorldPosition(zOnly, worldMap, worldUnitsPerMile, mapSizeMiles))
+                if (IsAllowedWorldPosition(zOnly, worldMap, ticSizeWorldUnits, mapSizeMiles))
                 {
                     unitTransform.position = zOnly;
                     return true;
@@ -65,10 +65,10 @@ namespace F89.Enemies
         public static bool IsAllowedWorldPosition(
             Vector3 worldPosition,
             WorldMapConfig worldMap,
-            float worldUnitsPerMile,
+            float ticSizeWorldUnits,
             float mapSizeMiles = -1f)
         {
-            if (worldMap == null)
+            if (worldMap == null || ticSizeWorldUnits <= 0f)
             {
                 return false;
             }
@@ -83,8 +83,7 @@ namespace F89.Enemies
                 return false;
             }
 
-            var miles = WorldMapConfig.WorldToMileOffset(worldPosition, worldUnitsPerMile);
-            return AntarcticaLandMask.IsDisplayLandMiles(miles, mapSizeMiles);
+            return AntarcticaLandMask.GetLandBlendAtWorld(worldPosition, worldMap, ticSizeWorldUnits) >= 0.5f;
         }
     }
 }

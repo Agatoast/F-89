@@ -14,7 +14,15 @@ namespace F89.UI
             {
                 if (labelFont == null)
                 {
-                    labelFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                    labelFont = Resources.Load<Font>("Fonts/StardosStencil-Regular")
+                        ?? Resources.Load<Font>("Fonts/StardosStencil-Bold")
+                        ?? Resources.Load<Font>("Fonts/Stencil")
+                        ?? Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
+                        ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+                    if (labelFont == null)
+                    {
+                        labelFont = Font.CreateDynamicFontFromOSFont(new[] { "Arial", "Segoe UI", "Verdana" }, 16);
+                    }
                 }
 
                 return labelFont;

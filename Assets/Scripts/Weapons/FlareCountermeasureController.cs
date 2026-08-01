@@ -81,16 +81,7 @@ namespace F89.Weapons
                 return false;
             }
 
-            var ticSize = profile.ticSizeWorldUnits;
-            var planeLength = ticSize * AircraftVisualFactory.VisualSizeMultiplier;
-            var planeAspect = 1.67f;
-            var planeTexture = AircraftVisualFactory.LoadTexture();
-            if (planeTexture != null)
-            {
-                planeAspect = (float)planeTexture.width / planeTexture.height;
-            }
-
-            var planeWidth = ticSize * planeAspect * AircraftVisualFactory.VisualSizeMultiplier;
+            FlareBurnVisual.GetPlaneDimensions(profile, 1f, out var planeWidth, out var planeLength);
             var forward = aircraft.transform.forward;
             forward.y = 0f;
             if (forward.sqrMagnitude < 0.0001f)

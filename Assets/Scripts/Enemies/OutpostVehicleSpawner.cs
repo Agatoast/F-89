@@ -312,9 +312,11 @@ namespace F89.Enemies
                         definition,
                         slotLabel,
                         spawnPos,
+                        outpost,
                         worldMap,
                         profile,
                         worldUnitsPerMile,
+                        ticSize,
                         playerTarget))
                 {
                     continue;
@@ -504,14 +506,18 @@ namespace F89.Enemies
             return $"{designation}-{abbrev}-{slotIndex}";
         }
 
+        private const float VehicleRoamRadiusMiles = 2f;
+
         private static bool SpawnGroundUnit(
             Transform parent,
             VehicleUnitDefinition definition,
             string slotLabel,
             Vector3 worldPosition,
+            AntarcticaBase outpost,
             WorldMapConfig worldMap,
             FlightProfile profile,
             float worldUnitsPerMile,
+            float ticSizeWorldUnits,
             LockableTarget playerTarget)
         {
             if (definition == null)
@@ -529,9 +535,57 @@ namespace F89.Enemies
 
             VehicleUnitVisual.Attach(unitObject.transform, definition, profile);
 
+            var roamHome = ResolveBunkerRoamCenter(outpost);
             var behavior = unitObject.AddComponent<OutpostGroundUnitBehavior>();
-            behavior.Configure(definition, worldMap, profile, worldUnitsPerMile, playerTarget);
+            behavior.Configure(
+                definition,
+                worldMap,
+                profile,
+                worldUnitsPerMile,
+                playerTarget,
+                roamRadiusMilesOverride: VehicleRoamRadiusMiles,
+                roamHomeWorld: roamHome);
             return true;
+        }
+
+        private static Vector3 ResolveBunkerRoamCenter(AntarcticaBase outpost)
+        {
+            if (outpost == null)
+            {
+                return Vector3.zero;
+            }
+
+            var buildings = outpost.GetComponentsInChildren<OutpostBuilding>(true);
+            for (var i = 0; i < buildings.Length; i++)
+            {
+                var building = buildings[i];
+                if (building != null && building.BuildingType == OutpostBuildingType.Bunker)
+                {
+                    var pos = building.transform.position;
+                    pos.y = 0f;
+                    return pos;
+                }
+            }
+
+            var runwayBunker = outpost.transform.Find(OutpostRunwayVisual.RunwayBunkerObjectName);
+            if (runwayBunker != null)
+            {
+                var pos = runwayBunker.position;
+                pos.y = 0f;
+                return pos;
+            }
+
+            var cluster = outpost.transform.Find(OutpostBuildingClusterSpawner.ClusterRootName);
+            if (cluster != null)
+            {
+                var pos = cluster.position;
+                pos.y = 0f;
+                return pos;
+            }
+
+            var fallback = outpost.transform.position;
+            fallback.y = 0f;
+            return fallback;
         }
 
         private static List<VehicleUnitDefinition> CollectCatalogUnits(
@@ -599,17 +653,18 @@ namespace F89.Enemies
             var minRadiusMiles = fliesOverGround
                 ? SpawnMinRadiusMiles
                 : Mathf.Max(SpawnMinRadiusMiles, (keepOutWorld / worldUnitsPerMile) * 1.05f);
+            var outpostMiles = CampaignMapCoordinates.WorldToMiles(outpostWorld, worldMap, ticSizeWorldUnits);
 
             var goldenAngle = 2.399963f;
+            var baseAngle = angleOffsetRadians + index * goldenAngle;
             for (var attempt = 0; attempt < 24; attempt++)
             {
-                var angle = angleOffsetRadians + (index * goldenAngle) + (attempt * 0.31f);
+                var angle = baseAngle + attempt * 0.31f;
                 var t = totalCount > 1 ? index / (float)(totalCount - 1) : 0.5f;
                 var radiusMiles = Mathf.Lerp(minRadiusMiles, SpawnMaxRadiusMiles, t) * (1f - attempt * 0.025f);
-                var candidate = outpostWorld + new Vector3(
-                    Mathf.Cos(angle) * radiusMiles * worldUnitsPerMile,
-                    0f,
-                    Mathf.Sin(angle) * radiusMiles * worldUnitsPerMile);
+                var offsetMiles = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radiusMiles;
+                var candidateMiles = outpostMiles + offsetMiles;
+                var candidate = CampaignMapCoordinates.MilesToWorld(candidateMiles, worldMap, ticSizeWorldUnits);
 
                 if (isFlier)
                 {
@@ -620,7 +675,7 @@ namespace F89.Enemies
                         || GroundUnitMovement.IsAllowedWorldPosition(
                             candidate,
                             worldMap,
-                            worldUnitsPerMile,
+                            ticSizeWorldUnits,
                             mapSizeMiles))
                     {
                         return candidate;
@@ -629,17 +684,21 @@ namespace F89.Enemies
                     continue;
                 }
 
+                candidate.y = 0f;
                 if (GroundUnitMovement.IsAllowedWorldPosition(
                         candidate,
                         worldMap,
-                        worldUnitsPerMile,
+                        ticSizeWorldUnits,
                         mapSizeMiles))
                 {
                     return candidate;
                 }
             }
 
-            var fallback = outpostWorld + Vector3.right * (minRadiusMiles * worldUnitsPerMile);
+            var fallbackAngle = baseAngle + index * 0.17f;
+            var fallbackMiles = outpostMiles + new Vector2(Mathf.Cos(fallbackAngle), Mathf.Sin(fallbackAngle))
+                * minRadiusMiles;
+            var fallback = CampaignMapCoordinates.MilesToWorld(fallbackMiles, worldMap, ticSizeWorldUnits);
             fallback.y = isFlier
                 ? TacScale.TacsToWorld(
                     fliesOverGround ? OutpostGroundRules.HelicopterCruiseAltitudeTacs : 1.5f,

@@ -223,7 +223,7 @@ namespace F89.LandCombat
             GetComponent<LandOutpostGuardMarker>()?.NotifyDestroyed();
 
             LandGroundSceneController.RegisterKill(level);
-            UrKillCredit.RegisterUrTroopKillByLevel(level);
+            UrKillCredit.RegisterEnemyTroopKillByLevel(level);
             if (hitCollider != null)
             {
                 hitCollider.enabled = false;

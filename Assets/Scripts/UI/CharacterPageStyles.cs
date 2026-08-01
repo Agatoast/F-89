@@ -12,6 +12,7 @@ namespace F89.UI
         private static GUIStyle scoreLabelStyle;
         private static GUIStyle scoreValueStyle;
         private static GUIStyle footlockerTitleStyle;
+        private static GUIStyle researchTitleStyle;
         private static GUIStyle killFolderLabelStyle;
         private static GUIStyle panelCaptionStyle;
         private static GUIStyle smallSlotLabelStyle;
@@ -31,6 +32,7 @@ namespace F89.UI
         public static GUIStyle ScoreLabelStyle => Ensure(ref scoreLabelStyle, 14, FontStyle.Normal, TextAnchor.UpperLeft, Color.white);
         public static GUIStyle ScoreValueStyle => Ensure(ref scoreValueStyle, 14, FontStyle.Bold, TextAnchor.UpperRight, Color.white);
         public static GUIStyle FootlockerTitleStyle => Ensure(ref footlockerTitleStyle, 44, FontStyle.Bold, TextAnchor.MiddleLeft, new Color(1f, 0.86f, 0.08f));
+        public static GUIStyle ResearchTitleStyle => Ensure(ref researchTitleStyle, 44, FontStyle.Bold, TextAnchor.UpperRight, new Color(1f, 0.86f, 0.08f));
         public static GUIStyle KillFolderLabelStyle => Ensure(ref killFolderLabelStyle, 30, FontStyle.Bold, TextAnchor.UpperCenter, Color.black);
         public static GUIStyle PanelCaptionStyle => Ensure(ref panelCaptionStyle, 12, FontStyle.Normal, TextAnchor.UpperLeft, new Color(0.92f, 0.92f, 0.92f), wordWrap: true);
         public static GUIStyle ResearchDropHintStyle => Ensure(
@@ -72,6 +74,26 @@ namespace F89.UI
 
         public static int ScaleSlotFont(int baseFontSize) =>
             Mathf.Max(8, Mathf.RoundToInt(baseFontSize * SlotTextScale));
+
+        public static void DrawYellowLabelWithBlackOutline(Rect rect, string text, GUIStyle style)
+        {
+            var previousContentColor = GUI.contentColor;
+            var fillColor = style.normal.textColor;
+
+            GUI.contentColor = Color.black;
+            GUI.Label(new Rect(rect.x - 1f, rect.y, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x + 1f, rect.y, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x, rect.y - 1f, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x, rect.y + 1f, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x - 1f, rect.y - 1f, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x + 1f, rect.y - 1f, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x - 1f, rect.y + 1f, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x + 1f, rect.y + 1f, rect.width, rect.height), text, style);
+
+            GUI.contentColor = fillColor;
+            GUI.Label(rect, text, style);
+            GUI.contentColor = previousContentColor;
+        }
 
         private static GUIStyle Ensure(
             ref GUIStyle style,

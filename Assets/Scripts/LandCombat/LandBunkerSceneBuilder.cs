@@ -187,19 +187,103 @@ namespace F89.LandCombat
         }
     }
 
-    /// <summary>Blue exit pad — returns to the surface ground map.</summary>
+    /// <summary>Blue exit pad — returns to the surface ground map after confirmation.</summary>
     public sealed class LandBunkerExit : MonoBehaviour
     {
+        private static LandBunkerExit activeExit;
+        private static float timeScaleBeforePause = 1f;
+
+        private bool leaveConfirmVisible;
         private bool transitioning;
 
+        public static bool IsLeaveConfirmVisible =>
+            activeExit != null && activeExit.leaveConfirmVisible;
+
+        private void OnEnable()
+        {
+            activeExit = this;
+        }
+
+        private void OnDisable()
+        {
+            if (activeExit == this)
+            {
+                activeExit = null;
+            }
+
+            if (leaveConfirmVisible)
+            {
+                ResumeCombat();
+            }
+        }
+
         private void OnTriggerEnter2D(Collider2D other)
+        {
+            if (transitioning || leaveConfirmVisible || other.GetComponentInParent<LandPlayerController>() == null)
+            {
+                return;
+            }
+
+            BeginLeaveConfirm();
+        }
+
+        private void OnTriggerExit2D(Collider2D other)
         {
             if (transitioning || other.GetComponentInParent<LandPlayerController>() == null)
             {
                 return;
             }
 
+            CancelLeaveConfirm();
+        }
+
+        public static void ConfirmLeave()
+        {
+            if (activeExit == null || activeExit.transitioning)
+            {
+                return;
+            }
+
+            activeExit.ExecuteLeave();
+        }
+
+        public static void CancelLeave()
+        {
+            activeExit?.CancelLeaveConfirm();
+        }
+
+        private void BeginLeaveConfirm()
+        {
+            leaveConfirmVisible = true;
+            timeScaleBeforePause = Time.timeScale > 0f ? Time.timeScale : 1f;
+            Time.timeScale = 0f;
+        }
+
+        private void CancelLeaveConfirm()
+        {
+            if (!leaveConfirmVisible || transitioning)
+            {
+                return;
+            }
+
+            leaveConfirmVisible = false;
+            ResumeCombat();
+        }
+
+        private static void ResumeCombat()
+        {
+            Time.timeScale = timeScaleBeforePause > 0f ? timeScaleBeforePause : 1f;
+        }
+
+        private void ExecuteLeave()
+        {
+            if (transitioning)
+            {
+                return;
+            }
+
             transitioning = true;
+            leaveConfirmVisible = false;
             CharacterGearSession.PersistActive();
             LandBossEncounter.CaptureActiveBossHealthFromBunker();
             LandBunkerHandoffState.Clear();

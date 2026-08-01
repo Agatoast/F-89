@@ -15,12 +15,19 @@ namespace F89.Core
         /// <summary>Clears sortie handoff and resets all outpost/bunker/platoon/boss world progress.</summary>
         public static void ResetMapForFreshPlay()
         {
-            LandMissionHandoffState.Clear();
-            OutpostRunwayDeckState.Clear();
-            CarrierResupplyState.Clear();
-            FriendlyOutpostTakeoffState.Clear();
-            LandMissionCompleteState.Clear();
-            LandMissionHealthState.Clear();
+            if (!ShouldPreserveFlightHandoff())
+            {
+                LandMissionHandoffState.Clear();
+                LandingMileFlagState.Clear();
+                OutpostRunwayDeckState.Clear();
+                CarrierResupplyState.Clear();
+                FriendlyOutpostTakeoffState.Clear();
+                DeckLandingServiceState.Clear();
+                OpenFieldLandingState.Clear();
+                LandMissionCompleteState.Clear();
+                LandMissionHealthState.Clear();
+            }
+
             ResetAllOutpostsAndBunkers(force: true);
         }
 
@@ -79,6 +86,7 @@ namespace F89.Core
             {
                 OutpostRunwayDeckState.Clear();
                 LandMissionHandoffState.Clear();
+                LandingMileFlagState.Clear();
             }
 
             OutpostVehicleSpawner.RemoveAllPlatoons();
@@ -141,7 +149,11 @@ namespace F89.Core
             return LandMissionHandoffState.HasPendingGroundReturn
                 || LandMissionHandoffState.HasPendingEnter
                 || LandMissionHandoffState.ShouldSuppressCarrierRespawn
+                || LandingMileFlagState.HasActiveFlag
                 || LandMissionHandoffState.GetStoredFlightSnapshot().IsValid;
         }
+
+        /// <summary>True while a ground landing / return-to-flight spawn must be preserved.</summary>
+        public static bool ShouldPreserveActiveSortieSpawn() => ShouldPreserveFlightHandoff();
     }
 }

@@ -44,6 +44,9 @@ namespace F89.UI
                 return;
             }
 
+            var previousMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.identity;
+
             EnsureStyles();
             var hudColor = FlightHudColorPalette.Current;
             var currentSpeed = aircraft.CurrentSpeedMph;
@@ -53,6 +56,8 @@ namespace F89.UI
             {
                 DrawTape(hudColor, currentSpeed, layout);
             }
+
+            GUI.matrix = previousMatrix;
         }
 
         private static TapeLayout ComputeTapeLayout()
