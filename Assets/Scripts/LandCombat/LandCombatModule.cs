@@ -1,4 +1,5 @@
 using F89.Core;
+using F89.Flight;
 using UnityEngine;
 
 namespace F89.LandCombat
@@ -23,6 +24,8 @@ namespace F89.LandCombat
             IsActive = true;
             OpenFieldLandingState.BeginFromSortie(snapshot);
             LandOutpostLandingState.BeginFromSortie(snapshot);
+            WaypointLandingState.BeginFromSortie(snapshot);
+            OpenFieldLandingNotice.EvaluateFromSortie(snapshot);
             Debug.Log($"[LandCombat] Module active ({ModuleVersion}). Return scene: {snapshot.ReturnSceneName}");
         }
 
@@ -41,7 +44,7 @@ namespace F89.LandCombat
                 returnSnapshot.ReturnSceneName = GameScenes.FlightTest;
             }
 
-            if (OutpostRunwayDeckState.ConsumePendingDeckTakeoffOnRestore()
+            if (OutpostRunwayDeckState.ConsumePendingFriendlyRunwayTakeoffOnRestore()
                 || returnSnapshot.RestoreWithImmediateTakeoff
                 || LandingMileFlagState.HasActiveFlag
                 || returnSnapshot.HasLandingMiles
@@ -72,15 +75,38 @@ namespace F89.LandCombat
                     OpenFieldLandingState.LandingMiles,
                     returnSnapshot.LandingRotationY);
             }
+            else if (WaypointLandingState.IsActive || !string.IsNullOrWhiteSpace(returnSnapshot.WaypointSiteCode))
+            {
+                returnSnapshot.ReturnToRunwayDeck = false;
+                returnSnapshot.RestoreWithImmediateTakeoff = true;
+                FlightGroundReturnService.EnsureWaypointLandingFlag(returnSnapshot);
+                LandingMileFlagState.TryApplyToSnapshot(ref returnSnapshot);
+                if (!returnSnapshot.HasLandingMiles)
+                {
+                    LandingMileFlagState.ApplyToSnapshot(ref returnSnapshot);
+                }
+            }
             else
             {
                 LandingMileFlagState.TryApplyToSnapshot(ref returnSnapshot);
             }
+
             LandSurfaceSession.Clear();
             LandBossAreaState.Clear();
             LandOutpostLandingState.Clear();
+            WaypointLandingState.Clear();
             OpenFieldLandingState.Clear();
+            OpenFieldLandingNotice.Clear();
             LandMissionHandoffState.BeginReturnToFlight(returnSnapshot, result);
+
+            if (returnSnapshot.RestoreWithImmediateTakeoff
+                || LandingMileFlagState.HasActiveFlag
+                || returnSnapshot.HasLandingMiles
+                || !string.IsNullOrWhiteSpace(returnSnapshot.WaypointSiteCode))
+            {
+                FlightMissionLaunchState.ClearStaleCarrierWhenSortieReturnPending();
+            }
+
             IsActive = false;
             var locationLabel = returnSnapshot.HasLandingMiles
                 ? CampaignMapCoordinates.FormatMilesLabel(
@@ -96,7 +122,9 @@ namespace F89.LandCombat
             LandSurfaceSession.Clear();
             LandBossAreaState.Clear();
             LandOutpostLandingState.Clear();
+            WaypointLandingState.Clear();
             OpenFieldLandingState.Clear();
+            OpenFieldLandingNotice.Clear();
             LandMissionHandoffState.Clear();
         }
     }

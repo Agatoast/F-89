@@ -1,4 +1,6 @@
 using F89.Core;
+using F89.Flight;
+using F89.LandCombat;
 using UnityEngine;
 
 namespace F89.Weapons
@@ -12,6 +14,7 @@ namespace F89.Weapons
         [SerializeField] private float hitRadiusWorld;
         [SerializeField] private int maxGroundHitPoints;
         [SerializeField] private int currentGroundHitPoints;
+        [SerializeField] private int sortieHitBudget;
 
         public string TargetLabel => targetLabel;
         public LockableTargetKind TargetKind => targetKind;
@@ -34,6 +37,9 @@ namespace F89.Weapons
         public int MaxGroundHitPoints => maxGroundHitPoints;
         public int CurrentGroundHitPoints => currentGroundHitPoints;
         public bool HasGroundHitPoints => maxGroundHitPoints > 0;
+        public int SortieHitBudget => sortieHitBudget;
+        public int SortieHitsTaken =>
+            sortieHitBudget > 0 ? Mathf.Max(0, sortieHitBudget - currentGroundHitPoints) : 0;
 
         public void Configure(
             string label,
@@ -103,6 +109,15 @@ namespace F89.Weapons
         {
             maxGroundHitPoints = Mathf.Max(0, maxGhp);
             currentGroundHitPoints = maxGroundHitPoints;
+            sortieHitBudget = 0;
+        }
+
+        /// <summary>One GHP per sortie hit — HUD and crash use discrete hit count.</summary>
+        public void ConfigureSortieHitBudget(int hits)
+        {
+            sortieHitBudget = Mathf.Clamp(hits, 1, PlayerAircraftGhp.MaxSortieHitBudget);
+            maxGroundHitPoints = sortieHitBudget;
+            currentGroundHitPoints = sortieHitBudget;
         }
 
         public void ApplyGroundDamage(int ghpDamage, string weaponName, bool wasLockedShot = false)
@@ -146,7 +161,12 @@ namespace F89.Weapons
 
             if (IsPlayerAircraft)
             {
-                ApplyPlayerAircraftDamage(airGhpDamage, weaponName, wasLockedShot);
+                if (!PlayerAircraftCombatState.IsAirborneForEnemyEngagement(GetComponent<AircraftController>()))
+                {
+                    return;
+                }
+
+                ApplyPlayerAircraftDamage(weaponName, wasLockedShot, playHitFx: true);
                 return;
             }
 
@@ -162,6 +182,12 @@ namespace F89.Weapons
 
             if (IsPlayerAircraft)
             {
+                if (!PlayerAircraftCombatState.IsAirborneForEnemyEngagement(GetComponent<AircraftController>()))
+                {
+                    return;
+                }
+
+                GroundExplosionEffect.PlayPlayerAircraftHit(transform.position);
                 if (Random.value > destroyChance)
                 {
                     Debug.LogWarning(
@@ -169,25 +195,32 @@ namespace F89.Weapons
                     return;
                 }
 
-                ApplyPlayerAircraftDamage(PlayerAircraftGhp.EnemySamHit, weaponName, wasLockedShot);
+                ApplyPlayerAircraftDamage(weaponName, wasLockedShot, playHitFx: false);
                 return;
             }
 
             DestroyFromGroundDamage(weaponName, wasLockedShot);
         }
 
-        private void ApplyPlayerAircraftDamage(int ghpDamage, string weaponName, bool wasLockedShot)
+        private void ApplyPlayerAircraftDamage(string weaponName, bool wasLockedShot, bool playHitFx)
         {
-            if (maxGroundHitPoints <= 0)
+            if (sortieHitBudget <= 0)
             {
-                maxGroundHitPoints = PlayerAircraftGhp.Max;
-                currentGroundHitPoints = maxGroundHitPoints;
+                ConfigureSortieHitBudget(PlayerAircraftGhp.SortieHitsToCrash);
             }
 
-            currentGroundHitPoints = Mathf.Max(0, currentGroundHitPoints - ghpDamage);
+            currentGroundHitPoints = Mathf.Max(
+                0,
+                currentGroundHitPoints - PlayerAircraftGhp.DamagePerEnemyHit);
+
             var hitKind = wasLockedShot ? "locked" : "direct";
+            if (playHitFx)
+            {
+                GroundExplosionEffect.PlayPlayerAircraftHit(transform.position);
+            }
+
             Debug.LogWarning(
-                $"F-89: PLAYER AIRCRAFT took {ghpDamage} GHP from {weaponName} ({hitKind}) "
+                $"F-89: PLAYER AIRCRAFT took {PlayerAircraftGhp.DamagePerEnemyHit} hit from {weaponName} ({hitKind}) "
                 + $"({currentGroundHitPoints}/{maxGroundHitPoints} remaining).");
 
             if (currentGroundHitPoints > 0)
@@ -227,7 +260,29 @@ namespace F89.Weapons
                     OutpostFlightPlatoonState.TryFinalizePlatoonClearance(parentBase);
                 }
 
+                var waypointTroopSite = GetComponentInParent<CampaignWaypointMissionSite>();
+                if (waypointTroopSite != null
+                    && CampaignWaypointSiteIds.IsWaypointSiteCode(waypointTroopSite.SiteCode))
+                {
+                    AntarcticaOutpostState.MarkTargetDestroyed(waypointTroopSite.SiteCode, targetLabel);
+                    CampaignWaypointPlatoonState.TryFinalizeClearance(waypointTroopSite, worldPosition);
+                }
+                else if (waypointTroopSite != null
+                         && GridSquareSiteIds.IsGridSquareSiteCode(waypointTroopSite.SiteCode))
+                {
+                    GridSquareSpawnState.MarkDestroyedBySiteCode(waypointTroopSite.SiteCode);
+                }
+
                 F89.Flight.CombatThreatRange.InvalidateCaches();
+                if (affiliation == TargetAffiliation.Hostile)
+                {
+                    var vehicleUnit = GetComponent<F89.Enemies.VehicleUnitComponent>();
+                    var troopLevel = vehicleUnit?.Definition != null
+                        ? vehicleUnit.Definition.vehicleLevel
+                        : 1;
+                    FlightInfantryLootState.RecordFlightKill(transform, troopLevel);
+                }
+
                 TryRegisterKillCredit();
                 Debug.Log($"Troop {targetLabel} destroyed by {weaponName} ({hitKind}) — no explosion.");
                 gameObject.SetActive(false);
@@ -240,9 +295,22 @@ namespace F89.Weapons
                 currentGroundHitPoints = 0;
                 building.SyncFromLockableTarget(this);
                 var buildingBase = GetComponentInParent<AntarcticaBase>();
+                var wasPrimaryComplete = buildingBase != null
+                    && OutpostPrimaryObjective.AreAirObjectivesDestroyed(buildingBase.BaseName);
                 if (buildingBase != null)
                 {
                     AntarcticaOutpostState.MarkTargetDestroyed(buildingBase.BaseName, targetLabel);
+                    if (!string.IsNullOrWhiteSpace(buildingBase.SiteCode))
+                    {
+                        AntarcticaOutpostState.MarkTargetDestroyed(buildingBase.SiteCode, targetLabel);
+                    }
+                }
+
+                if (buildingBase != null
+                    && !wasPrimaryComplete
+                    && OutpostPrimaryObjective.AreAirObjectivesDestroyed(buildingBase.BaseName))
+                {
+                    F89.UI.MissionObjectiveFlashNotifier.FlashPrimaryEliminated();
                 }
 
                 Debug.Log($"Building {targetLabel} destroyed by {weaponName} ({hitKind}).");
@@ -268,6 +336,39 @@ namespace F89.Weapons
             }
 
             var owningBase = GetComponentInParent<AntarcticaBase>();
+            var waypointSite = GetComponentInParent<CampaignWaypointMissionSite>();
+            if (waypointSite != null && CampaignWaypointSiteIds.IsWaypointSiteCode(waypointSite.SiteCode))
+            {
+                var vehicleUnit = GetComponent<F89.Enemies.VehicleUnitComponent>();
+                // First hostile ground vehicle kill drops the secondary wreck pad (not fliers/troops).
+                if (IsGroundVehicle
+                    && vehicleUnit?.Definition != null
+                    && vehicleUnit.Definition.IsHostile
+                    && !vehicleUnit.Definition.isTroop
+                    && !vehicleUnit.Definition.isFlier)
+                {
+                    CampaignWaypointPlatoonState.RecordHostileVehicleDestroy(waypointSite.SiteCode, worldPosition);
+                }
+
+                AntarcticaOutpostState.MarkTargetDestroyed(waypointSite.SiteCode, targetLabel);
+                CampaignWaypointPlatoonState.TryFinalizeClearance(waypointSite, worldPosition);
+                F89.Flight.CombatThreatRange.InvalidateCaches();
+                TryRegisterKillCredit();
+                Debug.Log($"Waypoint target {waypointSite.SiteCode}/{targetLabel} destroyed by {weaponName} ({hitKind}).");
+                gameObject.SetActive(false);
+                return;
+            }
+
+            if (waypointSite != null && GridSquareSiteIds.IsGridSquareSiteCode(waypointSite.SiteCode))
+            {
+                GridSquareSpawnState.MarkDestroyedBySiteCode(waypointSite.SiteCode);
+                F89.Flight.CombatThreatRange.InvalidateCaches();
+                TryRegisterKillCredit();
+                Debug.Log($"Grid square target {waypointSite.SiteCode}/{targetLabel} destroyed by {weaponName} ({hitKind}).");
+                gameObject.SetActive(false);
+                return;
+            }
+
             if (owningBase != null)
             {
                 AntarcticaOutpostState.MarkTargetDestroyed(owningBase.BaseName, targetLabel);

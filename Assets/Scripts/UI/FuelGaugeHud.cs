@@ -1,5 +1,7 @@
+using F89.Core;
 using F89.Flight;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace F89.UI
 {
@@ -11,6 +13,7 @@ namespace F89.UI
         private static readonly Color TickRed = new Color(0.92f, 0.18f, 0.18f, 1f);
         private static readonly Color LabelWhite = Color.white;
         private static readonly Color DisplayBackground = new Color(0.02f, 0.025f, 0.03f, 1f);
+        private static readonly Color RequestFuelFrameFill = new Color(0.02f, 0.025f, 0.03f, 1f);
 
         [SerializeField] private AircraftController aircraft;
 
@@ -20,7 +23,12 @@ namespace F89.UI
         private GUIStyle footerStyle;
         private GUIStyle rangeLabelStyle;
         private GUIStyle rangeValueStyle;
+        private GUIStyle requestFuelLabelStyle;
         private int lastFontSize = -1;
+        private int requestFuelLabelFontSize = -1;
+        private bool requestFuelButtonLit;
+        private float requestFuelLitUntilUnscaled;
+        private bool requestFuelConfirmVisible;
 
         public void Configure(AircraftController aircraftController)
         {
@@ -38,12 +46,21 @@ namespace F89.UI
                 return;
             }
 
+            if (requestFuelConfirmVisible)
+            {
+                DrawRequestFuelConfirmDialog();
+                return;
+            }
+
+            TryHandleRequestFuelButton();
+
             if (Event.current.type != EventType.Repaint)
             {
                 return;
             }
 
             DrawFuelGauge();
+            DrawRequestFuelButton();
         }
 
         private void DrawFuelGauge()
@@ -127,6 +144,181 @@ namespace F89.UI
                 new Rect(scope.x, rangeLabelY + lineHeight * 0.85f, scope.width, lineHeight),
                 $"{aircraft.ProjectedRangeMiles:0} MI",
                 rangeValueStyle);
+        }
+
+        private static Rect GetRequestFuelButtonRect()
+        {
+            var gauge = RadarMfdBezelRenderer.ComputeFuelGaugeLayout().ScopeRect;
+            var height = RadarMfdBezelRenderer.EdgeOsbSize * 1.75f;
+            return new Rect(0f, gauge.yMax, gauge.width, height);
+        }
+
+        private void TryHandleRequestFuelButton()
+        {
+            if (requestFuelConfirmVisible || !CanRequestMidAirRefuel())
+            {
+                return;
+            }
+
+            if (Event.current.type != EventType.MouseDown || Event.current.button != 0)
+            {
+                return;
+            }
+
+            var rect = GetRequestFuelButtonRect();
+            if (!rect.Contains(GetGuiMousePosition()))
+            {
+                return;
+            }
+
+            requestFuelButtonLit = true;
+            requestFuelLitUntilUnscaled = Time.unscaledTime + 0.35f;
+            Event.current.Use();
+            requestFuelConfirmVisible = true;
+            Time.timeScale = 0f;
+        }
+
+        private void DrawRequestFuelConfirmDialog()
+        {
+            var previousDepth = GUI.depth;
+            GUI.depth = -10000;
+
+            var result = RequestFuelConfirmDialog.Draw(true);
+            if (result == RequestFuelConfirmDialog.Result.Confirmed)
+            {
+                requestFuelConfirmVisible = false;
+                BeginMidAirRefuelRequest();
+            }
+            else if (result == RequestFuelConfirmDialog.Result.Cancelled)
+            {
+                requestFuelConfirmVisible = false;
+                Time.timeScale = 1f;
+            }
+
+            GUI.depth = previousDepth;
+        }
+
+        private void BeginMidAirRefuelRequest()
+        {
+            if (aircraft == null)
+            {
+                return;
+            }
+
+            var player = aircraft.gameObject;
+            var snapshot = AircraftLandingController.CaptureMidAirRefuelSnapshot(player);
+            snapshot.HasInFlightSpeed = true;
+            snapshot.InFlightSpeedMph = aircraft.CurrentSpeedMph;
+            snapshot.InFlightAutopilotActive = aircraft.IsAutopilotActive;
+
+            MidAirRefuelHandoffState.BeginEnterFromFlight(snapshot);
+            FlightMissionStartBootstrap.ResetForSceneLoad();
+            SceneManager.LoadScene(GameScenes.MARefuel);
+        }
+
+        private void DrawRequestFuelButton()
+        {
+            if (!CanRequestMidAirRefuel())
+            {
+                return;
+            }
+
+            var rect = GetRequestFuelButtonRect();
+            var hudColor = FlightHudColorPalette.Mfd;
+            var mouseOver = rect.Contains(GetGuiMousePosition());
+            var lit = requestFuelButtonLit && Time.unscaledTime < requestFuelLitUntilUnscaled;
+            var lowFuel = aircraft.TotalFuelCapacityGallons > 0f
+                && aircraft.TotalFuelGallons / aircraft.TotalFuelCapacityGallons < 0.3f;
+            var highlighted = lit || mouseOver || lowFuel;
+            var textAlpha = highlighted ? 1f : 0.48f;
+            var borderColor = highlighted ? Color.white : new Color(1f, 1f, 1f, 0.82f);
+
+            var previousDepth = GUI.depth;
+            var previousMatrix = GUI.matrix;
+            GUI.matrix = Matrix4x4.identity;
+            GUI.depth = -101;
+
+            var previous = GUI.color;
+            GUI.color = RequestFuelFrameFill;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            DrawMfdBorder(rect, 1f, borderColor);
+            GUI.color = previous;
+
+            var fontSize = GetRequestFuelFontSize(rect);
+            if (requestFuelLabelStyle == null || requestFuelLabelFontSize != fontSize)
+            {
+                requestFuelLabelFontSize = fontSize;
+                requestFuelLabelStyle = HudStyleFactory.CreateLabel(
+                    fontSize,
+                    FontStyle.Bold,
+                    TextAnchor.MiddleCenter,
+                    hudColor);
+            }
+
+            requestFuelLabelStyle.normal.textColor = new Color(hudColor.r, hudColor.g, hudColor.b, textAlpha);
+            var lineHeight = rect.height * 0.5f;
+            GUI.Label(new Rect(rect.x, rect.y, rect.width, lineHeight), "REQUEST", requestFuelLabelStyle);
+            GUI.Label(new Rect(rect.x, rect.y + lineHeight, rect.width, lineHeight), "FUEL", requestFuelLabelStyle);
+
+            GUI.depth = previousDepth;
+            GUI.matrix = previousMatrix;
+        }
+
+        private static int GetRequestFuelFontSize(Rect rect)
+        {
+            var lineHeight = rect.height * 0.5f;
+            var heightCap = Mathf.FloorToInt(lineHeight * 0.88f);
+            for (var size = heightCap; size >= 7; size--)
+            {
+                var style = HudStyleFactory.CreateLabel(size, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+                var requestSize = style.CalcSize(new GUIContent("REQUEST"));
+                var fuelSize = style.CalcSize(new GUIContent("FUEL"));
+                if (requestSize.x <= rect.width - 4f
+                    && requestSize.y <= lineHeight - 1f
+                    && fuelSize.x <= rect.width - 4f
+                    && fuelSize.y <= lineHeight - 1f)
+                {
+                    return size;
+                }
+            }
+
+            return 9;
+        }
+
+        private static bool CanRequestMidAirRefuel()
+        {
+            if (SceneManager.GetActiveScene().name != GameScenes.FlightTest)
+            {
+                return false;
+            }
+
+            if (AircraftLandingController.IsLandingActive
+                || AircraftLandingController.IsTakeoffActive
+                || AircraftLandingController.IsRunwayDeckMenuVisible
+                || AircraftLandingController.IsParkedAtRunway
+                || AircraftLandingController.IsCarrierApproachPromptVisible)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static Vector2 GetGuiMousePosition()
+        {
+            var mouse = Input.mousePosition;
+            return new Vector2(mouse.x, Screen.height - mouse.y);
+        }
+
+        private static void DrawMfdBorder(Rect rect, float thickness, Color color)
+        {
+            var previous = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), Texture2D.whiteTexture);
+            GUI.color = previous;
         }
 
         private static void DrawTankLine(

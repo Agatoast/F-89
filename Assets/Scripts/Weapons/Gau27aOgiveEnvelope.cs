@@ -4,8 +4,8 @@ using UnityEngine;
 namespace F89.Weapons
 {
     /// <summary>
-    /// Forward cone ogive in front of the aircraft. The crosshair may sit anywhere inside;
-    /// rounds still travel at most <see cref="Gau27aWeaponConfig.maxRangeMiles"/>.
+    /// Forward ogive centered on the aircraft: a circular sector with a 30° arc at max range
+    /// (± half-angle from the nose). The gun cursor cannot leave this region.
     /// </summary>
     public static class Gau27aOgiveEnvelope
     {
@@ -26,9 +26,19 @@ namespace F89.Weapons
             }
 
             var ray = camera.ScreenPointToRay(screenPosition);
-            if (!TryIntersectHorizontalPlane(ray, origin.y, out var hit))
+            if (!TryIntersectHorizontalPlane(ray, 0f, out var hit))
             {
-                return false;
+                // Ray misses the map plane — aim along flattened view direction, then clamp.
+                var view = Flatten(ray.direction);
+                if (view.sqrMagnitude < 0.0001f)
+                {
+                    view = Flatten(forward);
+                }
+
+                hit = origin + view.normalized * WorldMapConfig.RangeMilesToWorldUnits(
+                    config.ogiveMaxRangeMiles,
+                    worldMap,
+                    ticSizeWorldUnits);
             }
 
             clampedWorldPoint = ClampToOgive(
@@ -41,6 +51,11 @@ namespace F89.Weapons
             return true;
         }
 
+        /// <summary>
+        /// Polar clamp into a circular sector centered on the plane:
+        /// distance ∈ [min, max], bearing ∈ ±ogiveHalfAngle (30° total arc).
+        /// Far edge is a circular arc about the aircraft, not a flat cone face.
+        /// </summary>
         public static Vector3 ClampToOgive(
             Vector3 origin,
             Vector3 forward,
@@ -69,40 +84,87 @@ namespace F89.Weapons
                 config.minCrosshairMiles,
                 worldMap,
                 ticSizeWorldUnits);
-            var halfAngleRadians = config.ogiveHalfAngleDegrees * Mathf.Deg2Rad;
+            minWorld = Mathf.Max(0.01f, minWorld);
+            ogiveMaxWorld = Mathf.Max(minWorld, ogiveMaxWorld);
+
+            var halfAngleDegrees = Mathf.Max(0.01f, config.ogiveHalfAngleDegrees);
 
             var offset = worldPoint - origin;
             offset.y = 0f;
             if (offset.sqrMagnitude < 0.0001f)
             {
-                var result = origin + forward * Mathf.Max(minWorld, 0.01f);
-                result.y = 0.5f;
-                return result;
+                var onNose = origin + forward * minWorld;
+                onNose.y = 0.5f;
+                return onNose;
             }
 
-            var forwardDistance = Vector3.Dot(offset, forward);
-            var lateral = offset - forward * forwardDistance;
-            var lateralDistance = lateral.magnitude;
+            var distance = offset.magnitude;
+            var bearingDegrees = Vector3.SignedAngle(forward, offset / distance, Vector3.up);
 
-            if (forwardDistance < minWorld)
+            distance = Mathf.Clamp(distance, minWorld, ogiveMaxWorld);
+            bearingDegrees = Mathf.Clamp(bearingDegrees, -halfAngleDegrees, halfAngleDegrees);
+
+            var clampedDir = Quaternion.AngleAxis(bearingDegrees, Vector3.up) * forward;
+            var clamped = origin + clampedDir * distance;
+            clamped.y = 0.5f;
+            return clamped;
+        }
+
+        /// <summary>
+        /// True when the target lies inside the forward ogive sector (±half-angle, min–max range).
+        /// </summary>
+        public static bool IsWithinOgive(
+            Vector3 origin,
+            Vector3 forward,
+            Vector3 targetPosition,
+            Gau27aWeaponConfig config,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits)
+        {
+            if (config == null)
             {
-                forwardDistance = minWorld;
-                lateral = Vector3.zero;
-                lateralDistance = 0f;
+                return false;
+            }
+
+            origin.y = 0f;
+            targetPosition.y = 0f;
+            forward = Flatten(forward);
+            if (forward.sqrMagnitude < 0.0001f)
+            {
+                forward = Vector3.forward;
             }
             else
             {
-                forwardDistance = Mathf.Min(forwardDistance, ogiveMaxWorld);
-                var maxLateral = forwardDistance * Mathf.Tan(halfAngleRadians);
-                if (lateralDistance > maxLateral)
-                {
-                    lateral = lateral / lateralDistance * maxLateral;
-                }
+                forward.Normalize();
             }
 
-            var clamped = origin + forward * forwardDistance + lateral;
-            clamped.y = 0.5f;
-            return clamped;
+            var ogiveMaxWorld = WorldMapConfig.RangeMilesToWorldUnits(
+                config.ogiveMaxRangeMiles,
+                worldMap,
+                ticSizeWorldUnits);
+            var minWorld = WorldMapConfig.RangeMilesToWorldUnits(
+                config.minCrosshairMiles,
+                worldMap,
+                ticSizeWorldUnits);
+            minWorld = Mathf.Max(0.01f, minWorld);
+            ogiveMaxWorld = Mathf.Max(minWorld, ogiveMaxWorld);
+            var halfAngleDegrees = Mathf.Max(0.01f, config.ogiveHalfAngleDegrees);
+
+            var offset = targetPosition - origin;
+            offset.y = 0f;
+            if (offset.sqrMagnitude < 0.0001f)
+            {
+                return true;
+            }
+
+            var distance = offset.magnitude;
+            if (distance < minWorld || distance > ogiveMaxWorld)
+            {
+                return false;
+            }
+
+            var bearingDegrees = Vector3.SignedAngle(forward, offset / distance, Vector3.up);
+            return Mathf.Abs(bearingDegrees) <= halfAngleDegrees;
         }
 
         public static Vector3 ClampFireDestination(

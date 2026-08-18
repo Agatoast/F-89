@@ -17,18 +17,21 @@ namespace F89.Testing
             var existingPlayer = Object.FindAnyObjectByType<AircraftController>();
             if (existingPlayer != null)
             {
+                GamePauseController.ClearPauseOnSceneLoad();
                 FlightAudioBootstrap.EnsureReady();
-                FlightMissionStartBootstrap.ResetForSceneLoad();
+                RepositionForPendingReturn(existingPlayer);
                 EnsurePlayerConfigured(existingPlayer);
+                EnsurePlayerLockableTarget(existingPlayer.gameObject);
 
                 EnsureMapSystems(existingPlayer);
                 EnsurePlayerVisuals(existingPlayer);
-                AntarcticaBaseSpawner.SpawnIfNeeded();
-                EnsureWeaponSystems(existingPlayer.gameObject);
                 JetEngineSound.EnsureOn(existingPlayer.gameObject);
                 Gau27FireSound.EnsureOn(existingPlayer.gameObject);
+                EnsureWeaponSystems(existingPlayer.gameObject);
                 WeaponTestTargetSpawner.RemoveIfPresent();
                 FlightHudHost.EnsureOn(existingPlayer.gameObject);
+                FlightMissionStartRunner.EnsureOn(existingPlayer.gameObject);
+                FlightMissionStartBootstrap.Apply(existingPlayer, existingPlayer.gameObject);
 
                 return null;
             }
@@ -108,12 +111,13 @@ namespace F89.Testing
 
         public static GameObject Build()
         {
+            GamePauseController.ClearPauseOnSceneLoad();
             FlightAudioBootstrap.EnsureReady();
             var profile = LoadFlightProfile();
             var worldMap = LoadWorldMapConfig();
             var mapRoot = CreateMapRoot(worldMap, profile);
-            AntarcticaBaseSpawner.SpawnIfNeeded();
             var player = CreatePlayer(profile, worldMap);
+            AntarcticaBaseSpawner.SpawnIfNeeded();
             SetupCamera(player);
             CreateWeaponSystems(player);
             EnsureCountermeasureSystems(player);
@@ -131,6 +135,8 @@ namespace F89.Testing
 
             CreateAntarcticaMapOverlay(player);
             FlightHudHost.EnsureOn(player);
+            FlightMissionStartRunner.EnsureOn(player);
+            FlightMissionStartBootstrap.Apply(player.GetComponent<AircraftController>(), player);
 
             Debug.Log("F-89 flight test ready. Launch from USS Martin Van Buren. Mission 1: capture Palmer Station.");
             return player;
@@ -263,6 +269,9 @@ namespace F89.Testing
 
         private static GameObject CreatePlayer(FlightProfile profile, WorldMapConfig worldMap)
         {
+            LandMissionHandoffState.ForceReloadFromPrefs();
+            LandingMileFlagState.ForceReloadFromPrefs();
+
             var player = new GameObject("Player");
             player.transform.position = Vector3.zero;
             player.transform.rotation = Quaternion.identity;
@@ -311,7 +320,7 @@ namespace F89.Testing
             return player;
         }
 
-        private static void EnsurePlayerLockableTarget(GameObject player)
+        public static void EnsurePlayerLockableTarget(GameObject player)
         {
             var target = player.GetComponent<LockableTarget>();
             if (target == null)
@@ -324,7 +333,7 @@ namespace F89.Testing
                 LockableTargetKind.Air,
                 TargetAffiliation.Friendly,
                 TargetUnitClass.PlayerAircraft);
-            target.SetMaxGroundHitPoints(PlayerAircraftGhp.Max);
+            BunkerDefenseIntegration.ApplySortiePlaneHits(target);
         }
 
         private static void CreateWeaponSystems(GameObject player)
@@ -478,6 +487,65 @@ namespace F89.Testing
             EnsureFlightCamera(player.GetComponent<AircraftController>());
         }
 
+        private static void RepositionForPendingReturn(AircraftController player)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            FlightMissionLaunchState.TryRestorePendingLaunchFromPrefs();
+            if (FlightMissionLaunchState.IsExplicitCarrierSortiePending())
+            {
+                return;
+            }
+
+            if (!FlightGroundReturnService.ShouldApplySortieReturn())
+            {
+                return;
+            }
+
+            LandMissionHandoffState.ForceReloadFromPrefs();
+            LandingMileFlagState.ForceReloadFromPrefs();
+            if (!FlightGroundReturnService.TryGetPendingReturnSpawn(out var spawnPosition, out var spawnRotation))
+            {
+                return;
+            }
+
+            spawnPosition.y = 0f;
+            player.transform.SetPositionAndRotation(spawnPosition, spawnRotation);
+            if (player.TryGetComponent<Rigidbody>(out var body))
+            {
+                body.position = spawnPosition;
+                body.rotation = spawnRotation;
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+        }
+
+        private static void RestoreSortieFuelFromHandoff(AircraftController player)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            LandMissionHandoffState.ForceReloadFromPrefs();
+            var snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
+            if (!snapshot.IsValid)
+            {
+                player.Refuel();
+                return;
+            }
+
+            SortieSnapshotFuel.ResolveTankGallons(snapshot, out var leftGallons, out var rightGallons);
+            player.ApplyFuelState(leftGallons, rightGallons, snapshot.AfterburnerFuelRemaining);
+            if (player.TotalFuelGallons <= 0f)
+            {
+                player.Refuel();
+            }
+        }
+
         private static void EnsurePlayerConfigured(AircraftController player)
         {
             if (player == null)
@@ -494,6 +562,16 @@ namespace F89.Testing
             var worldMap = player.WorldMap ?? LoadWorldMapConfig();
             var input = player.GetComponent<PlayerAircraftInput>();
             player.Configure(profile, input, worldMap);
+            if (FlightGroundReturnService.ShouldPreserveSortieFuelOnSpawn())
+            {
+                RestoreSortieFuelFromHandoff(player);
+            }
+            else if (!FlightMissionLaunchState.IsExplicitCarrierSortiePending())
+            {
+                player.Refuel();
+            }
+
+            EnsurePlayerLockableTarget(player.gameObject);
         }
 
         private static void EnsureWeaponConfigs(

@@ -8,6 +8,7 @@ namespace F89.Core
 
         public static void BeginDeckRearm()
         {
+            FriendlyOutpostTakeoffState.Clear();
             IsResupplyFromCarrier = true;
             ReturnToDeckMenu = true;
         }

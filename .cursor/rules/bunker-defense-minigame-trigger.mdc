@@ -1,0 +1,15 @@
+---
+description: Bunker Defense - same 18 missions, mission-start VTOL
+alwaysApply: true
+---
+
+# Bunker Defense Mini-Game Trigger
+
+Bunker Defense is the mission-start defense minigame for F-89.
+
+- **Which missions:** Mission **03** intro from **OP-SOUTH** (`id "3"`, map 01), then catalog OP/STN assault sites **after** the campaign mission that clears that OP/STN is **complete** (5→OP-01, 8→OP-13, …). Mission 01/02 opening sorties do **not** trigger bunker defense (except map-01 mission-03 intro).
+- **When:** Campaign **START MISSION** from loadout only when **launch base is friendly occupied**, site is a catalog OP/STN defense location, clear mission is done (`current mission > clear mission`), and it is the **first launch from that base** since unlock (not carrier resupply / RETURN TO BASE deck paths). Claxon → `BunkerPlayScene` briefing → combat.
+- **Mission id:** Mission 03 intro always uses `"3"` from OP-SOUTH; later sites use the **site code** (e.g. `OP-01`, `OP-13`) so consumption is per base.
+- **Once:** Mark consumed on **OPEN FIRE**, not on scene load.
+- **Outcome:** Hangar survives → **+1** plane hit; hangar destroyed → **-1**. `FlightMissionData` only.
+- **Resume:** Last landing + mission character page.

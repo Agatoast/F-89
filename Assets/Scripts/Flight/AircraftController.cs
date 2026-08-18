@@ -168,7 +168,6 @@ namespace F89.Flight
 
         private void Start()
         {
-            FlightMissionStartBootstrap.Apply(this, gameObject);
             FlightHudBootstrap.EnsureForPlayer(gameObject);
         }
 
@@ -206,6 +205,12 @@ namespace F89.Flight
 
         public void TryApplyMissionCarrierLaunch()
         {
+            if (FlightGroundReturnService.BlocksCarrierDeckTakeoff()
+                || FlightMissionLaunchState.ShouldHonorOutpostLaunch())
+            {
+                return;
+            }
+
             if (!FlightMissionLaunchState.TryConsumeCarrierLaunch())
             {
                 return;
@@ -215,7 +220,7 @@ namespace F89.Flight
                 transform,
                 worldMap,
                 profile);
-            VtolTakeoffLaunch.BeginAt(this, transform.position);
+            CarrierDeckLaunch.BeginTakeoff(this);
         }
 
         private void InitializeFlightState()
@@ -230,7 +235,17 @@ namespace F89.Flight
                 return;
             }
 
-            Refuel();
+            if (!FlightGroundReturnService.ShouldPreserveSortieFuelOnSpawn()
+                && !FlightGroundReturnService.ShouldApplySortieReturn()
+                && !LandMissionHandoffState.ShouldSuppressCarrierRespawn)
+            {
+                Refuel();
+            }
+            else
+            {
+                RestoreSortieFuelFromHandoffIfAvailable();
+            }
+
             if (FlightMissionLaunchState.HasPendingLaunch || AircraftLandingController.IsTakeoffActive)
             {
                 currentSpeedMph = 0f;
@@ -337,10 +352,26 @@ namespace F89.Flight
         {
             RefuelAfterburner();
 
-            if (worldMap != null)
+            var gallonsPerTank = FuelGallonsPerTank;
+            leftTankGallons = gallonsPerTank;
+            rightTankGallons = gallonsPerTank;
+        }
+
+        private void RestoreSortieFuelFromHandoffIfAvailable()
+        {
+            LandMissionHandoffState.ForceReloadFromPrefs();
+            var snapshot = LandMissionHandoffState.GetStoredFlightSnapshot();
+            if (!snapshot.IsValid)
             {
-                leftTankGallons = worldMap.fuelGallonsPerTank;
-                rightTankGallons = worldMap.fuelGallonsPerTank;
+                Refuel();
+                return;
+            }
+
+            SortieSnapshotFuel.ResolveTankGallons(snapshot, out var leftGallons, out var rightGallons);
+            ApplyFuelState(leftGallons, rightGallons, snapshot.AfterburnerFuelRemaining);
+            if (TotalFuelGallons <= 0f)
+            {
+                Refuel();
             }
         }
 
@@ -353,6 +384,39 @@ namespace F89.Flight
             {
                 afterburnerFuelRemaining = Mathf.Min(afterburnerFuelRemaining, profile.afterburnerFuelCapacity);
             }
+        }
+
+        public void RestoreInFlightMotion(float speedMph, bool autopilotActive)
+        {
+            currentSpeedMph = Mathf.Max(0f, speedMph);
+            if (profile != null && worldMap != null)
+            {
+                currentSpeed = profile.MphToWorldSpeed(currentSpeedMph, worldMap);
+            }
+
+            IsAutopilotActive = autopilotActive;
+            if (body == null)
+            {
+                return;
+            }
+
+            if (autopilotActive)
+            {
+                body.linearVelocity = Vector3.zero;
+                return;
+            }
+
+            var forward = transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f)
+            {
+                body.linearVelocity = Vector3.zero;
+                return;
+            }
+
+            forward.Normalize();
+            body.linearVelocity = forward * currentSpeed;
+            body.angularVelocity = Vector3.zero;
         }
 
         private void FixedUpdate()

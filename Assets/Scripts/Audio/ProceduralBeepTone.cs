@@ -39,6 +39,28 @@ namespace F89.Audio
 
         public static AudioClip CreateLockTone(float frequencyHz, float durationSeconds, float volume = 0.28f)
         {
+            return CreateSustainedLockTone(frequencyHz, durationSeconds, volume);
+        }
+
+        /// <summary>Loop-friendly lock tone without a trailing fade-out.</summary>
+        public static AudioClip CreateSustainedLockTone(float frequencyHz, float durationSeconds, float volume = 0.28f)
+        {
+            var sampleCount = Mathf.Max(1, Mathf.RoundToInt(SampleRate * durationSeconds));
+            var data = new float[sampleCount];
+            for (var i = 0; i < sampleCount; i++)
+            {
+                var t = i / (float)SampleRate;
+                var fadeIn = Mathf.Clamp01(t / 0.03f);
+                data[i] = Mathf.Sin(Mathf.PI * 2f * frequencyHz * t) * fadeIn * volume;
+            }
+
+            var clip = AudioClip.Create("LockTone", sampleCount, 1, SampleRate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        public static AudioClip CreateLegacyLockTone(float frequencyHz, float durationSeconds, float volume = 0.28f)
+        {
             var sampleCount = Mathf.Max(1, Mathf.RoundToInt(SampleRate * durationSeconds));
             var data = new float[sampleCount];
             for (var i = 0; i < sampleCount; i++)

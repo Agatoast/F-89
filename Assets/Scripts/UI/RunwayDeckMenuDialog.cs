@@ -21,6 +21,9 @@ namespace F89.UI
             public bool DismountEnabled;
             public bool TakeOffEnabled;
             public bool EndMissionEnabled;
+            public bool ShowMissionStatus;
+            public bool PrimaryMissionComplete;
+            public bool SecondaryMissionComplete;
             public string Subtitle;
             /// <summary>Vertical anchor for the dialog (0.5 = center). Higher values sit lower on screen.</summary>
             public float DialogVerticalAnchor;
@@ -34,8 +37,15 @@ namespace F89.UI
         private const float ButtonGap = 12f;
         private const int ButtonFontSize = 16;
         private const int ButtonCount = 5;
+        private const float MissionStatusColumnWidth = 72f;
+        private const float MissionStatusLightSize = 18f;
+
+        private static readonly Color MissionIncompleteLightColor = new Color(0.82f, 0.12f, 0.1f);
+        private static readonly Color MissionCompleteLightColor = new Color(0.12f, 0.72f, 0.18f);
 
         private static GUIStyle messageStyle;
+        private static GUIStyle missionStatusHeadingStyle;
+        private static GUIStyle missionStatusSubheadingStyle;
 
         public static Result Draw(bool visible, in Options options)
         {
@@ -74,6 +84,28 @@ namespace F89.UI
 
             var buttonX = dialogRect.x + (dialogRect.width - ButtonWidth) * 0.5f;
             var buttonY = dialogRect.y + 64f + options.ButtonVerticalOffset;
+
+            if (options.ShowMissionStatus)
+            {
+                DrawMissionStatusColumn(
+                    new Rect(
+                        dialogRect.x + 16f,
+                        dialogRect.y + 58f + options.ButtonVerticalOffset,
+                        MissionStatusColumnWidth,
+                        72f),
+                    "PRIMARY",
+                    showMissionLabel: true,
+                    options.PrimaryMissionComplete);
+                DrawMissionStatusColumn(
+                    new Rect(
+                        dialogRect.x + dialogRect.width - 16f - MissionStatusColumnWidth,
+                        dialogRect.y + 58f + options.ButtonVerticalOffset,
+                        MissionStatusColumnWidth,
+                        72f),
+                    "SECONDARY",
+                    showMissionLabel: true,
+                    options.SecondaryMissionComplete);
+            }
 
             if (DrawMenuButton(
                     new Rect(buttonX, buttonY, ButtonWidth, ButtonHeight),
@@ -158,6 +190,38 @@ namespace F89.UI
             return true;
         }
 
+        private static void DrawMissionStatusColumn(
+            Rect columnRect,
+            string heading,
+            bool showMissionLabel,
+            bool complete)
+        {
+            var headingRect = new Rect(columnRect.x, columnRect.y, columnRect.width, 18f);
+            GUI.Label(headingRect, heading, missionStatusHeadingStyle);
+
+            var lightRect = new Rect(
+                columnRect.x + (columnRect.width - MissionStatusLightSize) * 0.5f,
+                columnRect.y + 22f,
+                MissionStatusLightSize,
+                MissionStatusLightSize);
+            DrawMissionStatusLight(lightRect, complete);
+
+            if (showMissionLabel)
+            {
+                var missionRect = new Rect(columnRect.x, columnRect.y + 44f, columnRect.width, 18f);
+                GUI.Label(missionRect, "MISSION", missionStatusSubheadingStyle);
+            }
+        }
+
+        private static void DrawMissionStatusLight(Rect rect, bool complete)
+        {
+            GUI.color = complete ? MissionCompleteLightColor : MissionIncompleteLightColor;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = Color.black;
+            HudGuiUtility.DrawWireBox(rect, 1f);
+            GUI.color = Color.white;
+        }
+
         private static void EnsureStyles()
         {
             if (messageStyle != null)
@@ -171,6 +235,18 @@ namespace F89.UI
                 TextAnchor.MiddleCenter,
                 Color.black,
                 wordWrap: true);
+            missionStatusHeadingStyle = HudStyleFactory.CreateLabel(
+                12,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                Color.black,
+                wordWrap: false);
+            missionStatusSubheadingStyle = HudStyleFactory.CreateLabel(
+                12,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                Color.black,
+                wordWrap: false);
         }
     }
 }

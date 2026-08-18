@@ -5,8 +5,8 @@ namespace F89.LandCombat
 {
     /// <summary>
     /// Rolls random Ultimate Reich loot for enemy corpses.
-    /// Per item: pick tech level uniformly from 1..enemyLevel, then pick item type
-    /// (weapon / helmet / vest / boots / bandage / grenade) with equal chance.
+    /// Per equipment item: pick tech level uniformly from 1..enemyLevel, then pick item type
+    /// (weapon / helmet / vest / boots) with equal chance.
     /// </summary>
     public static class LandEnemyLootGenerator
     {
@@ -20,7 +20,7 @@ namespace F89.LandCombat
             Grenade = 5
         }
 
-        private const int LootTypeCount = 6;
+        private const int EquipmentTypeCount = 4;
 
         public static void FillRandomLoot(int enemyLevel, List<LandGearInstance> into)
         {
@@ -30,16 +30,31 @@ namespace F89.LandCombat
                 return;
             }
 
-            enemyLevel = LandUrEnemyStats.ClampLevel(enemyLevel);
+            FillInfantryDeathLoot(enemyLevel, into);
+        }
+
+        /// <summary>Guaranteed infantry corpse loot — each equipment tech level is 1..infantryLevel.</summary>
+        public static void FillInfantryDeathLoot(int infantryLevel, List<LandGearInstance> into)
+        {
+            into?.Clear();
+            if (into == null)
+            {
+                return;
+            }
+
+            infantryLevel = LandUrEnemyStats.ClampLevel(infantryLevel);
             var count = Random.Range(LandEnemyLootRules.LootMinItems, LandEnemyLootRules.LootMaxItems + 1);
             for (var i = 0; i < count; i++)
             {
-                if (!TryRollItem(enemyLevel, out var item))
+                if (TryRollEquipment(infantryLevel, out var item))
                 {
-                    continue;
+                    into.Add(item);
                 }
+            }
 
-                into.Add(item);
+            if (into.Count == 0 && TryRollEquipment(infantryLevel, out var fallback))
+            {
+                into.Add(fallback);
             }
         }
 
@@ -53,7 +68,7 @@ namespace F89.LandCombat
             }
 
             enemyLevel = LandUrEnemyStats.ClampLevel(enemyLevel);
-            if (TryRollLeveledItemAtExactLevel(enemyLevel, out var guaranteedItem))
+            if (TryRollEquipmentAtExactLevel(enemyLevel, out var guaranteedItem))
             {
                 into.Add(guaranteedItem);
             }
@@ -63,38 +78,71 @@ namespace F89.LandCombat
                 LandEnemyLootRules.BossLootMaxExtraItems + 1);
             for (var i = 0; i < extraCount; i++)
             {
-                if (TryRollItem(enemyLevel, out var item))
+                if (TryRollEquipment(enemyLevel, out var item))
                 {
                     into.Add(item);
                 }
             }
         }
 
-        private static bool TryRollItem(int enemyLevel, out LandGearInstance item)
+        private static int RollUniformItemLevel(int maxLevel) =>
+            Random.Range(LandUrEnemyStats.MinLevel, maxLevel + 1);
+
+        private static bool TryRollEquipment(int maxLevel, out LandGearInstance item)
         {
-            // Even chance among every level from 1 through the enemy's level.
-            var itemLevel = Random.Range(LandUrEnemyStats.MinLevel, enemyLevel + 1);
-            // Even chance among item types (revisited later).
-            var type = (LootItemType)Random.Range(0, LootTypeCount);
-            if (!TryGetItem(type, itemLevel, out item))
+            maxLevel = LandUrEnemyStats.ClampLevel(maxLevel);
+            for (var attempt = 0; attempt < EquipmentTypeCount; attempt++)
             {
-                return false;
+                var itemLevel = RollUniformItemLevel(maxLevel);
+                var type = (LootItemType)Random.Range(0, EquipmentTypeCount);
+                if (!TryGetItem(type, itemLevel, out item))
+                {
+                    continue;
+                }
+
+                item = LandLoadoutEquipService.CloneItem(item);
+                if (item != null && IsItemLevelAtMost(item, maxLevel))
+                {
+                    return true;
+                }
             }
 
-            item = LandLoadoutEquipService.CloneItem(item);
-            return item != null;
+            item = null;
+            return false;
         }
 
-        private static bool TryRollLeveledItemAtExactLevel(int techLevel, out LandGearInstance item)
+        private static bool TryRollEquipmentAtExactLevel(int techLevel, out LandGearInstance item)
         {
-            var type = (LootItemType)Random.Range(0, 4);
-            if (!TryGetItem(type, techLevel, out item))
+            techLevel = LandUrEnemyStats.ClampLevel(techLevel);
+            var start = Random.Range(0, EquipmentTypeCount);
+            for (var i = 0; i < EquipmentTypeCount; i++)
+            {
+                var type = (LootItemType)((start + i) % EquipmentTypeCount);
+                if (!TryGetItem(type, techLevel, out item))
+                {
+                    continue;
+                }
+
+                item = LandLoadoutEquipService.CloneItem(item);
+                if (item != null && LandTechLevelRules.GetTechLevel(item) == techLevel)
+                {
+                    return true;
+                }
+            }
+
+            item = null;
+            return false;
+        }
+
+        private static bool IsItemLevelAtMost(LandGearInstance item, int maxLevel)
+        {
+            if (!LandLoadoutSlots.IsValidItem(item))
             {
                 return false;
             }
 
-            item = LandLoadoutEquipService.CloneItem(item);
-            return item != null;
+            var techLevel = LandTechLevelRules.GetTechLevel(item);
+            return techLevel == 0 || techLevel <= maxLevel;
         }
 
         private static bool TryGetItem(LootItemType type, int techLevel, out LandGearInstance item)

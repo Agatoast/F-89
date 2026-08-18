@@ -55,16 +55,15 @@ namespace F89.Flight
                 return;
             }
 
-            TryEnsureNearbyHostilePlatoons(observerPosition, worldMap, ticSizeWorldUnits, rangeCapMiles);
+            TryEnsureNearbyOutpostContent(observerPosition, worldMap, ticSizeWorldUnits);
             CollectLockableTargets(observerPosition, worldMap, ticSizeWorldUnits, rangeCapMiles, results);
             CollectBases(observerPosition, worldMap, ticSizeWorldUnits, rangeCapMiles, results);
         }
 
-        private static void TryEnsureNearbyHostilePlatoons(
+        private static void TryEnsureNearbyOutpostContent(
             Vector3 observerPosition,
             WorldMapConfig worldMap,
-            float ticSizeWorldUnits,
-            float? rangeCapMiles)
+            float ticSizeWorldUnits)
         {
             if (Time.unscaledTime < nextPlatoonEnsureTime)
             {
@@ -84,6 +83,24 @@ namespace F89.Flight
                 worldMap,
                 ticSizeWorldUnits,
                 player);
+            OutpostBuildingClusterSpawner.EnsureNearestClusterWithinMiles(
+                observerPosition,
+                HostileDetectionMiles,
+                worldMap,
+                ticSizeWorldUnits);
+            CampaignWaypointVehicleSpawner.EnsureActiveWaypointPlatoonWithinMiles(
+                observerPosition,
+                HostileDetectionMiles,
+                worldMap,
+                ticSizeWorldUnits,
+                player);
+            GridSquareVehicleSpawner.EnsureWithinMiles(
+                observerPosition,
+                GridSquareVehicleSpawner.EnsureRangeMiles,
+                worldMap,
+                ticSizeWorldUnits,
+                player);
+            CombatThreatRange.InvalidateCaches();
         }
 
         private static void CollectLockableTargets(
@@ -102,6 +119,23 @@ namespace F89.Flight
                     || target.IsFlareDecoy
                     || target.IsNeutral
                     || target.GetComponent<AntarcticaBase>() != null)
+                {
+                    continue;
+                }
+
+                // Cleared WP primary sites keep only the wreck secondary pad — no bunker, no hostiles on radar.
+                var waypointSite = target.GetComponentInParent<CampaignWaypointMissionSite>();
+                if (waypointSite != null
+                    && CampaignWaypointSiteIds.IsWaypointSiteCode(waypointSite.SiteCode)
+                    && CampaignWaypointPlatoonState.IsPrimaryAirObjectivesComplete(waypointSite.SiteCode))
+                {
+                    continue;
+                }
+
+                if (CampaignWaypointSecondaryState.ShouldSuppressRadarContact(
+                        target.transform.position,
+                        worldMap,
+                        ticSizeWorldUnits))
                 {
                     continue;
                 }
@@ -170,6 +204,14 @@ namespace F89.Flight
                     continue;
                 }
 
+                if (CampaignWaypointSecondaryState.ShouldSuppressRadarContact(
+                        baseSite.transform.position,
+                        worldMap,
+                        ticSizeWorldUnits))
+                {
+                    continue;
+                }
+
                 var hasRevealedBunker = baseSite.SiteKind == BaseSiteKind.Land
                     && (LandBossMissionAssignment.IsBunkerRevealedAtOutpost(
                             CharacterSessionState.ActiveSave,
@@ -192,5 +234,6 @@ namespace F89.Flight
                 });
             }
         }
+
     }
 }

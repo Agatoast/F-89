@@ -2,26 +2,33 @@ using UnityEngine;
 
 namespace F89.Weapons
 {
-    /// <summary>
-    /// Building / vehicle destruction explosions. Weapon-specific sprites will be supplied later.
-    /// </summary>
+    /// <summary>Building / vehicle destruction and player missile-hit explosions.</summary>
     public static class GroundExplosionEffect
     {
         public static void PlayBuildingExplosion(Vector3 worldPosition, string sourceLabel = null)
         {
-            PlayPlaceholder(worldPosition, "building", sourceLabel);
+            PlayFullExplosion(worldPosition);
         }
 
         public static void PlayVehicleExplosion(Vector3 worldPosition, string sourceLabel = null)
         {
-            PlayPlaceholder(worldPosition, "vehicle", sourceLabel);
+            PlayFullExplosion(worldPosition);
         }
 
-        private static void PlayPlaceholder(Vector3 worldPosition, string kind, string sourceLabel)
+        public static void PlayPlayerMissileHit(Vector3 worldPosition)
         {
-            // Sprites TBD — keep a clear log hook so wiring is ready when art lands.
-            var label = string.IsNullOrWhiteSpace(sourceLabel) ? kind : sourceLabel;
-            Debug.Log($"F-89: {kind} explosion at {worldPosition} ({label}) — sprite pending.");
+            GroundExplosionVisual.PlayFirstFrame(worldPosition);
+        }
+
+        /// <summary>Explosion flash on the player aircraft when hit by enemy weapons.</summary>
+        public static void PlayPlayerAircraftHit(Vector3 worldPosition)
+        {
+            GroundExplosionVisual.PlayAirHit(worldPosition);
+        }
+
+        private static void PlayFullExplosion(Vector3 worldPosition)
+        {
+            GroundExplosionVisual.PlayFullAnimation(worldPosition);
         }
     }
 }

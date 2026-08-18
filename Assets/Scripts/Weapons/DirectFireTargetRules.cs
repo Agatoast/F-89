@@ -31,10 +31,7 @@ namespace F89.Weapons
             }
 
             var outpostBuilding = target.GetComponent<OutpostBuilding>();
-            if (outpostBuilding != null
-                && !OutpostPrimaryObjective.IsMissionHostileBuilding(
-                    outpostBuilding.BuildingType,
-                    target.TargetLabel))
+            if (outpostBuilding != null && !OutpostPrimaryObjective.IsMissionHostileTarget(target))
             {
                 return false;
             }

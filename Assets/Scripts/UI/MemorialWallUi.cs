@@ -154,7 +154,7 @@ namespace F89.UI
                 entryRect.y + bottomSectionStartLine * LineHeight,
                 entryRect.width - 16f,
                 topSectionLines * LineHeight * 0.42f);
-            CharacterPageRibbonUi.DrawRibbons(ribbonRect, save.EarnedRibbonIds);
+            CharacterPageRibbonUi.DrawRibbons(ribbonRect, save.EarnedRibbonIds, save);
 
             var statsY = ribbonRect.yMax + LineHeight * 0.5f;
             GUI.Label(

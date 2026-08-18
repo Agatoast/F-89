@@ -5,30 +5,61 @@ namespace F89.Core
     /// <summary>Rank ladder gated by TotalScore. Used for promotion, demotion, and GCMP imprisonment.</summary>
     public static class PilotCareerRanks
     {
-        /// <summary>Index of 1st LT — first rank above starting 2nd LT.</summary>
+        /// <summary>Index of 1LT — first rank above starting 2LT.</summary>
         public const int FirstRankIndex = 1;
 
         private static readonly string[] Ranks =
         {
-            "2nd LT",
-            "1st LT",
-            "Capt",
-            "Maj",
-            "Lt Col",
-            "Col"
+            "2LT",
+            "1LT",
+            "CPT",
+            "MAJ",
+            "LTC",
+            "COL",
+            "GEN"
         };
 
         private static readonly int[] MinTotalScore =
         {
-            0,
-            500,
-            1500,
-            4000,
-            8000,
-            15000
+            0,      // 2LT
+            100,    // 1LT
+            1250,   // CPT
+            4000,   // MAJ
+            8000,   // LTC
+            15000,  // COL
+            25000   // BRIG
         };
 
         public static string LowestRank => Ranks[0];
+
+        public static int RankCount => Ranks.Length;
+
+        public static string GetRankName(int rankIndex)
+        {
+            if (rankIndex < 0 || rankIndex >= Ranks.Length)
+            {
+                return Ranks[0];
+            }
+
+            return Ranks[rankIndex];
+        }
+
+        /// <summary>
+        /// Resources path suffix under <c>CharacterPage/Ranks/</c> (no extension).
+        /// Drop PNGs at Assets/Resources/CharacterPage/Ranks/{name}.png
+        /// </summary>
+        public static string GetRankInsigniaResourceName(int rankIndex) =>
+            rankIndex switch
+            {
+                0 => "rank_0_2nd_lt",
+                1 => "rank_1_1st_lt",
+                2 => "rank_2_cpt",
+                3 => "rank_3_maj",
+                4 => "rank_4_lt_col",
+                5 => "rank_5_col",
+                6 => "rank_6_brig",
+                _ => "rank_0_2nd_lt"
+            };
 
         public static int GetMinTotalScoreForRankIndex(int rankIndex)
         {
@@ -76,8 +107,8 @@ namespace F89.Core
 
         /// <summary>
         /// Syncs rank to the total-score floor (promote or demote). Records first-rank achievement once.
-        /// Demotion does not clear <see cref="CharacterSaveData.HasAchievedFirstRank"/> — a demoted 2nd LT
-        /// who once reached 1st LT remains eligible for GCMP when total score is negative.
+        /// Demotion does not clear <see cref="CharacterSaveData.HasAchievedFirstRank"/> — a demoted 2LT
+        /// who once reached 1LT remains eligible for GCMP when total score is negative.
         /// </summary>
         public static void SyncCareerRankProgress(CharacterSaveData save)
         {
@@ -87,10 +118,10 @@ namespace F89.Core
             }
 
             var allowedIndex = GetHighestRankIndexForScore(save.TotalScore);
-            var currentIndex = GetRankIndex(save.Rank);
-            if (allowedIndex != currentIndex)
+            var canonicalRank = Ranks[allowedIndex];
+            if (save.Rank != canonicalRank)
             {
-                save.Rank = Ranks[allowedIndex];
+                save.Rank = canonicalRank;
             }
 
             if (save.HasAchievedFirstRank)
@@ -106,7 +137,7 @@ namespace F89.Core
         }
 
         /// <summary>
-        /// Once the pilot has reached 1st LT, negative total score triggers GCMP — even if demoted to 2nd LT.
+        /// Once the pilot has reached 1LT, negative total score triggers GCMP — even if demoted to 2LT.
         /// </summary>
         public static bool ShouldImprisonForNegativeTotal(CharacterSaveData save)
         {
@@ -145,13 +176,43 @@ namespace F89.Core
             return true;
         }
 
-        private static string Normalize(string rank) =>
-            rank.Trim()
-                .Replace("Lieutenant", "LT")
-                .Replace("Lieutentant", "LT")
-                .Replace("Lt.", "LT")
-                .Replace("Lt", "LT")
-                .Replace("  ", " ")
-                .ToUpperInvariant();
+        private static string Normalize(string rank)
+        {
+            if (string.IsNullOrWhiteSpace(rank))
+            {
+                return string.Empty;
+            }
+
+            var s = rank.Trim().ToUpperInvariant();
+            s = s.Replace("LIEUTENANT", "LT").Replace("LIEUTENTANT", "LT");
+            s = s.Replace("COLONEL", "COL").Replace("MAJOR", "MAJ");
+            s = s.Replace("CAPTAIN", "CPT").Replace("BRIGADIER", "BRIG");
+            s = s.Replace("GENERAL", "GEN");
+            s = s.Replace("LT.", "LT");
+            s = s.Replace(" ", string.Empty);
+            s = s.Replace(".", string.Empty);
+
+            if (s.StartsWith("2ND"))
+            {
+                s = "2" + s.Substring(3);
+            }
+
+            if (s.StartsWith("1ST"))
+            {
+                s = "1" + s.Substring(3);
+            }
+
+            if (s is "LTCL" or "LTCOL")
+            {
+                s = "LTC";
+            }
+
+            return s switch
+            {
+                "CAPT" => "CPT",
+                "BRIG" => "GEN",
+                _ => s
+            };
+        }
     }
 }

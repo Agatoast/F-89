@@ -46,7 +46,7 @@ namespace F89.UI
 
         private static RunwayDeckMenuDialog.Options BuildFullServiceOptions(string subtitle, bool endMissionEnabled)
         {
-            return new RunwayDeckMenuDialog.Options
+            var options = new RunwayDeckMenuDialog.Options
             {
                 RefuelEnabled = !DeckLandingServiceState.RefuelUsedThisLanding,
                 RearmEnabled = !DeckLandingServiceState.RearmUsedThisLanding,
@@ -55,6 +55,21 @@ namespace F89.UI
                 EndMissionEnabled = endMissionEnabled,
                 Subtitle = subtitle
             };
+
+            if (GamePlayModeState.IsCampaign)
+            {
+                var save = CharacterSessionState.ActiveSave;
+                options.ShowMissionStatus = save != null && !CampaignMissionProgress.IsCampaignFinished(save);
+                if (options.ShowMissionStatus)
+                {
+                    options.PrimaryMissionComplete =
+                        CampaignMissionObjectiveState.IsPrimaryMissionComplete(save);
+                    options.SecondaryMissionComplete =
+                        CampaignMissionObjectiveState.IsSecondaryMissionComplete(save);
+                }
+            }
+
+            return options;
         }
 
         private static RunwayDeckMenuDialog.Options BuildGroundOnlyOptions(string subtitle)

@@ -79,12 +79,14 @@ namespace F89.Core
 
             var trimmedName = outpostName.Trim();
             var baseSite = FindBaseByName(trimmedName);
+            var friendlyOccupied = AntarcticaOutpostState.IsFriendlyOccupied(trimmedName);
+            // Friendly occupied runways remain launchable even if surface structures were destroyed.
             if (baseSite == null
                 || baseSite.SiteKind != BaseSiteKind.Land
                 || !baseSite.IsActive
-                || baseSite.IsDestroyed)
+                || (baseSite.IsDestroyed && !friendlyOccupied))
             {
-                return false;
+                return TryGetLayoutMilesSpawn(trimmedName, out worldPosition, out worldRotation);
             }
 
             var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
@@ -109,6 +111,18 @@ namespace F89.Core
                 return true;
             }
 
+            if (TryGetLockedBaseMiles(baseSite, trimmedName, out var lockedMiles)
+                && worldMap != null)
+            {
+                worldPosition = CampaignMapCoordinates.MilesToWorld(lockedMiles, worldMap, ticSize);
+                worldPosition.y = 0f;
+                worldRotation = Quaternion.identity;
+                Debug.LogWarning(
+                    $"F-89: Runway missing at '{trimmedName}'; using locked layout miles "
+                    + $"{CampaignMapCoordinates.FormatMilesLabel(lockedMiles)}.");
+                return true;
+            }
+
             worldPosition = baseSite.transform.position;
             worldPosition.y = 0f;
             var baseForward = baseSite.transform.forward;
@@ -122,6 +136,73 @@ namespace F89.Core
             Debug.LogWarning(
                 $"F-89: Runway missing at '{trimmedName}'; using base center for spawn.");
             return true;
+        }
+
+        /// <summary>
+        /// Layout-mile spawn when the scene base is missing or unusable.
+        /// Prefer this over carrier fallback for parked friendly outpost launches.
+        /// </summary>
+        public static bool TryGetLayoutMilesSpawn(
+            string outpostName,
+            out Vector3 worldPosition,
+            out Quaternion worldRotation)
+        {
+            worldPosition = Vector3.zero;
+            worldRotation = Quaternion.identity;
+            if (string.IsNullOrWhiteSpace(outpostName)
+                || !TryGetLockedBaseMiles(null, outpostName.Trim(), out var lockedMiles))
+            {
+                return false;
+            }
+
+            var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+            var mapSizeMiles = worldMap != null ? worldMap.antarcticaSizeMiles : 3000f;
+            var hasCatalogGrid = CampaignMapLayoutState.TryGetSite(outpostName.Trim(), out var site)
+                && site != null
+                && site.GridCellX > 0
+                && site.GridCellZ > 0;
+            if (!hasCatalogGrid
+                && AntarcticaLandMask.IsVisibleOceanMiles(lockedMiles, mapSizeMiles))
+            {
+                Debug.LogWarning(
+                    $"F-89: Layout miles for '{outpostName.Trim()}' sit in visible ocean — skipping layout spawn.");
+                return false;
+            }
+
+            var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            if (worldMap == null || lockedMiles.sqrMagnitude <= 0.01f)
+            {
+                return false;
+            }
+
+            worldPosition = CampaignMapCoordinates.MilesToWorld(lockedMiles, worldMap, ticSize);
+            worldPosition.y = 0f;
+            worldRotation = Quaternion.identity;
+            Debug.LogWarning(
+                $"F-89: Using layout miles for outpost launch '{outpostName.Trim()}' at "
+                + $"{CampaignMapCoordinates.FormatMilesLabel(lockedMiles)}.");
+            return true;
+        }
+
+        private static bool TryGetLockedBaseMiles(
+            AntarcticaBase baseSite,
+            string outpostName,
+            out Vector2 miles)
+        {
+            miles = Vector2.zero;
+            if (baseSite != null && CampaignMapCoordinates.TryGetLockedBaseMiles(baseSite, out miles))
+            {
+                return miles.sqrMagnitude > 0.01f;
+            }
+
+            if (!CampaignMapLayoutState.TryGetSite(outpostName, out var site) || site == null)
+            {
+                return false;
+            }
+
+            miles = CampaignMapLayoutState.GetLockedMiles(site);
+            return miles.sqrMagnitude > 0.01f;
         }
 
         private static AntarcticaBase FindBaseByName(string outpostName)

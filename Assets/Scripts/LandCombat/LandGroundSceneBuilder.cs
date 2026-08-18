@@ -50,12 +50,45 @@ namespace F89.LandCombat
                 return;
             }
 
+            if (WaypointLandingState.IsActive)
+            {
+                SpawnWaypointSecondarySurface(planePosition, WaypointLandingState.SiteCode);
+                SpawnPendingFlightInfantryCorpses(planePosition, WaypointLandingState.SiteCode);
+                return;
+            }
+
             if (LandOutpostLandingState.HasActiveOutpost)
             {
                 SpawnOutpostSurface(
                     planePosition,
                     LandOutpostLandingState.ActiveOutpostName);
+                SpawnPendingFlightInfantryCorpses(
+                    planePosition,
+                    LandOutpostLandingState.ActiveOutpostName);
             }
+        }
+
+        private static void SpawnPendingFlightInfantryCorpses(Vector3 planeWorldPosition, string siteKey)
+        {
+            var pending = FlightInfantryLootState.ConsumeForLanding(siteKey);
+            if (pending == null || pending.Count == 0)
+            {
+                return;
+            }
+
+            var plane = (Vector2)planeWorldPosition;
+            var player = Object.FindAnyObjectByType<LandPlayerController>();
+            var faceTarget = player != null ? player.transform : null;
+
+            for (var i = 0; i < pending.Count; i++)
+            {
+                var record = pending[i];
+                var spawn = LandOutpostSurfaceLayout.GetGuardPosition(plane, i, pending.Count);
+                LandGroundEnemy.SpawnLootCorpseAt(spawn, record.Level, record.Items, faceTarget);
+            }
+
+            Debug.Log(
+                $"F-89 Land: Spawned {pending.Count} flight-kill infantry corpse(s) with loot at {siteKey}.");
         }
 
         private static void RestoreSurfaceFromBunker(
@@ -253,7 +286,9 @@ namespace F89.LandCombat
 
         private static void EnsureOutpostSurfaceIfNeeded()
         {
-            if (OpenFieldLandingState.IsActive || !LandOutpostLandingState.HasActiveOutpost)
+            if (OpenFieldLandingState.IsActive
+                || WaypointLandingState.IsActive
+                || !LandOutpostLandingState.HasActiveOutpost)
             {
                 return;
             }
@@ -311,7 +346,7 @@ namespace F89.LandCombat
                     var spawn = LandOutpostSurfaceLayout.GetGuardPosition(plane, i, area.GuardCount);
                     var enemyObject = new GameObject($"{area.SurfaceCode}_Guard_{i + 1}");
                     var enemy = enemyObject.AddComponent<LandGroundEnemy>();
-                    enemy.Initialize(spawn, area.GuardLevel, faceTarget);
+                    enemy.Initialize(spawn, LandUrEnemyStats.ScaleMissionTroopLevel(area.GuardLevel), faceTarget);
                     var marker = enemyObject.AddComponent<LandOutpostGuardMarker>();
                     marker.Configure(outpostName, i, bossNumber);
                     guardsSpawned++;
@@ -334,7 +369,10 @@ namespace F89.LandCombat
                 var guardCount = hasBossArea
                     ? area.GuardCount
                     : OutpostRunwayDeckState.DefaultRunwayGuardCount;
-                var guardLevel = hasBossArea ? area.GuardLevel : 1;
+                var guardLevel = hasBossArea
+                    ? LandUrEnemyStats.ScaleMissionTroopLevel(area.GuardLevel)
+                    : CampaignMissionPrimarySpawnCatalog.GetInfantryLevelForMission(
+                        CampaignMissionProgress.GetCurrentMissionNumber(save));
                 var assignedBoss = hasBossArea ? bossNumber : 0;
                 var guardsSpawned = 0;
 
@@ -361,6 +399,47 @@ namespace F89.LandCombat
                     $"F-89 Land: {outpostName} runway surface — {guardsSpawned}/{guardCount} guards"
                     + "; bunker access available.");
             }
+        }
+
+        private static void SpawnWaypointSecondarySurface(Vector3 planeWorldPosition, string siteCode)
+        {
+            if (string.IsNullOrWhiteSpace(siteCode))
+            {
+                LogOpenFieldArena(planeWorldPosition);
+                return;
+            }
+
+            var plane = (Vector2)planeWorldPosition;
+            var player = Object.FindAnyObjectByType<LandPlayerController>();
+            var faceTarget = player != null ? player.transform : null;
+            var guardCount = CampaignWaypointSecondaryCatalog.GetSecondaryInfantryCount(siteCode);
+            var guardLevel = 1;
+            if (CampaignWaypointLayoutState.TryGetByCode(siteCode, out var waypoint))
+            {
+                guardLevel = CampaignMissionPrimarySpawnCatalog.GetInfantryLevelForMission(waypoint.MissionNumber);
+            }
+
+            var guardsSpawned = 0;
+
+            for (var i = 0; i < guardCount; i++)
+            {
+                if (!OutpostSurfaceAccess.ShouldSpawnGroundGuard(siteCode, bossNumber: 0, i))
+                {
+                    continue;
+                }
+
+                var spawn = LandOutpostSurfaceLayout.GetGuardPosition(plane, i, guardCount);
+                var enemyObject = new GameObject($"{siteCode}_Guard_{i + 1}");
+                var enemy = enemyObject.AddComponent<LandGroundEnemy>();
+                enemy.Initialize(spawn, guardLevel, faceTarget);
+                var marker = enemyObject.AddComponent<LandOutpostGuardMarker>();
+                marker.Configure(siteCode, i, assignedBossNumber: 0);
+                guardsSpawned++;
+            }
+
+            Debug.Log(
+                $"F-89 Land: Waypoint secondary {siteCode} — {guardsSpawned}/{guardCount} surface infantry"
+                + " (no bunker; VTOL takeoff from landing miles).");
         }
 
         private static void LogOpenFieldArena(Vector3 planeWorldPosition)

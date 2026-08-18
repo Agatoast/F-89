@@ -11,9 +11,11 @@ namespace F89.UI
     {
         [SerializeField] private PlayerWeaponController weaponController;
         [SerializeField] private PlayerAircraftInput inputSource;
+        [SerializeField] private AircraftController aircraft;
 
         private Texture2D gauReticleTexture;
         private Texture2D gauGunSquareTexture;
+        private Texture2D lineTexture;
         private Texture2D siawCircleTexture;
         private Texture2D hellfireSquareTexture;
         private Texture2D gbuTriangleTexture;
@@ -25,16 +27,23 @@ namespace F89.UI
         private const float HellfireSquareSize = 101f;
         private const float GbuTriangleSideLength = 100f;
         private const int GauGunSquareSegmentPixels = 5;
+        private const float GauOgiveLineThickness = 1.5f;
+        private const int GauOgiveArcSegments = 28;
+        private const float GauOgiveDashStepPixels = 3f;
         private const float WeaponLabelSpacing = 5f;
         private const int WeaponLabelFontSize = 11;
 
         private GUIStyle weaponLabelStyle;
         private bool gameplayCursorHidden;
 
-        public void Configure(PlayerWeaponController weapons, PlayerAircraftInput input)
+        public void Configure(
+            PlayerWeaponController weapons,
+            PlayerAircraftInput input,
+            AircraftController aircraftController)
         {
             weaponController = weapons;
             inputSource = input;
+            aircraft = aircraftController;
             EnsureTextures();
         }
 
@@ -244,14 +253,165 @@ namespace F89.UI
                 return;
             }
 
+            DrawGauOgiveEnvelope(hudColor);
+
             var screen = gun.CrosshairScreenPoint;
-            if (screen.z < 0f)
+            if (screen.z <= 0f)
             {
                 return;
             }
 
-            DrawGauReticleAtScreenPosition(new Vector2(screen.x, screen.y), hudColor);
-            DrawGauGunSquareAtScreenPosition(new Vector2(screen.x, screen.y), hudColor);
+            var screenPos = new Vector2(screen.x, screen.y);
+            DrawGauReticleAtScreenPosition(screenPos, hudColor);
+            DrawGauGunSquareAtScreenPosition(screenPos, hudColor);
+        }
+
+        private void DrawGauOgiveEnvelope(Color hudColor)
+        {
+            var gun = weaponController.Gau27aGun;
+            if (gun == null || gun.Config == null || aircraft == null)
+            {
+                return;
+            }
+
+            var camera = Camera.main;
+            if (camera == null)
+            {
+                return;
+            }
+
+            var config = gun.Config;
+            var profile = aircraft.Profile;
+            var worldMap = aircraft.WorldMap;
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+
+            var origin = aircraft.transform.position;
+            origin.y = 0.5f;
+            var forward = aircraft.transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f)
+            {
+                forward = Vector3.forward;
+            }
+            else
+            {
+                forward.Normalize();
+            }
+
+            var halfAngle = config.ogiveHalfAngleDegrees;
+            var maxWorld = WorldMapConfig.RangeMilesToWorldUnits(
+                config.ogiveMaxRangeMiles,
+                worldMap,
+                ticSize);
+            var minWorld = WorldMapConfig.RangeMilesToWorldUnits(
+                config.minCrosshairMiles,
+                worldMap,
+                ticSize);
+            minWorld = Mathf.Max(0.01f, minWorld);
+
+            if (!TryWorldToGui(origin, camera, out var apex))
+            {
+                return;
+            }
+
+            var leftDir = Quaternion.AngleAxis(-halfAngle, Vector3.up) * forward;
+            var rightDir = Quaternion.AngleAxis(halfAngle, Vector3.up) * forward;
+
+            if (TryWorldToGui(origin + leftDir * maxWorld, camera, out var leftMax))
+            {
+                DrawDottedScreenLine(apex, leftMax, hudColor);
+            }
+
+            if (TryWorldToGui(origin + rightDir * maxWorld, camera, out var rightMax))
+            {
+                DrawDottedScreenLine(apex, rightMax, hudColor);
+            }
+
+            DrawDottedArc(origin, forward, -halfAngle, halfAngle, maxWorld, camera, hudColor);
+            if (minWorld < maxWorld - 0.01f)
+            {
+                DrawDottedArc(origin, forward, -halfAngle, halfAngle, minWorld, camera, hudColor);
+            }
+        }
+
+        private void DrawDottedArc(
+            Vector3 origin,
+            Vector3 forward,
+            float startAngleDegrees,
+            float endAngleDegrees,
+            float radiusWorld,
+            Camera camera,
+            Color hudColor)
+        {
+            Vector2? previous = null;
+            for (var segment = 0; segment <= GauOgiveArcSegments; segment++)
+            {
+                var t = segment / (float)GauOgiveArcSegments;
+                var angle = Mathf.Lerp(startAngleDegrees, endAngleDegrees, t);
+                var direction = Quaternion.AngleAxis(angle, Vector3.up) * forward;
+                var worldPoint = origin + direction * radiusWorld;
+                if (!TryWorldToGui(worldPoint, camera, out var guiPoint))
+                {
+                    previous = null;
+                    continue;
+                }
+
+                if (previous.HasValue)
+                {
+                    DrawDottedScreenLine(previous.Value, guiPoint, hudColor);
+                }
+
+                previous = guiPoint;
+            }
+        }
+
+        private void DrawDottedScreenLine(Vector2 start, Vector2 end, Color hudColor)
+        {
+            if (lineTexture == null)
+            {
+                lineTexture = Texture2D.whiteTexture;
+            }
+
+            var delta = end - start;
+            var length = delta.magnitude;
+            if (length < 0.5f)
+            {
+                return;
+            }
+
+            var direction = delta / length;
+            var dashPeriod = GauGunSquareSegmentPixels * 2f;
+            for (var distance = 0f; distance < length; distance += GauOgiveDashStepPixels)
+            {
+                if (!IsDottedSegment(
+                        Mathf.FloorToInt(distance),
+                        GauGunSquareSegmentPixels,
+                        (int)dashPeriod))
+                {
+                    continue;
+                }
+
+                var segmentEnd = Mathf.Min(distance + GauGunSquareSegmentPixels, length);
+                HudGuiUtility.DrawScreenLine(
+                    start + direction * distance,
+                    start + direction * segmentEnd,
+                    hudColor,
+                    GauOgiveLineThickness,
+                    lineTexture);
+            }
+        }
+
+        private static bool TryWorldToGui(Vector3 worldPoint, Camera camera, out Vector2 guiPoint)
+        {
+            var screenPoint = camera.WorldToScreenPoint(worldPoint);
+            if (screenPoint.z <= 0f)
+            {
+                guiPoint = default;
+                return false;
+            }
+
+            guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
+            return true;
         }
 
         private void DrawGauGunSquareAtScreenPosition(Vector2 screenBottomLeft, Color hudColor)

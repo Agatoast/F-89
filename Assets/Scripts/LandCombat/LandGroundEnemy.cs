@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using F89.Core;
 using F89.UI;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace F89.LandCombat
 {
@@ -67,7 +68,24 @@ namespace F89.LandCombat
 
         public IReadOnlyList<LandGearInstance> LootItems => lootItems;
 
-        public void Initialize(Vector2 position, int enemyLevel, Transform faceTarget = null, float startingHealth = -1f)
+        public static LandGroundEnemy SpawnLootCorpseAt(
+            Vector2 position,
+            int enemyLevel,
+            IReadOnlyList<LandGearInstance> items,
+            Transform faceTarget = null)
+        {
+            var enemyObject = new GameObject($"URTroopCorpse_L{enemyLevel}");
+            var enemy = enemyObject.AddComponent<LandGroundEnemy>();
+            enemy.InitializeCorpseWithLoot(position, enemyLevel, items, faceTarget);
+            return enemy;
+        }
+
+        public void Initialize(
+            Vector2 position,
+            int enemyLevel,
+            Transform faceTarget = null,
+            float startingHealth = -1f,
+            LandEnemySpriteSheet.Camouflage camouflage = LandEnemySpriteSheet.Camouflage.White)
         {
             level = LandUrEnemyStats.ClampLevel(enemyLevel);
             transform.position = position;
@@ -82,6 +100,7 @@ namespace F89.LandCombat
             PickRoamPoint(force: true);
             gameObject.name = $"URTroop_L{level}";
             EnsureVisuals();
+            visual?.SetCamouflage(camouflage);
             projectilePool = Object.FindAnyObjectByType<LandProjectilePool>();
             if (body != null)
             {
@@ -99,6 +118,71 @@ namespace F89.LandCombat
             }
 
             visual?.SetMoving(false);
+        }
+
+        public void InitializeCorpseWithLoot(
+            Vector2 position,
+            int enemyLevel,
+            IReadOnlyList<LandGearInstance> items,
+            Transform faceTarget = null)
+        {
+            level = LandUrEnemyStats.ClampLevel(enemyLevel);
+            transform.position = position;
+            currentHealth = 0f;
+            phase = CorpsePhase.Corpse;
+            checkedForLoot = true;
+            hasLootBag = false;
+            lootItems.Clear();
+            despawnAtTime = -1f;
+            chaseTarget = faceTarget;
+            gameObject.name = $"URTroopCorpse_L{level}";
+            EnsureVisuals();
+
+            if (items != null)
+            {
+                for (var i = 0; i < items.Count; i++)
+                {
+                    if (!LandLoadoutSlots.IsValidItem(items[i]))
+                    {
+                        continue;
+                    }
+
+                    var clone = LandLoadoutEquipService.CloneItem(items[i]);
+                    if (LandLoadoutSlots.IsValidItem(clone))
+                    {
+                        lootItems.Add(clone);
+                    }
+                }
+            }
+
+            if (lootItems.Count > 0)
+            {
+                hasLootBag = true;
+                while (lootItems.Count < LandEnemyLootRules.LootBagSlotCount)
+                {
+                    lootItems.Add(null);
+                }
+
+                corpseSpawnTime = Time.time;
+                despawnAtTime = corpseSpawnTime + LandEnemyLootRules.EmptyCorpseLifetimeSeconds;
+            }
+            else
+            {
+                corpseSpawnTime = Time.time;
+                ScheduleDespawn(LandEnemyLootRules.CheckedEmptyDespawnSeconds);
+            }
+
+            if (hitCollider != null)
+            {
+                hitCollider.enabled = true;
+            }
+
+            if (body != null)
+            {
+                FreezeCorpsePhysics();
+            }
+
+            visual?.ShowCorpseImmediate();
         }
 
         public void ApplyDamage(float amount)
@@ -148,7 +232,7 @@ namespace F89.LandCombat
                 }
                 else
                 {
-                    LandEnemyLootGenerator.FillRandomLoot(level, lootItems);
+                    LandEnemyLootGenerator.FillInfantryDeathLoot(level, lootItems);
                 }
 
                 while (lootItems.Count < LandEnemyLootRules.LootBagSlotCount)
@@ -256,7 +340,19 @@ namespace F89.LandCombat
                 hitCollider.enabled = true;
             }
 
+            FreezeCorpsePhysics();
             EnsureLootReady();
+        }
+
+        private void FreezeCorpsePhysics()
+        {
+            if (body == null)
+            {
+                return;
+            }
+
+            body.linearVelocity = Vector2.zero;
+            body.bodyType = RigidbodyType2D.Kinematic;
         }
 
         private void ScheduleDespawn(float delaySeconds)
@@ -458,6 +554,8 @@ namespace F89.LandCombat
                 hitCollider = circle;
             }
 
+            EnsureBunkerMovementBlocker();
+
             if (!TryGetComponent(out body))
             {
                 body = gameObject.AddComponent<Rigidbody2D>();
@@ -470,6 +568,30 @@ namespace F89.LandCombat
             body.interpolation = RigidbodyInterpolation2D.Interpolate;
             body.constraints = RigidbodyConstraints2D.FreezeRotation;
             body.linearVelocity = Vector2.zero;
+        }
+
+        private void EnsureBunkerMovementBlocker()
+        {
+            if (!string.Equals(
+                    SceneManager.GetActiveScene().name,
+                    GameScenes.Bunker,
+                    System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var colliders = GetComponents<CircleCollider2D>();
+            for (var i = 0; i < colliders.Length; i++)
+            {
+                if (!colliders[i].isTrigger)
+                {
+                    return;
+                }
+            }
+
+            var blocker = gameObject.AddComponent<CircleCollider2D>();
+            blocker.isTrigger = false;
+            blocker.radius = 0.5f;
         }
     }
 }

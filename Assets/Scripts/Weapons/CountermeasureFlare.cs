@@ -8,6 +8,10 @@ namespace F89.Weapons
         public const float EfficacyDurationSeconds = 10f;
         public const float VisualFadeDurationSeconds = 1.75f;
 
+        private static int activeDecoyCount;
+
+        public static bool HasActiveDecoys => activeDecoyCount > 0;
+
         private LockableTarget lockableTarget;
         private FlareBurnVisual burnVisual;
         private float efficacyRemaining;
@@ -45,6 +49,16 @@ namespace F89.Weapons
 
             burnVisual = gameObject.AddComponent<FlareBurnVisual>();
             burnVisual.Configure(planeWidthWorld, planeLengthWorld);
+        }
+
+        private void OnEnable()
+        {
+            activeDecoyCount++;
+        }
+
+        private void OnDisable()
+        {
+            activeDecoyCount = Mathf.Max(0, activeDecoyCount - 1);
         }
 
         private void Update()

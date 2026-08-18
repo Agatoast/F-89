@@ -37,7 +37,16 @@ namespace F89.LandCombat
             new(7, 5, 4, 216f),
             new(8, 5, 4, 252f),
             new(9, 5, 5, 288f),
-            new(10, 5, 5, 324f)
+            new(10, 5, 5, 324f),
+            new(11, 5, 5, 0f),
+            new(12, 5, 5, 36f),
+            new(13, 5, 5, 72f),
+            new(14, 5, 5, 108f),
+            new(15, 5, 5, 144f),
+            new(16, 5, 5, 180f),
+            new(17, 5, 5, 216f),
+            new(18, 5, 5, 252f),
+            new(19, 5, 5, 288f)
         };
 
         public static bool TryGet(int bossNumber, out Definition area)

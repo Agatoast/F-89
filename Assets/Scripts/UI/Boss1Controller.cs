@@ -23,25 +23,18 @@ namespace F89.UI
             }
 
             bossNumber = Mathf.Clamp(bossNumber, LandBossEncounter.FirstBossNumber, LandBossEncounter.LastBossNumber);
-            var backgroundResourcePath = $"LandCombat/Boss{bossNumber}";
-            backgroundTexture = Resources.Load<Texture2D>(backgroundResourcePath);
+            backgroundTexture = LandBossPortraitCatalog.LoadPortrait(bossNumber);
             if (backgroundTexture == null)
             {
                 backgroundTexture = Resources.Load<Texture2D>("LandCombat/Boss1");
-                Debug.LogWarning($"F-89: Boss {bossNumber} background missing from Resources/{backgroundResourcePath}; using Boss1 background.");
+                Debug.LogWarning(
+                    $"F-89: Boss {bossNumber} background missing from Resources/{LandBossPortraitCatalog.GetPortraitResourcePath(bossNumber)}; using Boss1 background.");
             }
         }
 
         private void OnGUI()
         {
             StartPageMenuStyles.DrawFullscreenBackground(backgroundTexture);
-            var titleStyle = HudStyleFactory.CreateLabel(26, FontStyle.Bold, TextAnchor.UpperCenter, Color.white);
-            var bossCount = LandBossEncounter.GetEnemyCount(bossNumber);
-            var encounterLabel = bossCount == 1
-                ? $"UR LEVEL {LandBossEncounter.GetEnemyLevel(bossNumber)}"
-                : $"{bossCount}x UR LEVEL {LandBossEncounter.GetEnemyLevel(bossNumber)}";
-            GUI.Label(new Rect(0f, UiFitCanvas.Rect.y + UiFitCanvas.Px(24f), Screen.width, UiFitCanvas.Px(36f)),
-                $"BOSS {bossNumber}  |  {encounterLabel}", titleStyle);
 
             var buttonWidth = UiFitCanvas.Px(280f);
             var buttonHeight = UiFitCanvas.Px(52f);

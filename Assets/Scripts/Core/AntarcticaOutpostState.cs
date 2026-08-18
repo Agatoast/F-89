@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using F89.Enemies;
-using F89.LandCombat;
 using UnityEngine;
 
 namespace F89.Core
@@ -56,8 +55,135 @@ namespace F89.Core
             CharacterSaveRepository.WriteWorldProgress(save);
         }
 
-        public static bool IsFriendlyOccupied(string outpostName) =>
-            Contains(CharacterSessionState.ActiveSave?.FriendlyOccupiedOutpostNames, outpostName);
+        public static bool IsTargetDestroyedForBase(AntarcticaBase baseSite, string targetLabel)
+        {
+            if (baseSite == null || string.IsNullOrWhiteSpace(targetLabel))
+            {
+                return false;
+            }
+
+            if (IsTargetDestroyed(baseSite.BaseName, targetLabel))
+            {
+                return true;
+            }
+
+            return !string.IsNullOrWhiteSpace(baseSite.SiteCode)
+                && IsTargetDestroyed(baseSite.SiteCode, targetLabel);
+        }
+
+        public static void MarkTargetDestroyedForBase(AntarcticaBase baseSite, string targetLabel)
+        {
+            if (baseSite == null || string.IsNullOrWhiteSpace(targetLabel))
+            {
+                return;
+            }
+
+            MarkTargetDestroyed(baseSite.BaseName, targetLabel);
+            if (!string.IsNullOrWhiteSpace(baseSite.SiteCode))
+            {
+                MarkTargetDestroyed(baseSite.SiteCode, targetLabel);
+            }
+        }
+
+        /// <summary>Clears one persisted destroy flag so mission assets can respawn.</summary>
+        public static void ClearTargetDestroyed(string outpostName, string targetLabel)
+        {
+            RemoveTargetId(GetTargetId(outpostName, targetLabel));
+        }
+
+        /// <summary>Removes every persisted destroy entry keyed under this outpost or site code.</summary>
+        public static void ClearAllSiteTargets(string outpostNameOrSiteCode)
+        {
+            if (string.IsNullOrWhiteSpace(outpostNameOrSiteCode))
+            {
+                return;
+            }
+
+            var prefix = $"{outpostNameOrSiteCode.Trim()}::";
+            RemoveTargetIdsMatching(id =>
+                id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>Clears whole-outpost destroyed flag when restoring a mission site.</summary>
+        public static void ClearOutpostDestroyed(string outpostName)
+        {
+            if (string.IsNullOrWhiteSpace(outpostName))
+            {
+                return;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            if (save?.DestroyedOutpostNames == null)
+            {
+                return;
+            }
+
+            var trimmed = outpostName.Trim();
+            var changed = false;
+            var kept = new List<string>();
+            for (var i = 0; i < save.DestroyedOutpostNames.Length; i++)
+            {
+                var value = save.DestroyedOutpostNames[i];
+                if (string.Equals(value, trimmed, StringComparison.OrdinalIgnoreCase))
+                {
+                    changed = true;
+                    continue;
+                }
+
+                kept.Add(value);
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            save.DestroyedOutpostNames = kept.ToArray();
+            CharacterSaveRepository.WriteWorldProgress(save);
+        }
+
+        public static void MarkMissionStructuresClearedForBase(AntarcticaBase baseSite)
+        {
+            if (baseSite == null)
+            {
+                return;
+            }
+
+            if (!IsTargetDestroyedForBase(baseSite, OutpostPrimaryObjective.RunwayTowerLabel))
+            {
+                MarkTargetDestroyedForBase(baseSite, OutpostPrimaryObjective.RunwayTowerLabel);
+            }
+
+            if (!IsTargetDestroyedForBase(baseSite, OutpostPrimaryObjective.BunkerBuildingLabel))
+            {
+                MarkTargetDestroyedForBase(baseSite, OutpostPrimaryObjective.BunkerBuildingLabel);
+            }
+        }
+
+        public static bool IsFriendlyOccupied(string outpostNameOrSiteCode) =>
+            IsFriendlyOccupied(CharacterSessionState.ActiveSave, outpostNameOrSiteCode);
+
+        public static bool IsFriendlyOccupied(CharacterSaveData save, string outpostNameOrSiteCode)
+        {
+            if (string.IsNullOrWhiteSpace(outpostNameOrSiteCode))
+            {
+                return false;
+            }
+
+            var names = save?.FriendlyOccupiedOutpostNames;
+            if (ContainsIgnoreCase(names, outpostNameOrSiteCode))
+            {
+                return true;
+            }
+
+            if (!CampaignMapLayoutState.TryGetSite(outpostNameOrSiteCode, out var site) || site == null)
+            {
+                return false;
+            }
+
+            return ContainsIgnoreCase(names, site.SiteCode)
+                || ContainsIgnoreCase(names, CampaignMapLayoutState.NormalizeSiteName(site.Label));
+        }
 
         /// <summary>True when the bunker boss was defeated or the flight-map bunker building was destroyed.</summary>
         public static bool IsBunkerCleared(string outpostName)
@@ -78,6 +204,23 @@ namespace F89.Core
         /// <summary>Persisted friendly occupation — set only after END MISSION with air objectives complete.</summary>
         public static bool IsFriendlyBase(string outpostName) => IsFriendlyOccupied(outpostName);
 
+        public static bool IsFriendlyBaseSite(AntarcticaBase baseSite)
+        {
+            if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Land || baseSite.IsDestroyed)
+            {
+                return false;
+            }
+
+            if (baseSite.Control == BaseControl.Friendly)
+            {
+                return true;
+            }
+
+            return IsFriendlyOccupied(baseSite.BaseName)
+                || (!string.IsNullOrWhiteSpace(baseSite.SiteCode)
+                    && IsFriendlyOccupied(baseSite.SiteCode));
+        }
+
         /// <summary>Hostile while the bunker boss is still alive.</summary>
         public static bool IsEnemyOutpost(string outpostName) =>
             !string.IsNullOrWhiteSpace(outpostName)
@@ -91,36 +234,13 @@ namespace F89.Core
             && IsBunkerCleared(outpostName);
 
         /// <summary>
-        /// Marks the mission outpost friendly after air objectives are destroyed and the pilot
-        /// ends the mission from the carrier deck or an outpost runway.
+        /// Marks the current catalog mission outpost friendly after END MISSION when air
+        /// objectives are complete. Boss clear is not required. Follows mission SiteCode.
         /// </summary>
         public static void TryApplyMissionCompleteOccupation(string landedOutpostName)
         {
-            if (!GamePlayModeState.IsCampaign)
-            {
-                return;
-            }
-
-            var save = CharacterSessionState.ActiveSave;
-            if (save == null || !LandBossMissionAssignment.IsPrimaryMissionComplete(save))
-            {
-                return;
-            }
-
-            var outpostName = !string.IsNullOrWhiteSpace(landedOutpostName)
-                ? landedOutpostName
-                : save.AssignedBossOutpostName;
-            if (string.IsNullOrWhiteSpace(outpostName))
-            {
-                return;
-            }
-
-            if (!OutpostPrimaryObjective.AreAirObjectivesDestroyed(outpostName))
-            {
-                return;
-            }
-
-            MarkFriendlyOccupied(outpostName);
+            _ = landedOutpostName;
+            CampaignMissionObjectiveState.TryApplyVictoryOccupation(CharacterSessionState.ActiveSave);
         }
 
         public static void MarkFriendlyOccupied(string outpostName)
@@ -131,14 +251,47 @@ namespace F89.Core
             }
 
             var save = CharacterSessionState.ActiveSave;
-            if (save == null || Contains(save.FriendlyOccupiedOutpostNames, outpostName))
+            if (save == null)
             {
                 return;
             }
 
-            save.FriendlyOccupiedOutpostNames = Add(save.FriendlyOccupiedOutpostNames, outpostName);
+            var baseName = outpostName.Trim();
+            var siteCode = string.Empty;
+            if (CampaignMapLayoutState.TryGetSite(baseName, out var site) && site != null)
+            {
+                baseName = CampaignMapLayoutState.NormalizeSiteName(site.Label);
+                siteCode = site.SiteCode;
+            }
+
+            var changed = false;
+            if (!ContainsIgnoreCase(save.FriendlyOccupiedOutpostNames, baseName))
+            {
+                save.FriendlyOccupiedOutpostNames = Add(save.FriendlyOccupiedOutpostNames, baseName);
+                changed = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(siteCode)
+                && !ContainsIgnoreCase(save.FriendlyOccupiedOutpostNames, siteCode))
+            {
+                save.FriendlyOccupiedOutpostNames = Add(save.FriendlyOccupiedOutpostNames, siteCode);
+                changed = true;
+            }
+
+            if (!changed && IsFriendlyOccupied(baseName))
+            {
+                ApplyFriendlyControlToBase(baseName);
+                return;
+            }
+
+            OutpostFlightPlatoonState.MarkPlatoonCleared(baseName);
+            if (!string.IsNullOrWhiteSpace(siteCode))
+            {
+                OutpostFlightPlatoonState.MarkPlatoonCleared(siteCode);
+            }
+
             CharacterSaveRepository.WriteWorldProgress(save);
-            ApplyFriendlyControlToBase(outpostName);
+            ApplyFriendlyControlToBase(baseName);
         }
 
         public static void ApplyFriendlyControlToAllBases()
@@ -168,13 +321,18 @@ namespace F89.Core
                 var baseSite = bases[i];
                 if (baseSite == null
                     || baseSite.SiteKind != BaseSiteKind.Land
-                    || !string.Equals(baseSite.BaseName, outpostName, StringComparison.Ordinal))
+                    || !MatchesBaseKey(baseSite, outpostName))
                 {
                     continue;
                 }
 
                 baseSite.Capture();
-                OutpostFlightPlatoonState.MarkPlatoonCleared(outpostName);
+                OutpostFlightPlatoonState.MarkPlatoonCleared(baseSite.BaseName);
+                if (!string.IsNullOrWhiteSpace(baseSite.SiteCode))
+                {
+                    OutpostFlightPlatoonState.MarkPlatoonCleared(baseSite.SiteCode);
+                }
+
                 var platoon = baseSite.transform.Find("VehiclePlatoon");
                 if (platoon != null)
                 {
@@ -182,8 +340,34 @@ namespace F89.Core
                 }
 
                 OutpostVehicleSpawner.EnsureEmptyPlatoonMarker(baseSite);
+                OutpostRunwayVisual.ApplyFriendlyBaseCleanup(baseSite);
                 return;
             }
+        }
+
+        private static bool MatchesBaseKey(AntarcticaBase baseSite, string key)
+        {
+            if (baseSite == null || string.IsNullOrWhiteSpace(key))
+            {
+                return false;
+            }
+
+            if (string.Equals(baseSite.BaseName, key, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(baseSite.SiteCode, key, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!CampaignMapLayoutState.TryGetSite(key, out var site) || site == null)
+            {
+                return false;
+            }
+
+            return string.Equals(
+                       baseSite.BaseName,
+                       CampaignMapLayoutState.NormalizeSiteName(site.Label),
+                       StringComparison.OrdinalIgnoreCase)
+                || string.Equals(baseSite.SiteCode, site.SiteCode, StringComparison.OrdinalIgnoreCase);
         }
 
         public static void ResetAllDestroyedOutposts()
@@ -201,7 +385,10 @@ namespace F89.Core
             return $"{outpostName.Trim()}::{targetLabel.Trim()}";
         }
 
-        private static bool Contains(string[] values, string value)
+        private static bool Contains(string[] values, string value) =>
+            ContainsIgnoreCase(values, value);
+
+        private static bool ContainsIgnoreCase(string[] values, string value)
         {
             if (values == null || string.IsNullOrEmpty(value))
             {
@@ -210,7 +397,7 @@ namespace F89.Core
 
             for (var i = 0; i < values.Length; i++)
             {
-                if (string.Equals(values[i], value, StringComparison.Ordinal))
+                if (string.Equals(values[i], value, StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
@@ -245,6 +432,52 @@ namespace F89.Core
             var list = values == null ? new List<string>() : new List<string>(values);
             list.Add(value);
             return list.ToArray();
+        }
+
+        private static void RemoveTargetId(string targetId)
+        {
+            if (string.IsNullOrEmpty(targetId))
+            {
+                return;
+            }
+
+            RemoveTargetIdsMatching(id => string.Equals(id, targetId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void RemoveTargetIdsMatching(System.Func<string, bool> predicate)
+        {
+            if (predicate == null)
+            {
+                return;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            if (save?.DestroyedWorldTargetIds == null || save.DestroyedWorldTargetIds.Length == 0)
+            {
+                return;
+            }
+
+            var kept = new List<string>();
+            var changed = false;
+            for (var i = 0; i < save.DestroyedWorldTargetIds.Length; i++)
+            {
+                var value = save.DestroyedWorldTargetIds[i];
+                if (predicate(value))
+                {
+                    changed = true;
+                    continue;
+                }
+
+                kept.Add(value);
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            save.DestroyedWorldTargetIds = kept.ToArray();
+            CharacterSaveRepository.WriteWorldProgress(save);
         }
     }
 }

@@ -10,8 +10,8 @@ namespace F89.Audio
     {
         private const string ClipResourcePath = "Audio/StealthJetFlying";
 
-        /// <summary>Engine loop at Sound FX 50% (half prior jet loudness).</summary>
-        private const float VolumeAtFiftyPercent = 0.225f;
+        /// <summary>Engine loop at Sound FX 50% (2× prior jet loudness).</summary>
+        private const float VolumeAtFiftyPercent = 0.45f;
 
         private AudioSource audioSource;
         private AircraftController aircraft;

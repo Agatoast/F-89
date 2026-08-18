@@ -66,7 +66,13 @@ namespace F89.UI
             HudGuiUtility.DrawWireBox(fieldRect, 1f);
 
             GUI.SetNextControlName(NameFieldControl);
+            var previousCursorColor = GUI.skin.settings.cursorColor;
+            var previousSelectionColor = GUI.skin.settings.selectionColor;
+            GUI.skin.settings.cursorColor = Color.black;
+            GUI.skin.settings.selectionColor = new Color(0.55f, 0.7f, 0.95f, 0.55f);
             characterName = GUI.TextField(fieldRect, characterName ?? string.Empty, fieldStyle);
+            GUI.skin.settings.cursorColor = previousCursorColor;
+            GUI.skin.settings.selectionColor = previousSelectionColor;
             if (characterName != null && characterName.Length > MaxNameLength)
             {
                 characterName = characterName.Substring(0, MaxNameLength);

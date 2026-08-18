@@ -9,24 +9,36 @@ namespace F89.LandCombat
     /// </summary>
     public static class LandBossMissionAssignment
     {
-        public const int BossMissionCount = LandBossEncounter.LastBossNumber;
+        public const int BossMissionCount = LandBossEncounter.CampaignLastBossNumber;
         public const string Boss1OutpostName = "Outpost South";
         public const string LegacyBoss1OutpostName = "Outpost 02";
         public const string Boss2OutpostName = "Outpost 01";
         public const string LegacyBoss2OutpostName = "Outpost 04";
+        public const string Boss10OutpostName = "Outpost 13 SE";
+        public const string LegacyBoss10OutpostName = "Outpost 13";
 
+        // Boss N → outpost/station label from Docs/MissionCatalog.md (map layout labels).
         private static readonly string[] DesignatedOutposts =
         {
-            Boss1OutpostName,
-            Boss2OutpostName,
-            "Outpost 05",
-            "Outpost 06",
-            "Outpost 07",
-            "Outpost 08",
-            "Outpost 09",
-            "Outpost 10",
-            "Outpost 12",
-            "Outpost 13"
+            Boss1OutpostName,           // Boss01 — Mission 01 OP-South
+            Boss2OutpostName,           // Boss02 — Mission 05 OP-01
+            LegacyBoss10OutpostName,    // Boss03 — Mission 08 OP-13
+            Boss10OutpostName,          // Boss04 — Mission 10 OP-13-SE
+            "Outpost 43",               // Boss05 — Mission 13 OP-43
+            "Outpost 21",               // Boss06 — Mission 15 OP-21
+            "Rothera Research",         // Boss07 — Mission 18 STN-Rothera
+            "Palmer Station",           // Boss08 — Mission 21 STN-Palmer
+            "Marambio Base",            // Boss09 — Mission 24 STN-Marambio
+            "Outpost 18",               // Boss10 — Mission 27 OP-18
+            "Outpost 05",               // Boss11 — Mission 31 OP-05
+            "Outpost 33",               // Boss12 — Mission 34 OP-33
+            "Outpost 27",               // Boss13 — Mission 38 OP-27
+            "Outpost 41",               // Boss14 — Mission 42 OP-41
+            "Concordia Station",        // Boss15 — Mission 44 STN-Concordia
+            "Neumayer III",             // Boss16 — Mission 46 STN-Neumayer-III
+            "Halley VI",                // Boss17 — Mission 47 STN-Halley-VI
+            "Outpost 44",               // Boss18 — Mission 49 OP-44
+            "Amundsen-Scott"            // Boss19 — Mission 53 STN-Amundsen-Scott
         };
 
         public static bool HasActiveAssignment(CharacterSaveData save) =>
@@ -34,24 +46,28 @@ namespace F89.LandCombat
 
         public static bool IsActiveMissionOutpost(CharacterSaveData save, string outpostName)
         {
-            if (!HasActiveAssignment(save) || string.IsNullOrWhiteSpace(outpostName))
+            if (save == null || string.IsNullOrWhiteSpace(outpostName))
             {
                 return false;
             }
 
-            return string.Equals(save.AssignedBossOutpostName, outpostName, StringComparison.Ordinal);
-        }
-
-        /// <summary>True when the assigned primary air objectives are already complete.</summary>
-        public static bool IsPrimaryMissionComplete(CharacterSaveData save)
-        {
-            if (!HasActiveAssignment(save))
+            if (!CampaignMissionObjectiveState.TryGetCurrentSiteCode(save, out var siteCode)
+                || !CampaignMissionSiteCatalog.IsOutpostOrStationSite(siteCode))
             {
-                return true;
+                return false;
             }
 
-            return OutpostPrimaryObjective.AreAirObjectivesDestroyed(save.AssignedBossOutpostName);
+            if (!CampaignMissionObjectiveState.TryResolveOutpostBaseName(siteCode, out var baseName))
+            {
+                return false;
+            }
+
+            return string.Equals(baseName, outpostName.Trim(), StringComparison.OrdinalIgnoreCase);
         }
+
+        /// <summary>True when the current catalog mission primary objectives are complete.</summary>
+        public static bool IsPrimaryMissionComplete(CharacterSaveData save) =>
+            CampaignMissionObjectiveState.IsPrimaryMissionComplete(save);
 
         /// <summary>
         /// Marks the active assigned mission complete without requiring a boss kill,
@@ -70,14 +86,27 @@ namespace F89.LandCombat
 
         public static void PrepareNextAssignment(CharacterSaveData save)
         {
+            // Catalog mission order owns progression. Boss links follow the current SiteCode.
+            SyncAssignmentToCampaignMission(save);
+        }
+
+        /// <summary>
+        /// Links bunker/boss state to the current catalog mission outpost when applicable.
+        /// Waypoint missions clear the boss assignment so it cannot steal the blue marker.
+        /// </summary>
+        public static void SyncAssignmentToCampaignMission(CharacterSaveData save)
+        {
             if (save == null)
             {
                 return;
             }
 
             CharacterSaveRepository.EnsureBossMissionInitialized(save);
-            var bossNumber = GetNextUndefeatedBoss(save);
-            if (bossNumber <= 0)
+            CampaignMissionProgress.EnsureInitialized(save);
+
+            if (!CampaignMissionSiteCatalog.TryGetCurrentSiteCode(save, out var siteCode)
+                || CampaignMissionSiteCatalog.IsWaypointSite(siteCode)
+                || !CampaignMissionObjectiveState.TryResolveOutpostBaseName(siteCode, out var outpostName))
             {
                 save.AssignedBossNumber = 0;
                 save.AssignedBossOutpostName = string.Empty;
@@ -85,11 +114,41 @@ namespace F89.LandCombat
                 return;
             }
 
-            var outpostName = GetDesignatedOutpostName(bossNumber);
-            save.AssignedBossNumber = bossNumber;
             save.AssignedBossOutpostName = outpostName;
-            save.BossMissionOutpostNames[bossNumber - 1] = outpostName;
+            var bossNumber = FindDesignatedBossForOutpost(outpostName);
+            save.AssignedBossNumber = bossNumber;
+            if (bossNumber >= 1 && bossNumber <= BossMissionCount)
+            {
+                save.BossMissionOutpostNames[bossNumber - 1] = outpostName;
+                if (MissionProgressState.IsMissionInProgress())
+                {
+                    save.RevealedBunkerMask |= 1 << (bossNumber - 1);
+                }
+            }
+
             CharacterSaveRepository.WriteBossProgress(save);
+        }
+
+        private static int FindDesignatedBossForOutpost(string outpostName)
+        {
+            if (string.IsNullOrWhiteSpace(outpostName))
+            {
+                return 0;
+            }
+
+            for (var i = 0; i < DesignatedOutposts.Length; i++)
+            {
+                if (string.Equals(DesignatedOutposts[i], outpostName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(
+                        CampaignMapLayoutState.NormalizeSiteName(DesignatedOutposts[i]),
+                        CampaignMapLayoutState.NormalizeSiteName(outpostName),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return i + 1;
+                }
+            }
+
+            return 0;
         }
 
         /// <summary>Call when the player launches from the carrier on an assigned sortie.</summary>
@@ -127,7 +186,7 @@ namespace F89.LandCombat
             CharacterSaveRepository.EnsureBossMissionInitialized(save);
             for (var i = 0; i < BossMissionCount; i++)
             {
-                if (!string.Equals(save.BossMissionOutpostNames[i], outpostName, System.StringComparison.Ordinal))
+                if (!OutpostNamesMatch(save.BossMissionOutpostNames[i], outpostName))
                 {
                     continue;
                 }
@@ -155,14 +214,34 @@ namespace F89.LandCombat
                     continue;
                 }
 
-                if (string.Equals(save.BossMissionOutpostNames[i], outpostName, System.StringComparison.Ordinal))
+                if (!OutpostNamesMatch(save.BossMissionOutpostNames[i], outpostName))
                 {
-                    bossNumber = i + 1;
-                    return true;
+                    continue;
                 }
+
+                bossNumber = i + 1;
+                return true;
             }
 
             return false;
+        }
+
+        private static bool OutpostNamesMatch(string linkedOutpost, string outpostName)
+        {
+            if (string.IsNullOrWhiteSpace(linkedOutpost) || string.IsNullOrWhiteSpace(outpostName))
+            {
+                return false;
+            }
+
+            if (string.Equals(linkedOutpost, outpostName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return string.Equals(
+                CampaignMapLayoutState.NormalizeSiteName(linkedOutpost),
+                CampaignMapLayoutState.NormalizeSiteName(outpostName),
+                StringComparison.OrdinalIgnoreCase);
         }
 
         public static string GetDesignatedOutpostName(int bossNumber)
@@ -179,13 +258,14 @@ namespace F89.LandCombat
         /// <summary>Writes the canonical boss-to-outpost links into the active save.</summary>
         public static void InitializeBossMissionOutpostLinks(CharacterSaveData save)
         {
-            if (save == null)
+            if (save == null
+                || save.BossMissionOutpostNames == null
+                || save.BossMissionOutpostNames.Length == 0)
             {
                 return;
             }
 
-            CharacterSaveRepository.EnsureBossMissionInitialized(save);
-            for (var i = 0; i < BossMissionCount; i++)
+            for (var i = 0; i < BossMissionCount && i < save.BossMissionOutpostNames.Length; i++)
             {
                 save.BossMissionOutpostNames[i] = GetDesignatedOutpostName(i + 1);
             }
@@ -209,27 +289,6 @@ namespace F89.LandCombat
                 + $"(UR level {LandBossEncounter.GetEnemyLevel(save.AssignedBossNumber)}).";
         }
 
-        /// <summary>
-        /// Chooses a friendly occupied outpost runway for campaign launch when available.
-        /// Boss 1 always launches from the carrier.
-        /// </summary>
-        public static void AssignMissionLaunchOrigin(CharacterSaveData save)
-        {
-            ClearMissionLaunchOutpost(save);
-        }
-
-        /// <summary>Clears launch origin so the next sortie starts from the carrier deck.</summary>
-        public static void ClearMissionLaunchOutpost(CharacterSaveData save)
-        {
-            if (save == null)
-            {
-                return;
-            }
-
-            save.MissionLaunchOutpostName = string.Empty;
-            CharacterSaveRepository.WriteBossProgress(save);
-        }
-
         /// <summary>Parks the aircraft at this outpost runway for the next sortie launch.</summary>
         public static void PersistLaunchOutpost(CharacterSaveData save, string outpostName)
         {
@@ -238,14 +297,27 @@ namespace F89.LandCombat
                 return;
             }
 
-            save.MissionLaunchOutpostName = outpostName;
+            var trimmed = outpostName.Trim();
+            if (CampaignMapLayoutState.TryGetSite(trimmed, out var site)
+                && site != null
+                && !string.IsNullOrWhiteSpace(site.Label))
+            {
+                trimmed = CampaignMapLayoutState.NormalizeSiteName(site.Label);
+            }
+
+            if (string.Equals(save.MissionLaunchOutpostName, trimmed, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            save.MissionLaunchOutpostName = trimmed;
             CharacterSaveRepository.WriteBossProgress(save);
         }
 
         private static int GetNextUndefeatedBoss(CharacterSaveData save)
         {
             for (var bossNumber = LandBossEncounter.FirstBossNumber;
-                 bossNumber <= LandBossEncounter.LastBossNumber;
+                 bossNumber <= LandBossEncounter.CampaignLastBossNumber;
                  bossNumber++)
             {
                 if (!LandBossEncounter.IsDefeated(bossNumber))

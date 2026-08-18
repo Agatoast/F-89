@@ -12,6 +12,8 @@ namespace F89.Core
     {
         private const string SaveFileName = "character_saves.json";
         private const string LastSelectedSaveIdKey = "F89.LastSelectedSaveId";
+        private const string LastSelectedCampaignSaveIdKey = "F89.LastSelectedSaveId.Campaign";
+        private const string LastSelectedFreeFlightSaveIdKey = "F89.LastSelectedSaveId.FreeFlight";
         private const string AllSavesClearedKey = "F89.AllSavesCleared.v2";
         private const int MaxCharacterNameLength = CharacterNameLimits.MaxLength;
 
@@ -46,24 +48,30 @@ namespace F89.Core
             return null;
         }
 
-        public static CharacterSaveData CreateSave(string name, string rank = "2nd LT")
+        public static CharacterSaveData CreateSave(string name, string rank = "2LT")
         {
             EnsureLoaded();
 
             var save = new CharacterSaveData
             {
                 Id = Guid.NewGuid().ToString("N"),
-                Rank = string.IsNullOrWhiteSpace(rank) ? "2nd LT" : rank.Trim(),
+                Rank = string.IsNullOrWhiteSpace(rank) ? "2LT" : rank.Trim(),
                 Name = TrimCharacterName(name),
                 LastPlayedUtc = DateTime.UtcNow.ToString("o"),
                 HighestAward = MilitaryMedalIds.DefaultForNewCharacter,
                 EarnedRibbonIds = new[] { MilitaryRibbonIds.FruitSalad },
+                EarnedRibbonCounts = new[] { 1 },
                 MaxHitPoints = 100,
                 Move = 3,
-                DamageResistance = 0
+                DamageResistance = 0,
+                PlayModeKind = (int)GamePlayModeState.ActivePlayMode,
+                CampaignMissionNumber = 1,
+                HasCompletedCampaign = false
             };
 
             EnsureGearInitialized(save);
+            LandDefaultLoadout.EquipStarterEquipment(save);
+            GameplaySessionBootstrap.ClearStalePersistedSession();
             cachedSaves.Add(save);
             WriteToDisk();
             return save;
@@ -82,6 +90,14 @@ namespace F89.Core
 
         public static string GetLastSelectedSaveId()
         {
+            var modeKey = GetLastSelectedSaveIdKeyForActiveMode();
+            var modeValue = PlayerPrefs.GetString(modeKey, string.Empty);
+            if (!string.IsNullOrEmpty(modeValue))
+            {
+                return modeValue;
+            }
+
+            // Legacy single-key preference (pre Campaign / Free Flight split).
             return PlayerPrefs.GetString(LastSelectedSaveIdKey, string.Empty);
         }
 
@@ -92,8 +108,16 @@ namespace F89.Core
                 return;
             }
 
+            PlayerPrefs.SetString(GetLastSelectedSaveIdKeyForActiveMode(), saveId);
             PlayerPrefs.SetString(LastSelectedSaveIdKey, saveId);
             PlayerPrefs.Save();
+        }
+
+        private static string GetLastSelectedSaveIdKeyForActiveMode()
+        {
+            return GamePlayModeState.IsCampaign
+                ? LastSelectedCampaignSaveIdKey
+                : LastSelectedFreeFlightSaveIdKey;
         }
 
         public static void WritePortrait(CharacterSaveData save)
@@ -175,6 +199,8 @@ namespace F89.Core
             CharacterPortraitService.DeleteAllCustomPortraits();
             cachedSaves.Clear();
             PlayerPrefs.DeleteKey(LastSelectedSaveIdKey);
+            PlayerPrefs.DeleteKey(LastSelectedCampaignSaveIdKey);
+            PlayerPrefs.DeleteKey(LastSelectedFreeFlightSaveIdKey);
             PlayerPrefs.Save();
             CharacterSessionState.ActiveSave = null;
             CharacterGearSession.Bind(null);
@@ -260,7 +286,7 @@ namespace F89.Core
             return results;
         }
 
-        /// <summary>Syncs vehicle/troop kill totals from per-level UR kill folders.</summary>
+        /// <summary>Syncs vehicle/troop kill folders from save arrays and destroyed flight-map targets.</summary>
         public static void SyncVehicleKillCredit(CharacterSaveData save)
         {
             if (save == null)
@@ -269,12 +295,204 @@ namespace F89.Core
             }
 
             EnsureLoaded();
-            EnsureUrKillArrays(save);
-            WriteToDisk();
+            if (EnsureUrKillArrays(save))
+            {
+                WriteToDisk();
+            }
         }
 
-        /// <summary>Adds a ribbon if the character has not already earned it. Updates HighestAward.</summary>
+        private static void NormalizeUrKillProgress()
+        {
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null)
+                {
+                    continue;
+                }
+
+                if (EnsureUrKillArrays(save))
+                {
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                WriteToDisk();
+            }
+        }
+
+        public static bool EnsureUrKillArrays(CharacterSaveData save)
+        {
+            return EnsureUrKillArrays(save, out _);
+        }
+
+        /// <returns>True when kill folders or legacy totals were repaired.</returns>
+        private static bool EnsureUrKillArrays(CharacterSaveData save, out bool repaired)
+        {
+            repaired = false;
+            if (save == null)
+            {
+                return false;
+            }
+
+            var vehicleBefore = UrKillCredit.Sum(save.UrVehicleKillsByLevel);
+            var troopBefore = UrKillCredit.Sum(save.UrTroopKillsByLevel);
+            var legacyVehicleBefore = save.EnemyVehiclesKilled;
+            var legacyTroopBefore = save.EnemyTroopsKilled;
+
+            ResizeUrKillArray(ref save.UrVehicleKillsByLevel);
+            ResizeUrKillArray(ref save.UrTroopKillsByLevel);
+
+            if (UrKillCredit.Sum(save.UrVehicleKillsByLevel) == 0)
+            {
+                repaired |= BackfillUrVehicleKillsFromDestroyedTargets(save);
+            }
+
+            if (UrKillCredit.Sum(save.UrTroopKillsByLevel) == 0)
+            {
+                repaired |= BackfillUrTroopKillsFromDestroyedTargets(save);
+            }
+
+            save.EnemyVehiclesKilled = Mathf.Max(
+                save.EnemyVehiclesKilled,
+                UrKillCredit.Sum(save.UrVehicleKillsByLevel));
+            save.EnemyTroopsKilled = Mathf.Max(
+                save.EnemyTroopsKilled,
+                UrKillCredit.Sum(save.UrTroopKillsByLevel));
+
+            repaired |= vehicleBefore != UrKillCredit.Sum(save.UrVehicleKillsByLevel)
+                || troopBefore != UrKillCredit.Sum(save.UrTroopKillsByLevel)
+                || legacyVehicleBefore != save.EnemyVehiclesKilled
+                || legacyTroopBefore != save.EnemyTroopsKilled;
+            return repaired;
+        }
+
+        private static void ResizeUrKillArray(ref int[] values)
+        {
+            if (values != null && values.Length == UrKillCredit.LevelCount)
+            {
+                return;
+            }
+
+            var resized = new int[UrKillCredit.LevelCount];
+            if (values != null)
+            {
+                var copyLength = Mathf.Min(values.Length, resized.Length);
+                for (var i = 0; i < copyLength; i++)
+                {
+                    resized[i] = values[i];
+                }
+            }
+
+            values = resized;
+        }
+
+        private static bool BackfillUrVehicleKillsFromDestroyedTargets(CharacterSaveData save)
+        {
+            if (save?.DestroyedWorldTargetIds == null || save.DestroyedWorldTargetIds.Length == 0)
+            {
+                return false;
+            }
+
+            var counts = new int[UrKillCredit.LevelCount];
+            var credited = false;
+            var catalog = Enemies.VehicleUnitCatalog.LoadOrDefault();
+            for (var i = 0; i < save.DestroyedWorldTargetIds.Length; i++)
+            {
+                if (!TryParseDestroyedUrTarget(
+                        save.DestroyedWorldTargetIds[i],
+                        catalog,
+                        out var definition)
+                    || definition == null
+                    || definition.isTroop)
+                {
+                    continue;
+                }
+
+                counts[UrKillCredit.LevelToIndex(definition.vehicleLevel)]++;
+                credited = true;
+            }
+
+            if (!credited)
+            {
+                return false;
+            }
+
+            save.UrVehicleKillsByLevel = counts;
+            return true;
+        }
+
+        private static bool BackfillUrTroopKillsFromDestroyedTargets(CharacterSaveData save)
+        {
+            if (save?.DestroyedWorldTargetIds == null || save.DestroyedWorldTargetIds.Length == 0)
+            {
+                return false;
+            }
+
+            var counts = new int[UrKillCredit.LevelCount];
+            var credited = false;
+            var catalog = Enemies.VehicleUnitCatalog.LoadOrDefault();
+            for (var i = 0; i < save.DestroyedWorldTargetIds.Length; i++)
+            {
+                if (!TryParseDestroyedUrTarget(
+                        save.DestroyedWorldTargetIds[i],
+                        catalog,
+                        out var definition)
+                    || definition == null
+                    || !definition.isTroop)
+                {
+                    continue;
+                }
+
+                counts[UrKillCredit.LevelToIndex(definition.vehicleLevel)]++;
+                credited = true;
+            }
+
+            if (!credited)
+            {
+                return false;
+            }
+
+            save.UrTroopKillsByLevel = counts;
+            return true;
+        }
+
+        private static bool TryParseDestroyedUrTarget(
+            string targetId,
+            VehicleUnitCatalog catalog,
+            out VehicleUnitDefinition definition)
+        {
+            definition = null;
+            if (string.IsNullOrWhiteSpace(targetId))
+            {
+                return false;
+            }
+
+            var separator = targetId.IndexOf("::", StringComparison.Ordinal);
+            if (separator < 0 || separator >= targetId.Length - 2)
+            {
+                return false;
+            }
+
+            var label = targetId.Substring(separator + 2).Trim();
+            return TryResolveUrDefinitionFromTargetLabel(catalog, label, out definition);
+        }
+
+        /// <summary>
+        /// Grants a ribbon the first time only (returns true for award UI).
+        /// Repeat star devices use <see cref="TryIncrementRibbonAwardCount"/>.
+        /// </summary>
         public static bool TryGrantRibbon(CharacterSaveData save, string ribbonId)
+        {
+            return TryGrantRibbon(save, ribbonId, allowRepeatAward: false);
+        }
+
+        /// <summary>
+        /// Increments a repeat-award ribbon when this sortie earned another device.
+        /// </summary>
+        public static bool TryIncrementRibbonAwardCount(CharacterSaveData save, string ribbonId)
         {
             if (save == null || string.IsNullOrEmpty(ribbonId))
             {
@@ -282,27 +500,175 @@ namespace F89.Core
             }
 
             EnsureLoaded();
-            save.EarnedRibbonIds ??= Array.Empty<string>();
+            EnsureRibbonCountsInitialized(save);
             for (var i = 0; i < save.EarnedRibbonIds.Length; i++)
             {
-                if (save.EarnedRibbonIds[i] == ribbonId)
+                if (save.EarnedRibbonIds[i] != ribbonId)
+                {
+                    continue;
+                }
+
+                if (!MilitaryRibbonCatalog.SupportsAwardDevices(ribbonId)
+                    || MilitaryRibbonCatalog.IsSingleAwardOnly(ribbonId)
+                    || save.EarnedRibbonCounts[i] >= MilitaryRibbonAwardDevices.MaxTrackedAwards)
                 {
                     return false;
                 }
+
+                save.EarnedRibbonCounts[i]++;
+                WriteToDisk();
+                return true;
             }
 
-            var updated = new string[save.EarnedRibbonIds.Length + 1];
+            return false;
+        }
+
+        /// <summary>
+        /// Score medals: first award or repeat device from this sortie's mission score only.
+        /// Awards the single highest score tier for the sortie (200+ → Commendation, not Achievement).
+        /// </summary>
+        public static bool TryGrantScoreMedalForMission(
+            CharacterSaveData save,
+            int missionScore,
+            out string ribbonId,
+            out int awardCountAfterGrant)
+        {
+            ribbonId = null;
+            awardCountAfterGrant = 0;
+            if (!MissionScoreMedalCatalog.TryGetHighestQualifyingRibbonId(missionScore, out ribbonId))
+            {
+                return false;
+            }
+
+            if (TryGrantRibbon(save, ribbonId))
+            {
+                awardCountAfterGrant = 1;
+                return true;
+            }
+
+            if (!TryIncrementRibbonAwardCount(save, ribbonId))
+            {
+                return false;
+            }
+
+            awardCountAfterGrant = GetRibbonAwardCount(save, ribbonId);
+            return true;
+        }
+
+        /// <summary>
+        /// Backfill only: grant if missing; never increment an existing ribbon count.
+        /// </summary>
+        public static bool TryEnsureRibbonGranted(CharacterSaveData save, string ribbonId)
+        {
+            return TryGrantRibbon(save, ribbonId, allowRepeatAward: false);
+        }
+
+        public static bool HasEarnedRibbon(CharacterSaveData save, string ribbonId)
+        {
+            return GetRibbonAwardCount(save, ribbonId) > 0;
+        }
+
+        private static bool TryGrantRibbon(CharacterSaveData save, string ribbonId, bool allowRepeatAward)
+        {
+            if (save == null || string.IsNullOrEmpty(ribbonId))
+            {
+                return false;
+            }
+
+            EnsureLoaded();
+            EnsureRibbonCountsInitialized(save);
             for (var i = 0; i < save.EarnedRibbonIds.Length; i++)
             {
-                updated[i] = save.EarnedRibbonIds[i];
+                if (save.EarnedRibbonIds[i] != ribbonId)
+                {
+                    continue;
+                }
+
+                return false;
             }
 
-            updated[updated.Length - 1] = ribbonId;
-            save.EarnedRibbonIds = updated;
+            var idUpdated = new string[save.EarnedRibbonIds.Length + 1];
+            var countUpdated = new int[save.EarnedRibbonCounts.Length + 1];
+            for (var i = 0; i < save.EarnedRibbonIds.Length; i++)
+            {
+                idUpdated[i] = save.EarnedRibbonIds[i];
+                countUpdated[i] = save.EarnedRibbonCounts[i];
+            }
+
+            idUpdated[idUpdated.Length - 1] = ribbonId;
+            countUpdated[countUpdated.Length - 1] = 1;
+            save.EarnedRibbonIds = idUpdated;
+            save.EarnedRibbonCounts = countUpdated;
             var derived = MilitaryMedalCatalog.GetHighestMedalIdFromEarnedRibbons(save.EarnedRibbonIds);
             save.HighestAward = MilitaryMedalCatalog.NormalizeAwardId(derived);
             WriteToDisk();
             return true;
+        }
+
+        public static int GetRibbonAwardCount(CharacterSaveData save, string ribbonId)
+        {
+            if (save == null || string.IsNullOrEmpty(ribbonId))
+            {
+                return 0;
+            }
+
+            EnsureRibbonCountsInitialized(save);
+            for (var i = 0; i < save.EarnedRibbonIds.Length; i++)
+            {
+                if (save.EarnedRibbonIds[i] == ribbonId)
+                {
+                    return Mathf.Max(0, save.EarnedRibbonCounts[i]);
+                }
+            }
+
+            return 0;
+        }
+
+        private static void EnsureRibbonCountsInitialized(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            save.EarnedRibbonIds ??= Array.Empty<string>();
+            if (save.EarnedRibbonCounts == null || save.EarnedRibbonCounts.Length != save.EarnedRibbonIds.Length)
+            {
+                var counts = new int[save.EarnedRibbonIds.Length];
+                for (var i = 0; i < counts.Length; i++)
+                {
+                    if (MilitaryRibbonCatalog.IsSingleAwardOnly(save.EarnedRibbonIds[i]))
+                    {
+                        counts[i] = 1;
+                        continue;
+                    }
+
+                    var existing = save.EarnedRibbonCounts != null && i < save.EarnedRibbonCounts.Length
+                        ? save.EarnedRibbonCounts[i]
+                        : 1;
+                    counts[i] = Mathf.Clamp(existing <= 0 ? 1 : existing, 1, MilitaryRibbonAwardDevices.MaxTrackedAwards);
+                }
+
+                save.EarnedRibbonCounts = counts;
+            }
+            else
+            {
+                for (var i = 0; i < save.EarnedRibbonCounts.Length; i++)
+                {
+                    if (save.EarnedRibbonCounts[i] <= 0)
+                    {
+                        save.EarnedRibbonCounts[i] = 1;
+                    }
+                    else if (MilitaryRibbonCatalog.IsSingleAwardOnly(save.EarnedRibbonIds[i]))
+                    {
+                        save.EarnedRibbonCounts[i] = 1;
+                    }
+                    else if (save.EarnedRibbonCounts[i] > MilitaryRibbonAwardDevices.MaxTrackedAwards)
+                    {
+                        save.EarnedRibbonCounts[i] = MilitaryRibbonAwardDevices.MaxTrackedAwards;
+                    }
+                }
+            }
         }
 
         public static void EnsureGearInitialized(CharacterSaveData save)
@@ -323,39 +689,114 @@ namespace F89.Core
             NormalizeVaultItems(save.Vault);
             EnsureBossProgressInitialized(save);
             EnsureBossMissionInitialized(save);
+            SyncDefeatedBossMaskFromProgress(save);
+            SyncBossKillAwardMaskFromCampaignProgress(save);
+            EnsureBossKillAwardMaskInitialized(save);
             EnsureUrKillArrays(save);
         }
 
-        public static void EnsureUrKillArrays(CharacterSaveData save)
+        /// <summary>
+        /// Grants boss-kill awards for boss missions whose outpost was made friendly after END MISSION.
+        /// Repairs saves where bunker kills completed the campaign step but masks were never written.
+        /// </summary>
+        public static void SyncBossKillAwardMaskFromCampaignProgress(CharacterSaveData save)
         {
             if (save == null)
             {
                 return;
             }
 
-            if (save.UrVehicleKillsByLevel == null || save.UrVehicleKillsByLevel.Length != UrKillCredit.LevelCount)
+            EnsureBossMissionInitialized(save);
+            var changed = false;
+            for (var bossNumber = LandBossEncounter.FirstBossNumber;
+                 bossNumber <= LandBossEncounter.LastBossNumber;
+                 bossNumber++)
             {
-                save.UrVehicleKillsByLevel = new int[UrKillCredit.LevelCount];
+                var bit = 1 << (bossNumber - 1);
+                if ((save.BossKillAwardMask & bit) != 0)
+                {
+                    continue;
+                }
+
+                var outpostIndex = bossNumber - 1;
+                if (save.BossMissionOutpostNames == null
+                    || outpostIndex >= save.BossMissionOutpostNames.Length)
+                {
+                    continue;
+                }
+
+                var outpostName = save.BossMissionOutpostNames[outpostIndex];
+                if (string.IsNullOrWhiteSpace(outpostName)
+                    || !AntarcticaOutpostState.IsFriendlyOccupied(save, outpostName))
+                {
+                    continue;
+                }
+
+                save.BossKillAwardMask |= bit;
+                save.DefeatedBossMask |= bit;
+                changed = true;
             }
 
-            if (save.UrTroopKillsByLevel == null || save.UrTroopKillsByLevel.Length != UrKillCredit.LevelCount)
+            if (changed)
             {
-                save.UrTroopKillsByLevel = new int[UrKillCredit.LevelCount];
+                WriteBossProgress(save);
+            }
+        }
+
+        /// <summary>
+        /// Backfills <see cref="CharacterSaveData.BossKillAwardMask"/> from legacy defeat data once.
+        /// </summary>
+        public static void EnsureBossKillAwardMaskInitialized(CharacterSaveData save)
+        {
+            if (save == null || save.BossKillAwardMask != 0 || save.DefeatedBossMask == 0)
+            {
+                return;
             }
 
-            var folderKillCount = UrKillCredit.Sum(save.UrVehicleKillsByLevel)
-                + UrKillCredit.Sum(save.UrTroopKillsByLevel);
-            if (folderKillCount == 0 && save.DestroyedWorldTargetIds is { Length: > 0 })
+            save.BossKillAwardMask = save.DefeatedBossMask;
+            WriteBossProgress(save);
+        }
+
+        /// <summary>
+        /// Ensures <see cref="CharacterSaveData.DefeatedBossMask"/> reflects saved boss HP slots
+        /// (0 HP = defeated) for characters created before defeat tracking was reliable.
+        /// </summary>
+        public static void SyncDefeatedBossMaskFromProgress(CharacterSaveData save)
+        {
+            if (save == null)
             {
-                BackfillUrKillArraysFromDestroyedTargets(save);
+                return;
             }
 
-            save.EnemyVehiclesKilled = Mathf.Max(
-                save.EnemyVehiclesKilled,
-                UrKillCredit.Sum(save.UrVehicleKillsByLevel));
-            save.EnemyTroopsKilled = Mathf.Max(
-                save.EnemyTroopsKilled,
-                UrKillCredit.Sum(save.UrTroopKillsByLevel));
+            EnsureBossProgressInitialized(save);
+            var changed = false;
+            for (var bossNumber = LandBossEncounter.FirstBossNumber;
+                 bossNumber <= LandBossEncounter.LastBossNumber;
+                 bossNumber++)
+            {
+                var bit = 1 << (bossNumber - 1);
+                if ((save.DefeatedBossMask & bit) != 0)
+                {
+                    continue;
+                }
+
+                if (bossNumber >= save.BossPrimaryHitPoints.Length)
+                {
+                    continue;
+                }
+
+                var savedHp = save.BossPrimaryHitPoints[bossNumber];
+                if (savedHp >= -0.001f && savedHp <= 0.001f)
+                {
+                    save.DefeatedBossMask |= bit;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                WriteBossProgress(save);
+            }
         }
 
         private static bool TryResolveUrDefinitionFromTargetLabel(
@@ -389,42 +830,6 @@ namespace F89.Core
             return catalog.TryGetByAbbreviation(label, VehicleUnitDesignation.UR, out definition);
         }
 
-        private static void BackfillUrKillArraysFromDestroyedTargets(CharacterSaveData save)
-        {
-            var catalog = Enemies.VehicleUnitCatalog.LoadOrDefault();
-            for (var i = 0; i < save.DestroyedWorldTargetIds.Length; i++)
-            {
-                var targetId = save.DestroyedWorldTargetIds[i];
-                if (string.IsNullOrWhiteSpace(targetId))
-                {
-                    continue;
-                }
-
-                var separator = targetId.IndexOf("::", StringComparison.Ordinal);
-                if (separator < 0 || separator >= targetId.Length - 2)
-                {
-                    continue;
-                }
-
-                var label = targetId.Substring(separator + 2).Trim();
-                if (!TryResolveUrDefinitionFromTargetLabel(catalog, label, out var definition)
-                    || definition == null)
-                {
-                    continue;
-                }
-
-                var index = UrKillCredit.LevelToIndex(definition.vehicleLevel);
-                if (definition.isTroop)
-                {
-                    save.UrTroopKillsByLevel[index]++;
-                }
-                else
-                {
-                    save.UrVehicleKillsByLevel[index]++;
-                }
-            }
-        }
-
         public static void EnsureBossMissionInitialized(CharacterSaveData save)
         {
             if (save == null)
@@ -432,7 +837,7 @@ namespace F89.Core
                 return;
             }
 
-            const int bossSlotCount = 10;
+            const int bossSlotCount = LandBossEncounter.LastBossNumber;
             if (save.BossMissionOutpostNames == null || save.BossMissionOutpostNames.Length != bossSlotCount)
             {
                 save.BossMissionOutpostNames = new string[bossSlotCount];
@@ -440,6 +845,8 @@ namespace F89.Core
 
             MigrateBoss1Outpost(save);
             MigrateBoss2Outpost(save);
+            MigrateBoss10Outpost(save);
+            LandBossMissionAssignment.InitializeBossMissionOutpostLinks(save);
         }
 
         private static void MigrateBoss1Outpost(CharacterSaveData save)
@@ -484,6 +891,47 @@ namespace F89.Core
             }
         }
 
+        private static void MigrateBoss10Outpost(CharacterSaveData save)
+        {
+            if (save.BossMissionOutpostNames.Length < 10)
+            {
+                return;
+            }
+
+            var linked = save.BossMissionOutpostNames[9];
+            if (string.IsNullOrWhiteSpace(linked)
+                || string.Equals(linked, LandBossMissionAssignment.LegacyBoss10OutpostName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(linked, LandBossMissionAssignment.Boss10OutpostName, StringComparison.OrdinalIgnoreCase))
+            {
+                save.BossMissionOutpostNames[9] = "Outpost 18";
+            }
+
+            if (save.AssignedBossNumber == 10
+                && (string.IsNullOrWhiteSpace(save.AssignedBossOutpostName)
+                    || string.Equals(
+                        save.AssignedBossOutpostName,
+                        LandBossMissionAssignment.LegacyBoss10OutpostName,
+                        StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(
+                        save.AssignedBossOutpostName,
+                        LandBossMissionAssignment.Boss10OutpostName,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                save.AssignedBossOutpostName = "Outpost 18";
+            }
+
+            // Saves on mission 10 could have AssignedBossNumber = 0 when OP-13-SE was not linked.
+            if (save.AssignedBossNumber == 0
+                && CampaignMissionProgress.GetCurrentMissionNumber(save) == 10
+                && CampaignMissionObjectiveState.TryResolveOutpostBaseName("OP-13-SE", out var baseName))
+            {
+                save.AssignedBossNumber = 4;
+                save.AssignedBossOutpostName = baseName;
+                save.BossMissionOutpostNames[3] = baseName;
+                save.RevealedBunkerMask |= 1 << 3;
+            }
+        }
+
         public static void WriteGear(CharacterSaveData save)
         {
             if (save == null)
@@ -521,9 +969,27 @@ namespace F89.Core
             WriteToDisk();
         }
 
+        public static void EnsureBunkerDefenseProgress(CharacterSaveData save)
+        {
+            if (save == null)
+            {
+                return;
+            }
+
+            if (save.ConsumedBunkerDefenseMissionIds == null)
+            {
+                save.ConsumedBunkerDefenseMissionIds = Array.Empty<string>();
+            }
+
+            if (save.CompletedBunkerDefenseMissionIds == null)
+            {
+                save.CompletedBunkerDefenseMissionIds = Array.Empty<string>();
+            }
+        }
+
         private static void EnsureBossProgressInitialized(CharacterSaveData save)
         {
-            const int bossSlotCount = 11;
+            const int bossSlotCount = 20;
             if (save.BossPrimaryHitPoints == null || save.BossPrimaryHitPoints.Length != bossSlotCount)
             {
                 save.BossPrimaryHitPoints = CreateBossHealthSlots(bossSlotCount);
@@ -593,10 +1059,39 @@ namespace F89.Core
             NormalizeLoadedAwards();
             NormalizeLoadedRibbons();
             NormalizeLoadedScores();
+            NormalizeLoadedRanks();
+            NormalizeUrKillProgress();
             NormalizeLoadedGear();
             NormalizeLoadedAttributes();
+            NormalizeLoadedPlayModes();
+            NormalizeSuccessfulEndMissionProgress();
+            NormalizeLaunchOrigins();
 
             if (cachedSaves.Count == 0)
+            {
+                WriteToDisk();
+            }
+        }
+
+        private static void NormalizeLoadedRanks()
+        {
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null || save.IsCourtMartialed || save.IsKilledInAction)
+                {
+                    continue;
+                }
+
+                var before = save.Rank;
+                PilotCareerRanks.SyncCareerRankProgress(save);
+                if (save.Rank != before)
+                {
+                    changed = true;
+                }
+            }
+
+            if (changed)
             {
                 WriteToDisk();
             }
@@ -626,6 +1121,125 @@ namespace F89.Core
                 save.Move = move;
                 save.DamageResistance = dr;
                 changed = true;
+            }
+
+            if (changed)
+            {
+                WriteToDisk();
+            }
+        }
+
+        private static void NormalizeLoadedPlayModes()
+        {
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null)
+                {
+                    continue;
+                }
+
+                if (save.PlayModeKind != (int)CharacterPlayMode.Campaign
+                    && save.PlayModeKind != (int)CharacterPlayMode.FreeFlight)
+                {
+                    save.PlayModeKind = (int)CharacterPlayMode.Campaign;
+                    changed = true;
+                }
+
+                if (save.CampaignMissionNumber <= 0)
+                {
+                    save.CampaignMissionNumber = 1;
+                    changed = true;
+                }
+
+                if (!save.HasCompletedCampaign
+                    && save.CampaignMissionNumber > CampaignMissionProgress.TotalMissionCount)
+                {
+                    save.HasCompletedCampaign = true;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                WriteToDisk();
+            }
+        }
+
+        private static void NormalizeLaunchOrigins()
+        {
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null || MissionLaunchOrigin.HasSavedLaunchOutpost(save))
+                {
+                    continue;
+                }
+
+                var before = save.MissionLaunchOutpostName ?? string.Empty;
+                MissionLaunchOrigin.EnsureDefaultLaunchOriginIfMissing(save);
+                var after = save.MissionLaunchOutpostName ?? string.Empty;
+                if (!string.Equals(before, after, StringComparison.Ordinal))
+                {
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                WriteToDisk();
+            }
+        }
+
+        /// <summary>
+        /// Backfills one-time threshold ribbons for legacy saves (no award screen).
+        /// Does not inflate SuccessfulEndMissionCount or repeat star devices.
+        /// </summary>
+        private static void NormalizeSuccessfulEndMissionProgress()
+        {
+            var changed = false;
+            foreach (var save in cachedSaves)
+            {
+                if (save == null)
+                {
+                    continue;
+                }
+
+                if (save.SuccessfulEndMissionCount < 0)
+                {
+                    save.SuccessfulEndMissionCount = 0;
+                    changed = true;
+                }
+
+                // Legacy backfill only — never overwrite the real END MISSION counter.
+                var inferredEndMissions = save.CampaignMissionNumber > 1
+                    ? save.CampaignMissionNumber - 1
+                    : 0;
+                if (save.HasCompletedCampaign)
+                {
+                    inferredEndMissions = Math.Max(inferredEndMissions, CampaignMissionProgress.TotalMissionCount);
+                }
+
+                var thresholdEndMissions = Math.Max(save.SuccessfulEndMissionCount, inferredEndMissions);
+
+                if (thresholdEndMissions >= 1)
+                {
+                    if (TryEnsureRibbonGranted(save, MilitaryRibbonIds.CombatAction))
+                    {
+                        changed = true;
+                    }
+
+                    if (TryEnsureRibbonGranted(save, MilitaryRibbonIds.AntarcticaService))
+                    {
+                        changed = true;
+                    }
+                }
+
+                if (thresholdEndMissions >= 5
+                    && TryEnsureRibbonGranted(save, MilitaryRibbonIds.GoodConduct))
+                {
+                    changed = true;
+                }
             }
 
             if (changed)
@@ -711,12 +1325,78 @@ namespace F89.Core
                     save.EarnedRibbonIds = Array.Empty<string>();
                     changed = true;
                 }
+
+                var countsWereMissing = save.EarnedRibbonCounts == null
+                    || save.EarnedRibbonCounts.Length != save.EarnedRibbonIds.Length;
+                EnsureRibbonCountsInitialized(save);
+                if (ClampInflatedRibbonAwardCounts(save))
+                {
+                    changed = true;
+                }
+
+                if (countsWereMissing)
+                {
+                    changed = true;
+                }
+
+                if (TryRepairMissingScoreMedalBackfill(save))
+                {
+                    changed = true;
+                }
             }
 
             if (changed)
             {
                 WriteToDisk();
             }
+        }
+
+        /// <summary>
+        /// Legacy repair: score-medal backfill used BestMissionScore and could grant Achievement at 200+.
+        /// </summary>
+        private static bool TryRepairMissingScoreMedalBackfill(CharacterSaveData save)
+        {
+            if (save == null || save.BestMissionScore < MissionScoreMedalCatalog.JointServiceCommendationMinMissionScore)
+            {
+                return false;
+            }
+
+            if (HasEarnedRibbon(save, MilitaryRibbonIds.JointServiceCommendation))
+            {
+                return false;
+            }
+
+            return TryEnsureRibbonGranted(save, MilitaryRibbonIds.JointServiceCommendation);
+        }
+
+        /// <summary>
+        /// Repeat ribbon devices only come from END MISSION grants — at most one per successful sortie.
+        /// Repairs saves inflated by legacy load-time re-grants.
+        /// </summary>
+        private static bool ClampInflatedRibbonAwardCounts(CharacterSaveData save)
+        {
+            if (save?.EarnedRibbonIds == null || save.EarnedRibbonCounts == null)
+            {
+                return false;
+            }
+
+            var maxRepeatable = Math.Max(1, save.SuccessfulEndMissionCount);
+            var changed = false;
+            for (var i = 0; i < save.EarnedRibbonIds.Length; i++)
+            {
+                if (MilitaryRibbonCatalog.IsSingleAwardOnly(save.EarnedRibbonIds[i]))
+                {
+                    continue;
+                }
+
+                if (save.EarnedRibbonCounts[i] > maxRepeatable)
+                {
+                    save.EarnedRibbonCounts[i] = maxRepeatable;
+                    changed = true;
+                }
+            }
+
+            return changed;
         }
 
         private static void ClearAllSavesOnce()

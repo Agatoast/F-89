@@ -15,9 +15,11 @@ Shader "F89/ProceduralFlightGround"
         _IceBright ("Ice Bright", Color) = (0.90, 0.93, 0.96, 1)
         _IceMid ("Ice Mid", Color) = (0.78, 0.83, 0.88, 1)
         _IceShadow ("Ice Shadow", Color) = (0.62, 0.69, 0.78, 1)
-        _IceCrack ("Ice Crack", Color) = (0.48, 0.56, 0.66, 1)
-        _LandNoiseScale ("Land Noise Scale", Float) = 0.0035
-        _SatelliteBlend ("Satellite Imagery Blend", Range(0, 1)) = 1
+        _IceCrack ("Ice Crack", Color) = (0.52, 0.60, 0.72, 1)
+        _IceBlue ("Blue Ice", Color) = (0.72, 0.82, 0.92, 1)
+        _RockTint ("Rock Outcrop", Color) = (0.58, 0.56, 0.54, 1)
+        _LandNoiseScale ("Land Noise Scale", Float) = 0.09
+        _SatelliteBlend ("Satellite Imagery Blend", Range(0, 1)) = 0
     }
 
     SubShader
@@ -55,6 +57,8 @@ Shader "F89/ProceduralFlightGround"
                 float4 _IceMid;
                 float4 _IceShadow;
                 float4 _IceCrack;
+                float4 _IceBlue;
+                float4 _RockTint;
                 float _LandNoiseScale;
                 float _SatelliteBlend;
             CBUFFER_END
@@ -101,7 +105,7 @@ Shader "F89/ProceduralFlightGround"
             {
                 float value = 0.0;
                 float amplitude = 0.5;
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < 5; i++)
                 {
                     value += amplitude * ValueNoise(p);
                     p *= 2.03;
@@ -166,17 +170,28 @@ Shader "F89/ProceduralFlightGround"
 
             float3 SampleIce(float3 worldPos)
             {
-                float2 p = worldPos.xz * max(_LandNoiseScale, 0.0001);
+                float scale = max(_LandNoiseScale, 0.0001);
+                float2 p = worldPos.xz * scale;
+
                 float drift = Fbm(p);
                 float detail = Fbm(p * 3.7 + float2(17.0, 43.0));
                 float crevice = Fbm(p * 7.5 + float2(91.0, 12.0));
+                float sastrugi = ValueNoise(float2(p.x * 0.35, p.y * 2.8));
+                float windPack = ValueNoise(float2(p.x * 1.8, p.y * 0.22) + float2(33.0, 7.0));
+                float rock = Fbm(p * 0.65 + float2(200.0, 50.0));
+                float blueIce = smoothstep(0.58, 0.74, Fbm(p * 1.4 + float2(-40.0, 120.0)));
+                float dune = Fbm(p * 0.28 + float2(8.0, -19.0));
+                float frost = ValueNoise(p * 11.0 + float2(4.0, 9.0));
 
                 float3 ice = lerp(_IceMid.rgb, _IceBright.rgb, drift);
                 ice = lerp(ice, _IceShadow.rgb, saturate(1.0 - detail) * 0.55);
-                ice = lerp(ice, _IceCrack.rgb, smoothstep(0.52, 0.68, crevice) * 0.42);
-
-                float windStreak = ValueNoise(float2(p.x * 0.35, p.y * 2.8));
-                ice = lerp(ice, _IceBright.rgb, windStreak * 0.12);
+                ice = lerp(ice, _IceCrack.rgb, smoothstep(0.50, 0.68, crevice) * 0.34);
+                ice = lerp(ice, _IceBright.rgb, sastrugi * 0.20);
+                ice = lerp(ice, _IceShadow.rgb, (1.0 - windPack) * 0.18);
+                ice = lerp(ice, _IceBlue.rgb, blueIce * 0.32);
+                ice = lerp(ice, _RockTint.rgb, smoothstep(0.64, 0.76, rock) * 0.20);
+                ice = lerp(ice, _IceMid.rgb, dune * 0.12);
+                ice = lerp(ice, _IceBright.rgb, frost * 0.08);
                 return ice;
             }
 
@@ -221,6 +236,8 @@ Shader "F89/ProceduralFlightGround"
             fixed4 _IceMid;
             fixed4 _IceShadow;
             fixed4 _IceCrack;
+            fixed4 _IceBlue;
+            fixed4 _RockTint;
             float _LandNoiseScale;
             float _SatelliteBlend;
 
@@ -264,7 +281,7 @@ Shader "F89/ProceduralFlightGround"
             {
                 float value = 0.0;
                 float amplitude = 0.5;
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < 5; i++)
                 {
                     value += amplitude * ValueNoise(p);
                     p *= 2.03;
@@ -327,15 +344,28 @@ Shader "F89/ProceduralFlightGround"
 
             fixed3 SampleIce(float3 worldPos)
             {
-                float2 p = worldPos.xz * max(_LandNoiseScale, 0.0001);
+                float scale = max(_LandNoiseScale, 0.0001);
+                float2 p = worldPos.xz * scale;
+
                 float drift = Fbm(p);
                 float detail = Fbm(p * 3.7 + float2(17.0, 43.0));
                 float crevice = Fbm(p * 7.5 + float2(91.0, 12.0));
+                float sastrugi = ValueNoise(float2(p.x * 0.35, p.y * 2.8));
+                float windPack = ValueNoise(float2(p.x * 1.8, p.y * 0.22) + float2(33.0, 7.0));
+                float rock = Fbm(p * 0.65 + float2(200.0, 50.0));
+                float blueIce = smoothstep(0.58, 0.74, Fbm(p * 1.4 + float2(-40.0, 120.0)));
+                float dune = Fbm(p * 0.28 + float2(8.0, -19.0));
+                float frost = ValueNoise(p * 11.0 + float2(4.0, 9.0));
+
                 fixed3 ice = lerp(_IceMid.rgb, _IceBright.rgb, drift);
                 ice = lerp(ice, _IceShadow.rgb, saturate(1.0 - detail) * 0.55);
-                ice = lerp(ice, _IceCrack.rgb, smoothstep(0.52, 0.68, crevice) * 0.42);
-                float windStreak = ValueNoise(float2(p.x * 0.35, p.y * 2.8));
-                ice = lerp(ice, _IceBright.rgb, windStreak * 0.12);
+                ice = lerp(ice, _IceCrack.rgb, smoothstep(0.50, 0.68, crevice) * 0.34);
+                ice = lerp(ice, _IceBright.rgb, sastrugi * 0.20);
+                ice = lerp(ice, _IceShadow.rgb, (1.0 - windPack) * 0.18);
+                ice = lerp(ice, _IceBlue.rgb, blueIce * 0.32);
+                ice = lerp(ice, _RockTint.rgb, smoothstep(0.64, 0.76, rock) * 0.20);
+                ice = lerp(ice, _IceMid.rgb, dune * 0.12);
+                ice = lerp(ice, _IceBright.rgb, frost * 0.08);
                 return ice;
             }
 

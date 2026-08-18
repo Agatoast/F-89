@@ -19,6 +19,12 @@ namespace F89.UI
             };
         }
 
+        /// <summary>Extra black mask below mounted icons (mockup pixels) to hide wing art bleed-through.</summary>
+        public static float GetHardpointMaskBottomPaddingPx(AircraftLoadoutWeapon weapon)
+        {
+            return weapon == AircraftLoadoutWeapon.Aim9z ? 10f : 0f;
+        }
+
         private static readonly Dictionary<AircraftLoadoutWeapon, string> VerticalResourcePaths =
             new Dictionary<AircraftLoadoutWeapon, string>
             {
@@ -188,6 +194,12 @@ namespace F89.UI
             }
 
             var maskRect = GetHardpointMaskRect(paddedHardpoint, iconRect);
+            var bottomPaddingPx = GetHardpointMaskBottomPaddingPx(weapon);
+            if (bottomPaddingPx > 0f)
+            {
+                var scaleY = hardpointRect.height / AircraftLoadoutLayout.HardpointHeightPx;
+                maskRect.height += bottomPaddingPx * scaleY;
+            }
 
             GUI.color = GetHardpointMaskColor(weapon);
             GUI.DrawTexture(maskRect, Texture2D.whiteTexture);

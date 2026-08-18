@@ -590,30 +590,51 @@ namespace F89.UI
         {
             index = Mathf.Clamp(index, 0, BasicTraySlots.Length - 1);
             var entry = BasicTraySlots[index];
-            var definitionId = entry.fallbackDefinitionId;
             var save = CharacterGearSession.ActiveSave;
-            var unlockedId = LandResearchBreakthroughService.GetBasicLoadoutDefinitionId(save, entry.slot);
-            if (!string.IsNullOrEmpty(unlockedId))
+            var definitionId = entry.fallbackDefinitionId;
+            LandResearchService.EnsureSlotTechLevels(save);
+            var researchLevel = LandResearchService.GetSlotTechLevel(save, index);
+            if (LandResearchBreakthroughService.TryResolveUnlockedItem(
+                    index,
+                    researchLevel,
+                    out var unlockedId,
+                    out _)
+                && !string.IsNullOrEmpty(unlockedId))
             {
                 definitionId = unlockedId;
-            }
-
-            var rarity = LandItemRarity.White;
-            var catalog = CharacterGearSession.Catalog;
-            if (catalog != null && catalog.TryGetWeapon(definitionId, out var weapon))
-            {
-                rarity = weapon.Rarity;
-            }
-            else if (catalog != null && catalog.TryGetGear(definitionId, out var gear))
-            {
-                rarity = gear.Rarity;
             }
 
             return new LandGearInstance
             {
                 DefinitionId = definitionId,
-                Rarity = rarity
+                Rarity = ResolveTrayItemRarity(definitionId)
             };
+        }
+
+        private static LandItemRarity ResolveTrayItemRarity(string definitionId)
+        {
+            if (LandUsWeaponCatalog.TryGetByDefinitionId(definitionId, out var usWeapon))
+            {
+                return usWeapon.Rarity;
+            }
+
+            if (LandUsGearCatalog.TryGetByDefinitionId(definitionId, out var usGear))
+            {
+                return usGear.Rarity;
+            }
+
+            var catalog = CharacterGearSession.Catalog;
+            if (catalog != null && catalog.TryGetWeapon(definitionId, out var weapon))
+            {
+                return weapon.Rarity;
+            }
+
+            if (catalog != null && catalog.TryGetGear(definitionId, out var gear))
+            {
+                return gear.Rarity;
+            }
+
+            return LandItemRarity.White;
         }
 
         private static void BeginDrag(

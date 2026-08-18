@@ -152,6 +152,16 @@ namespace F89.Core
 
             {
 
+                if (CampaignWaypointSiteIds.IsWaypointSiteCode(outpostName))
+
+                {
+
+                    return CampaignWaypointPlatoonState.IsPrimaryAirObjectivesComplete(outpostName);
+
+                }
+
+
+
                 return HasPlatoonKillEvidence(outpostName);
 
             }
@@ -181,71 +191,82 @@ namespace F89.Core
 
 
             if (AntarcticaOutpostState.IsFriendlyOccupied(outpost.BaseName)
-
+                || AntarcticaOutpostState.IsFriendlyOccupied(outpost.SiteCode)
+                || OutpostPrimaryObjective.AreAirObjectivesDestroyed(outpost.BaseName)
+                || OutpostPrimaryObjective.AreAirObjectivesDestroyed(outpost.SiteCode)
                 || outpost.Control != BaseControl.Hostile)
-
             {
-
                 return true;
-
             }
 
 
 
-            if (IsPlatoonClearedInSave(outpost.BaseName))
-
+            if (IsPlatoonClearedInSave(outpost.BaseName)
+                && !IsActiveCatalogMissionOutpost(outpost))
             {
-
                 return true;
-
             }
 
-
+            if (!string.IsNullOrWhiteSpace(outpost.SiteCode)
+                && IsPlatoonClearedInSave(outpost.SiteCode)
+                && !IsActiveCatalogMissionOutpost(outpost))
+            {
+                return true;
+            }
 
             var platoon = outpost.transform.Find("VehiclePlatoon");
-
             if (platoon != null)
-
             {
-
                 if (OutpostVehicleSpawner.PlatoonHasLivingUnits(platoon))
-
                 {
-
                     return false;
-
                 }
 
-
+                if (IsActiveCatalogMissionOutpost(outpost))
+                {
+                    UnityEngine.Object.Destroy(platoon.gameObject);
+                    return false;
+                }
 
                 OutpostVehicleSpawner.MarkAllPlatoonSlotsDestroyed(outpost);
-
                 return true;
-
             }
-
-
 
             if (HasPlatoonKillEvidence(outpost.BaseName))
-
             {
+                if (IsActiveCatalogMissionOutpost(outpost))
+                {
+                    return false;
+                }
 
                 MarkPlatoonCleared(outpost.BaseName);
-
                 return true;
-
             }
 
-
+            if (IsActiveCatalogMissionOutpost(outpost))
+            {
+                return false;
+            }
 
             return OutpostVehicleSpawner.AreAllPlatoonSlotsDestroyed(outpost);
-
         }
 
+        private static bool IsActiveCatalogMissionOutpost(AntarcticaBase outpost)
+        {
+            var save = CharacterSessionState.ActiveSave;
+            if (!GamePlayModeState.IsCampaign
+                || save == null
+                || outpost == null
+                || !CampaignMissionObjectiveState.IsActiveMissionOutpost(save, outpost))
+            {
+                return false;
+            }
 
+            return !OutpostPrimaryObjective.AreAirObjectivesDestroyed(outpost.BaseName)
+                && !OutpostPrimaryObjective.AreAirObjectivesDestroyed(outpost.SiteCode);
+        }
 
         /// <summary>When the last platoon unit dies, persist full clearance immediately.</summary>
-
         public static void TryFinalizePlatoonClearance(AntarcticaBase outpost)
 
         {

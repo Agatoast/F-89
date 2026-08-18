@@ -1,10 +1,30 @@
 namespace F89.Core
 {
     /// <summary>
-    /// Campaign is the only defined play mode today. Non-campaign will skip early-end career penalties.
+    /// Active session play mode. Campaign uses the 53-mission path; Free Flight skips missions.
     /// </summary>
     public static class GamePlayModeState
     {
-        public static bool IsCampaign { get; set; } = true;
+        public static bool IsCampaign { get; private set; } = true;
+
+        public static bool IsFreeFlight => !IsCampaign;
+
+        public static CharacterPlayMode ActivePlayMode =>
+            IsCampaign ? CharacterPlayMode.Campaign : CharacterPlayMode.FreeFlight;
+
+        public static void EnterCampaign()
+        {
+            IsCampaign = true;
+        }
+
+        public static void EnterFreeFlight()
+        {
+            IsCampaign = false;
+        }
+
+        public static void ResetToCampaignDefault()
+        {
+            IsCampaign = true;
+        }
     }
 }

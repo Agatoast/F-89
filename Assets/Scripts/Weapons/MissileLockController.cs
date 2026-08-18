@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using F89.Audio;
 using F89.Core;
 using F89.Flight;
+using F89.UI;
 using UnityEngine;
 
 namespace F89.Weapons
@@ -12,6 +13,7 @@ namespace F89.Weapons
         [SerializeField] private Camera lockCamera;
 
         private ILockCapableWeapon lockWeapon;
+        private ILockCapableWeapon fireLockWeapon;
         private AudioSource lockToneSource;
         private AudioSource beepSource;
         private AudioClip beepClip;
@@ -41,18 +43,26 @@ namespace F89.Weapons
             SelectedTarget != null && SelectedTarget.IsFriendly && lockWeapon != null;
         public bool SelectedTargetKindMismatch =>
             SelectedTarget != null
-            && lockWeapon != null
+            && fireLockWeapon != null
             && !SelectedTarget.IsFriendly
-            && !MatchesActiveWeaponTarget(SelectedTarget);
+            && !MatchesActiveWeaponTarget(SelectedTarget, fireLockWeapon);
 
         public void SetActiveWeapon(ILockCapableWeapon weapon)
         {
-            if (lockWeapon == weapon)
+            SetActiveWeapon(weapon, weapon);
+        }
+
+        public void SetActiveWeapon(ILockCapableWeapon fireWeapon, ILockCapableWeapon trackingWeapon)
+        {
+            var nextFire = fireWeapon;
+            var nextTracking = trackingWeapon ?? fireWeapon;
+            if (fireLockWeapon == nextFire && lockWeapon == nextTracking)
             {
                 return;
             }
 
-            lockWeapon = weapon;
+            fireLockWeapon = nextFire;
+            lockWeapon = nextTracking;
             if (SelectedTarget == null || !SelectedTarget.IsAlive)
             {
                 RestartLockProgressForSelection();
@@ -72,8 +82,9 @@ namespace F89.Weapons
 
         public void Configure(AircraftController aircraftController, Camera camera)
         {
-            aircraft = aircraftController;
-            lockCamera = camera;
+            EnsureRuntimeReferences();
+            aircraft = aircraftController ?? aircraft;
+            lockCamera = camera ?? lockCamera ?? Camera.main;
             EnsureAudio();
             ClearSelection();
         }
@@ -88,6 +99,7 @@ namespace F89.Weapons
 
         public void UpdateLockProgress(bool weaponActive)
         {
+            EnsureRuntimeReferences();
             ReticleVisible = weaponActive;
             TargetOutOfRange = false;
             if (!weaponActive || lockWeapon == null || aircraft == null)
@@ -99,7 +111,7 @@ namespace F89.Weapons
 
             UpdateIffDisplay();
 
-            if (!GameSettings.MissileSoundsEnabled)
+            if (!LockAudioEnabled)
             {
                 StopLockTone();
             }
@@ -329,12 +341,17 @@ namespace F89.Weapons
                 return null;
             }
 
-            if (!CanWeaponLockTarget(SelectedTarget))
+            if (fireLockWeapon == null)
             {
                 return null;
             }
 
-            return IsTargetInWeaponRange(SelectedTarget) ? SelectedTarget : null;
+            if (!CanFireWeaponLockTarget(SelectedTarget))
+            {
+                return null;
+            }
+
+            return IsTargetInWeaponRange(SelectedTarget, fireLockWeapon) ? SelectedTarget : null;
         }
 
         public void ClearLockAfterFire()
@@ -364,27 +381,42 @@ namespace F89.Weapons
                 return friendlyEngagementAuthorized == target;
             }
 
-            if (!MatchesActiveWeaponTarget(target))
-            {
-                return false;
-            }
-
-            return true;
+            return MatchesActiveWeaponTarget(target, lockWeapon);
         }
 
-        private bool MatchesActiveWeaponTarget(LockableTarget target)
+        private bool CanFireWeaponLockTarget(LockableTarget target)
         {
-            if (target == null || lockWeapon == null)
+            if (target == null || !target.IsAlive || fireLockWeapon == null)
             {
                 return false;
             }
 
-            if (!target.MatchesWeapon(lockWeapon.ValidTargetKind))
+            if (target.IsFriendly)
+            {
+                return friendlyEngagementAuthorized == target;
+            }
+
+            return MatchesActiveWeaponTarget(target, fireLockWeapon);
+        }
+
+        private static bool MatchesActiveWeaponTarget(LockableTarget target, ILockCapableWeapon weapon)
+        {
+            if (target == null || weapon == null)
             {
                 return false;
             }
 
-            if (lockWeapon is Agm114HellfireWeaponConfig || lockWeapon is Agm88jSiawWeaponConfig)
+            if (weapon is Gau27aWeaponConfig || weapon is GenericTargetLockProfile)
+            {
+                return !target.IsFlareDecoy && !target.IsPlayerAircraft;
+            }
+
+            if (!target.MatchesWeapon(weapon.ValidTargetKind))
+            {
+                return false;
+            }
+
+            if (weapon is Agm114HellfireWeaponConfig || weapon is Agm88jSiawWeaponConfig)
             {
                 return target.IsGroundVehicle
                     || target.IsInfantry
@@ -407,7 +439,7 @@ namespace F89.Weapons
                 return true;
             }
 
-            if (lockWeapon != null && !MatchesActiveWeaponTarget(SelectedTarget))
+            if (fireLockWeapon != null && !MatchesActiveWeaponTarget(SelectedTarget, fireLockWeapon))
             {
                 return true;
             }
@@ -417,12 +449,12 @@ namespace F89.Weapons
 
         public bool ShouldBlockFireWithoutSelection()
         {
-            return lockWeapon != null && (SelectedTarget == null || !SelectedTarget.IsAlive);
+            return fireLockWeapon != null && (SelectedTarget == null || !SelectedTarget.IsAlive);
         }
 
         public bool ShouldBlockFireWithoutLock()
         {
-            return lockWeapon != null && LockState != MissileLockState.Locked;
+            return fireLockWeapon != null && LockState != MissileLockState.Locked;
         }
 
         private bool IsTargetInLockCoverage(LockableTarget target)
@@ -442,9 +474,14 @@ namespace F89.Weapons
 
         private bool IsTargetInWeaponRange(LockableTarget target)
         {
+            return IsTargetInWeaponRange(target, lockWeapon);
+        }
+
+        private bool IsTargetInWeaponRange(LockableTarget target, ILockCapableWeapon weapon)
+        {
             var worldMap = aircraft.WorldMap;
             var profile = aircraft.Profile;
-            if (profile == null || target == null || lockWeapon == null)
+            if (profile == null || target == null || weapon == null)
             {
                 return false;
             }
@@ -452,7 +489,7 @@ namespace F89.Weapons
             return WeaponLockRange.IsWithinRange(
                 aircraft.transform.position,
                 target.transform.position,
-                lockWeapon.RangeMiles,
+                weapon.RangeMiles,
                 worldMap,
                 profile.ticSizeWorldUnits);
         }
@@ -476,6 +513,10 @@ namespace F89.Weapons
             LockState = MissileLockState.Tracking;
             TargetOutOfRange = !IsTargetInWeaponRange(SelectedTarget);
             beepTimer = 0f;
+            if (!TargetOutOfRange)
+            {
+                PlayImmediateTrackingBeep();
+            }
         }
 
         private void StopLockProgressOnly()
@@ -496,7 +537,10 @@ namespace F89.Weapons
 
         private void UpdateBeepAudio()
         {
-            if (LockState == MissileLockState.Locked || lockWeapon == null || !GameSettings.MissileSoundsEnabled)
+            if (LockState == MissileLockState.Locked
+                || lockWeapon == null
+                || !LockAudioEnabled
+                || GamePauseController.IsPaused)
             {
                 return;
             }
@@ -507,6 +551,7 @@ namespace F89.Weapons
                 return;
             }
 
+            AudioListener.pause = false;
             SyncSfxVolume();
             var t = LockProgressNormalized;
             var interval = Mathf.Lerp(lockWeapon.MaxBeepInterval, lockWeapon.MinBeepInterval, t);
@@ -520,9 +565,32 @@ namespace F89.Weapons
             beepSource.PlayOneShot(beepClip);
         }
 
+        private void PlayImmediateTrackingBeep()
+        {
+            if (!LockAudioEnabled || GamePauseController.IsPaused)
+            {
+                return;
+            }
+
+            EnsureAudio();
+            SyncSfxVolume();
+            if (beepSource == null || beepClip == null)
+            {
+                return;
+            }
+
+            AudioListener.pause = false;
+            beepSource.PlayOneShot(beepClip);
+            beepTimer = lockWeapon != null
+                ? lockWeapon.MaxBeepInterval
+                : 0.55f;
+        }
+
         private void PlayLockToneIfNeeded()
         {
-            if (lockTonePlaying || !GameSettings.MissileSoundsEnabled)
+            if (lockTonePlaying
+                || !LockAudioEnabled
+                || GamePauseController.IsPaused)
             {
                 return;
             }
@@ -534,6 +602,7 @@ namespace F89.Weapons
                 return;
             }
 
+            AudioListener.pause = false;
             lockTonePlaying = true;
             lockToneSource.loop = true;
             lockToneSource.clip = lockToneClip;
@@ -562,14 +631,16 @@ namespace F89.Weapons
             IffFriendActive = true;
             IffFriendLabel = target != null ? target.TargetLabel : string.Empty;
             iffDisplayTimer = 2.5f;
-            if (!GameSettings.MissileSoundsEnabled)
+            if (!LockAudioEnabled)
             {
                 return;
             }
 
             EnsureAudio();
+            SyncSfxVolume();
             if (beepSource != null && iffFriendClip != null)
             {
+                AudioListener.pause = false;
                 beepSource.PlayOneShot(iffFriendClip);
             }
         }
@@ -589,17 +660,52 @@ namespace F89.Weapons
             }
         }
 
+        private Transform audioRoot;
+        private bool audioInitialized;
+
+        private void Awake()
+        {
+            EnsureRuntimeReferences();
+        }
+
+        private void Start()
+        {
+            EnsureRuntimeReferences();
+            EnsureAudio();
+        }
+
+        private void EnsureRuntimeReferences()
+        {
+            if (aircraft == null)
+            {
+                aircraft = GetComponent<AircraftController>();
+            }
+
+            if (lockCamera == null)
+            {
+                lockCamera = Camera.main;
+            }
+        }
+
+        private static bool LockAudioEnabled =>
+            GameSettings.SoundEnabled && GameSettings.MissileSoundsEnabled;
+
         private void EnsureAudio()
         {
-            GameSettings.Load();
+            if (!audioInitialized)
+            {
+                GameSettings.Load();
+                audioInitialized = true;
+            }
+
             if (beepClip == null)
             {
-                beepClip = ProceduralBeepTone.CreateBeep(880f, 0.06f);
+                beepClip = ProceduralBeepTone.CreateBeep(880f, 0.08f, 0.45f);
             }
 
             if (lockToneClip == null)
             {
-                lockToneClip = ProceduralBeepTone.CreateLockTone(1320f, 0.6f);
+                lockToneClip = ProceduralBeepTone.CreateSustainedLockTone(1320f, 0.35f, 0.4f);
             }
 
             if (iffFriendClip == null)
@@ -607,26 +713,38 @@ namespace F89.Weapons
                 iffFriendClip = ProceduralBeepTone.CreateIffFriendTone();
             }
 
+            if (audioRoot == null)
+            {
+                var existing = transform.Find("F89_MissileLockAudio");
+                if (existing == null)
+                {
+                    existing = new GameObject("F89_MissileLockAudio").transform;
+                    existing.SetParent(transform, false);
+                }
+
+                audioRoot = existing;
+            }
+
             if (beepSource == null)
             {
-                beepSource = gameObject.AddComponent<AudioSource>();
+                beepSource = audioRoot.gameObject.AddComponent<AudioSource>();
                 beepSource.playOnAwake = false;
                 beepSource.spatialBlend = 0f;
-                beepSource.volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
+                beepSource.volume = GameAudioLevels.MissileTargetingSfxVolume;
             }
 
             if (lockToneSource == null)
             {
-                lockToneSource = gameObject.AddComponent<AudioSource>();
+                lockToneSource = audioRoot.gameObject.AddComponent<AudioSource>();
                 lockToneSource.playOnAwake = false;
                 lockToneSource.spatialBlend = 0f;
-                lockToneSource.volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
+                lockToneSource.volume = GameAudioLevels.MissileTargetingSfxVolume;
             }
         }
 
         private void SyncSfxVolume()
         {
-            var volume = F89.Audio.GameAudioLevels.CurrentSfxVolume;
+            var volume = GameAudioLevels.MissileTargetingSfxVolume;
             if (beepSource != null)
             {
                 beepSource.volume = volume;

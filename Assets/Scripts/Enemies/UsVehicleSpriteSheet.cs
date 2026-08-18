@@ -5,6 +5,7 @@ namespace F89.Enemies
 {
     /// <summary>
     /// US vehicle sheet (side views). Art faces left; white background keyed to transparent at load.
+    /// Flight map ground units use <see cref="UsTopDownVehicleSpriteSheet"/>; AH-64 has no top-down art yet.
     /// </summary>
     public static class UsVehicleSpriteSheet
     {

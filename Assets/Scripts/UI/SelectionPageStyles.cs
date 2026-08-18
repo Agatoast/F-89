@@ -222,7 +222,7 @@ namespace F89.UI
                 return;
             }
 
-            GUI.DrawTexture(rect, medalTexture, ScaleMode.ScaleToFit, false);
+            UiTextureFit.DrawTextureExact(rect, medalTexture);
         }
 
         public static void DrawDossierStats(

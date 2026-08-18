@@ -67,7 +67,7 @@ namespace F89.Flight
                 return;
             }
 
-            // Keep map state as-is; next P resumes without opening/closing the map.
+            // Keep map waypoints — P only pauses flight; it must not erase staged route markers.
             SuspendAutopilot(closeMap: false);
             suspendInputFrame = Time.frameCount;
             ShowToast("Autopilot paused — P to resume.");
@@ -77,7 +77,7 @@ namespace F89.Flight
         {
             if (IsFlying)
             {
-                Disengage(reason, closeMap: false);
+                Disengage(reason, closeMap: false, clearMapRoute: false);
                 ShowToast("Autopilot canceled.");
                 return;
             }
@@ -253,7 +253,7 @@ namespace F89.Flight
                         worldMap,
                         profile.ticSizeWorldUnits))
                 {
-                    Disengage("Hostile contact within 40 MI — autopilot off.", closeMap: false);
+                    Disengage("Hostile contact within 40 MI — autopilot off.", closeMap: false, clearMapRoute: false);
                     ShowToast("Hostile contact — autopilot disengaged.");
                     return;
                 }
@@ -273,7 +273,7 @@ namespace F89.Flight
                 }
                 else
                 {
-                    Disengage($"Arrived at {destinationLabel}.", closeMap: true);
+                    Disengage($"Arrived at {destinationLabel}.", closeMap: true, clearMapRoute: false);
                 }
             }
         }
@@ -350,8 +350,9 @@ namespace F89.Flight
 
                 if (IsWithinArrivalRange(destinationWorld))
                 {
+                    // Keep the map waypoint — P must not erase staged navigation markers.
                     AbandonSuspendedRoute();
-                    mapOverlay?.ClearMapRouteOnArrival();
+                    ShowToast("Already at destination.");
                     return;
                 }
 
@@ -359,7 +360,15 @@ namespace F89.Flight
                 return;
             }
 
-            // Radar-selected base takes priority over a stale map waypoint.
+            // Staged map waypoints win over a radar-selected base (P must not replace them).
+            if (mapOverlay != null && AntarcticaMapOverlay.HasMapWaypoint)
+            {
+                if (mapOverlay.TryEngageAutopilotToMapTarget())
+                {
+                    return;
+                }
+            }
+
             if (HasRadarSelectedBase(out _))
             {
                 if (TryEngageAutopilotToRadarTarget())
@@ -368,7 +377,6 @@ namespace F89.Flight
                 }
             }
 
-            // Map waypoint staged via M → click (plan on map, then P).
             if (mapOverlay != null && mapOverlay.HasAutopilotMapTarget)
             {
                 if (mapOverlay.TryEngageAutopilotToMapTarget())
@@ -487,13 +495,13 @@ namespace F89.Flight
 
             // Sticky map/base selection after arrival used to re-engage the same target and
             // instantly "arrive" again, which blocked starting a second trip.
+            // Keep map waypoints visible — do not clear markers on a rejected engage.
             if (DestinationDistanceMiles <= ArrivalThresholdMiles && routeQueue.Count == 0)
             {
                 hasDestination = false;
                 destinationLabel = string.Empty;
                 DestinationDistanceMiles = 0f;
                 IsFlying = false;
-                mapOverlay?.ClearMapRouteOnArrival();
                 ShowToast("Already at destination.");
                 Debug.Log("F-89: Autopilot ignored — already at destination.");
                 return false;
@@ -634,7 +642,7 @@ namespace F89.Flight
             aircraft?.ApplyAutopilotState(0f, false);
         }
 
-        private void Disengage(string reason, bool closeMap = false)
+        private void Disengage(string reason, bool closeMap = false, bool clearMapRoute = false)
         {
             IsFlying = false;
             hasDestination = false;
@@ -642,7 +650,11 @@ namespace F89.Flight
             DestinationDistanceMiles = 0f;
             routeQueue.Clear();
             Time.timeScale = 1f;
-            mapOverlay?.ClearMapRouteOnArrival();
+            if (clearMapRoute)
+            {
+                mapOverlay?.ClearMapRouteOnArrival();
+            }
+
             mapOverlay?.EndAutopilotFlight();
             if (closeMap)
             {

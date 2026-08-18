@@ -11,13 +11,17 @@ namespace F89.UI
         private const string SaveAntarcticaLogoResourcePath = "CharacterPage/save_antarctica_logo";
 
         private static readonly string[] ButtonLabels = { "PLAY", "STORY", "SETTINGS", "CREDITS" };
+        private static readonly string[] PlayModeButtonLabels = { "CAMPAIGN", "FREE FLIGHT" };
 
         private Texture2D backgroundTexture;
         private Texture2D saveAntarcticaLogoTexture;
         private static bool showDeleteAllSavesConfirm;
+        private static bool showPlayModeSelect;
 
         private void Start()
         {
+            showPlayModeSelect = false;
+            showDeleteAllSavesConfirm = false;
             backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
             saveAntarcticaLogoTexture = Resources.Load<Texture2D>(SaveAntarcticaLogoResourcePath);
             if (saveAntarcticaLogoTexture == null)
@@ -28,19 +32,48 @@ namespace F89.UI
 
         private void OnGUI()
         {
+            if (CampaignMapPageController.IsActive)
+            {
+                return;
+            }
+
+            if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape)
+            {
+                if (showDeleteAllSavesConfirm)
+                {
+                    showDeleteAllSavesConfirm = false;
+                    Event.current.Use();
+                }
+                else if (showPlayModeSelect)
+                {
+                    showPlayModeSelect = false;
+                    Event.current.Use();
+                }
+            }
+
             StartPageMenuStyles.DrawFullscreenBackground(backgroundTexture);
             StartPageMenuStyles.DrawSaveAntarcticaLogo(saveAntarcticaLogoTexture);
-            DrawButtons();
+            if (showPlayModeSelect)
+            {
+                DrawPlayModeButtons();
+            }
+            else
+            {
+                DrawButtons();
+            }
+
             if (!showDeleteAllSavesConfirm)
             {
                 DrawDeleteAllSavesButton();
+                DrawMapButton();
+                DrawTempMaRefuelButton();
             }
             else
             {
                 DrawDeleteAllSavesConfirm();
             }
 
-            if (LandCombatTestCheats.ShowDevMenuButtons)
+            if (LandCombatTestCheats.ShowDevMenuButtons && !showPlayModeSelect)
             {
                 DrawTempFightReichButton();
             }
@@ -60,6 +93,20 @@ namespace F89.UI
             }
         }
 
+        private static void DrawPlayModeButtons()
+        {
+            for (var i = 0; i < PlayModeButtonLabels.Length; i++)
+            {
+                var rect = StartPageMenuStyles.GetMainMenuButtonRect(i, PlayModeButtonLabels.Length);
+                if (!StartPageMenuStyles.DrawMenuButton(rect, PlayModeButtonLabels[i], fontSize: 50))
+                {
+                    continue;
+                }
+
+                HandlePlayModeButton(PlayModeButtonLabels[i]);
+            }
+        }
+
         private static void DrawDeleteAllSavesButton()
         {
             var width = UiFitCanvas.Px(220f);
@@ -73,6 +120,38 @@ namespace F89.UI
             }
 
             showDeleteAllSavesConfirm = true;
+        }
+
+        private static void DrawMapButton()
+        {
+            var width = UiFitCanvas.Px(120f);
+            var height = UiFitCanvas.Px(44f);
+            var x = UiFitCanvas.Rect.xMax - width - UiFitCanvas.Px(18f);
+            var y = UiFitCanvas.Rect.yMax - height - UiFitCanvas.Px(18f);
+            var buttonRect = new Rect(x, y, width, height);
+            if (!StartPageMenuStyles.DrawMenuButton(buttonRect, "MAP", fontSize: 22))
+            {
+                return;
+            }
+
+            CampaignMapPageController.Open();
+        }
+
+        /// <summary>Temporary jump to mid-air refuel prototype; remove when wired into campaign.</summary>
+        private static void DrawTempMaRefuelButton()
+        {
+            var width = UiFitCanvas.Px(160f);
+            var height = UiFitCanvas.Px(44f);
+            var x = UiFitCanvas.Rect.x + UiFitCanvas.Px(18f);
+            var y = UiFitCanvas.Rect.y + UiFitCanvas.Px(18f + 44f + 10f);
+            var buttonRect = new Rect(x, y, width, height);
+            if (!StartPageMenuStyles.DrawMenuButton(buttonRect, "MARefuel", fontSize: 22))
+            {
+                return;
+            }
+
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(GameScenes.MARefuel);
         }
 
         private static void DrawDeleteAllSavesConfirm()
@@ -140,6 +219,18 @@ namespace F89.UI
                 EnterLandCombatDirect();
             }
 
+            var minigunX = x - width - gap;
+            for (var mapNumber = 1; mapNumber <= SaveAntarctica.BunkerDefense.Core.DefenseSiteCatalog.MissionCount; mapNumber++)
+            {
+                var rowY = y + (height + gap) * mapNumber;
+                var minigunRect = new Rect(minigunX, rowY, width, height);
+                var minigunLabel = $"MG {mapNumber:00}";
+                if (StartPageMenuStyles.DrawMenuButton(minigunRect, minigunLabel, fontSize: 18))
+                {
+                    EnterBunkerDefenseDirect(mapNumber);
+                }
+            }
+
             for (var bossNumber = LandBossEncounter.FirstBossNumber;
                  bossNumber <= LandBossEncounter.LastBossNumber;
                  bossNumber++)
@@ -154,9 +245,18 @@ namespace F89.UI
             }
         }
 
+        private static void EnterBunkerDefenseDirect(int mapNumber)
+        {
+            Time.timeScale = 1f;
+            GamePlayModeState.EnterCampaign();
+            EnsureActiveSaveForDevJump();
+            BunkerDefenseIntegration.LaunchDevMinigun(mapNumber);
+        }
+
         private static void EnterLandCombatDirect(int bossNumber = 0)
         {
             Time.timeScale = 1f;
+            GamePlayModeState.EnterCampaign();
             EnsureActiveSaveForDevJump();
             CharacterGearSession.Bind(CharacterSessionState.ActiveSave, forceReload: true);
             if (bossNumber != 0)
@@ -167,11 +267,12 @@ namespace F89.UI
                 }
 
                 LandBossAreaState.BeginArea(bossNumber);
+                LandBunkerHandoffState.BeginBossFightEnter(layoutIndex: 1, bossNumber);
+                SceneManager.LoadScene(GameScenes.GetBossScene(bossNumber));
+                return;
             }
-            else
-            {
-                LandBossAreaState.Clear();
-            }
+
+            LandBossAreaState.Clear();
 
             var snapshot = new LandSortieSnapshot
             {
@@ -220,7 +321,7 @@ namespace F89.UI
             switch (label)
             {
                 case "PLAY":
-                    SceneManager.LoadScene(GameScenes.SelectionPage);
+                    showPlayModeSelect = true;
                     break;
                 case "STORY":
                     OpenSubpage(StoryPageContent.Title, StoryPageContent.Body);
@@ -233,6 +334,25 @@ namespace F89.UI
                     break;
                 case "CREDITS":
                     OpenSubpage("CREDITS", "Credits — coming soon.");
+                    break;
+            }
+        }
+
+        private static void HandlePlayModeButton(string label)
+        {
+            Time.timeScale = 1f;
+
+            switch (label)
+            {
+                case "CAMPAIGN":
+                    GamePlayModeState.EnterCampaign();
+                    showPlayModeSelect = false;
+                    SceneManager.LoadScene(GameScenes.SelectionPage);
+                    break;
+                case "FREE FLIGHT":
+                    GamePlayModeState.EnterFreeFlight();
+                    showPlayModeSelect = false;
+                    SceneManager.LoadScene(GameScenes.SelectionPage);
                     break;
             }
         }

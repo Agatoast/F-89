@@ -49,7 +49,14 @@ namespace F89.Core
         public static KeyCode GetKey(string bindingId)
         {
             EnsureLoaded();
-            return Keys.TryGetValue(bindingId, out var key) ? key : KeyCode.None;
+            if (Keys.TryGetValue(bindingId, out var key))
+            {
+                return key;
+            }
+
+            return GameKeyBindingCatalog.TryGetDefinition(bindingId, out var definition)
+                ? definition.DefaultKey
+                : KeyCode.None;
         }
 
         public static string GetDisplayLabel(string bindingId)
@@ -316,6 +323,24 @@ namespace F89.Core
             if (!isLoaded)
             {
                 Load();
+                return;
+            }
+
+            EnsureCatalogSynced();
+        }
+
+        private static void EnsureCatalogSynced()
+        {
+            foreach (var binding in GameKeyBindingCatalog.Bindings)
+            {
+                if (Keys.ContainsKey(binding.Id))
+                {
+                    continue;
+                }
+
+                var prefKey = PlayerPrefsPrefix + binding.Id;
+                var stored = PlayerPrefs.GetInt(prefKey, (int)binding.DefaultKey);
+                Keys[binding.Id] = (KeyCode)stored;
             }
         }
 

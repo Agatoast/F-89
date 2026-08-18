@@ -20,4 +20,7 @@ MonoBehaviour:
   roundSpeedMilesPerSecond: 0.66
   crosshairDotRadiusTics: 0.1
   groundHitPointsPerHit: 1
+  lockTimeSeconds: 2
+  maxBeepInterval: 0.55
+  minBeepInterval: 0.12
   startingRounds: 300

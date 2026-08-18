@@ -11,14 +11,20 @@ namespace F89.Weapons
         private float speedWorld;
         private float dotRadiusWorld;
         private Vector3 launchVelocity;
+        private LockableTarget lockedTarget;
+        private Transform aircraftTransform;
+        private WorldMapConfig worldMap;
+        private float ticSizeWorld;
 
         public static void Fire(
             Gau27aWeaponConfig weaponConfig,
             FlightProfile profile,
-            WorldMapConfig worldMap,
+            WorldMapConfig mapConfig,
             Vector3 spawnPoint,
             Vector3 destination,
-            Vector3 launchVelocityWorld = default)
+            Vector3 launchVelocityWorld = default,
+            LockableTarget lockedTargetForHit = null,
+            Transform aircraftTransformForOgive = null)
         {
             if (weaponConfig == null)
             {
@@ -30,26 +36,34 @@ namespace F89.Weapons
             round.Initialize(
                 weaponConfig,
                 profile,
-                worldMap,
+                mapConfig,
                 spawnPoint,
                 destination,
-                launchVelocityWorld);
+                launchVelocityWorld,
+                lockedTargetForHit,
+                aircraftTransformForOgive);
         }
 
         private void Initialize(
             Gau27aWeaponConfig weaponConfig,
             FlightProfile profile,
-            WorldMapConfig worldMap,
+            WorldMapConfig mapConfig,
             Vector3 spawnPoint,
             Vector3 destination,
-            Vector3 launchVelocityWorld)
+            Vector3 launchVelocityWorld,
+            LockableTarget lockedTargetForHit,
+            Transform aircraftTransformForOgive)
         {
             config = weaponConfig;
+            worldMap = mapConfig;
             aimPoint = destination;
             aimPoint.y = 0.5f;
             launchVelocity = Flatten(launchVelocityWorld);
+            lockedTarget = lockedTargetForHit;
+            aircraftTransform = aircraftTransformForOgive;
 
             var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            ticSizeWorld = ticSize;
             speedWorld = WorldMapConfig.MilesPerSecondToWorldUnits(
                 weaponConfig.roundSpeedMilesPerSecond,
                 worldMap,
@@ -113,13 +127,50 @@ namespace F89.Weapons
         private void ResolveImpact()
         {
             var target = FindTargetUnderCrosshairDot();
-            if (target == null)
+            if (target != null)
             {
+                PlaneWeaponGhp.ApplyGau27Hit(target, wasLockedShot: false);
                 return;
             }
 
-            // Anything under the central crosshair dot auto-hits.
-            PlaneWeaponGhp.ApplyGau27Hit(target, wasLockedShot: false);
+            if (TryHitLockedTargetInOgive(out target))
+            {
+                PlaneWeaponGhp.ApplyGau27Hit(target, wasLockedShot: true);
+            }
+        }
+
+        private bool TryHitLockedTargetInOgive(out LockableTarget target)
+        {
+            target = lockedTarget;
+            if (target == null || !target.IsAlive || aircraftTransform == null)
+            {
+                return false;
+            }
+
+            if (!DirectFireTargetRules.CanBeDamagedByGau27(target))
+            {
+                return false;
+            }
+
+            var forward = aircraftTransform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f)
+            {
+                forward = Vector3.forward;
+            }
+
+            if (!Gau27aOgiveEnvelope.IsWithinOgive(
+                    aircraftTransform.position,
+                    forward,
+                    target.transform.position,
+                    config,
+                    worldMap,
+                    ticSizeWorld))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private LockableTarget FindTargetUnderCrosshairDot()

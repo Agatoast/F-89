@@ -11,16 +11,31 @@ namespace F89.Flight
     {
         private void Start()
         {
-            if (FlightMissionStartBootstrap.SortieStartupComplete
-                || FlightMissionLaunchState.HasPendingCarrierLaunch
-                || !string.IsNullOrEmpty(FlightMissionLaunchState.LaunchFromOutpostName)
-                || !FlightGroundReturnService.ShouldApplySortieReturn())
+            if (FlightMissionStartBootstrap.CarrierCatapultLaunchComplete)
+            {
+                return;
+            }
+
+            if (!FlightGroundReturnService.ShouldApplySortieReturn())
+            {
+                return;
+            }
+
+            if (FlightMissionLaunchState.IsExplicitCarrierSortiePending())
             {
                 return;
             }
 
             if (AircraftLandingController.IsTakeoffActive
-                || AircraftLandingController.IsParkedAtRunway)
+                || AircraftLandingController.IsParkedAtRunway
+                || AircraftLandingController.IsRunwayDeckMenuVisible)
+            {
+                return;
+            }
+
+            var aircraft = GetComponent<AircraftController>();
+            if (aircraft != null
+                && aircraft.CurrentSpeedMph >= FlightMissionLaunchState.CarrierTakeoffSpeedMph * 0.5f)
             {
                 return;
             }

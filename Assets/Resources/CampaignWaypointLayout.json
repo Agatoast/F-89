@@ -1,0 +1,416 @@
+{
+
+    "Waypoints": [
+
+        {
+
+            "SiteCode": "WP-02",
+
+            "MissionNumber": 2,
+
+            "GridCellX": 439,
+
+            "GridCellZ": 1760
+
+        },
+
+        {
+
+            "SiteCode": "WP-03",
+
+            "MissionNumber": 3,
+
+            "GridCellX": 430,
+
+            "GridCellZ": 1720
+
+        },
+
+        {
+
+            "SiteCode": "WP-04",
+
+            "MissionNumber": 4,
+
+            "GridCellX": 500,
+
+            "GridCellZ": 1690
+
+        },
+
+        {
+
+            "SiteCode": "WP-06",
+
+            "MissionNumber": 6,
+
+            "GridCellX": 520,
+
+            "GridCellZ": 1680
+
+        },
+
+        {
+
+            "SiteCode": "WP-07",
+
+            "MissionNumber": 7,
+
+            "GridCellX": 650,
+
+            "GridCellZ": 1585
+
+        },
+
+        {
+
+            "SiteCode": "WP-09",
+
+            "MissionNumber": 9,
+
+            "GridCellX": 710,
+
+            "GridCellZ": 1550
+
+        },
+
+        {
+
+            "SiteCode": "WP-11",
+
+            "MissionNumber": 11,
+
+            "GridCellX": 802,
+
+            "GridCellZ": 1504
+
+        },
+
+        {
+
+            "SiteCode": "WP-12",
+
+            "MissionNumber": 12,
+
+            "GridCellX": 842,
+
+            "GridCellZ": 1464
+
+        },
+
+        {
+
+            "SiteCode": "WP-14",
+
+            "MissionNumber": 14,
+
+            "GridCellX": 916,
+
+            "GridCellZ": 1613
+
+        },
+
+        {
+
+            "SiteCode": "WP-16",
+
+            "MissionNumber": 16,
+
+            "GridCellX": 964,
+
+            "GridCellZ": 1438
+
+        },
+
+        {
+
+            "SiteCode": "WP-17",
+
+            "MissionNumber": 17,
+
+            "GridCellX": 942,
+
+            "GridCellZ": 1357
+
+        },
+
+        {
+
+            "SiteCode": "WP-19",
+
+            "MissionNumber": 19,
+
+            "GridCellX": 992,
+
+            "GridCellZ": 1287
+
+        },
+
+        {
+
+            "SiteCode": "WP-20",
+
+            "MissionNumber": 20,
+
+            "GridCellX": 883,
+
+            "GridCellZ": 1246
+
+        },
+
+        {
+
+            "SiteCode": "WP-22",
+
+            "MissionNumber": 22,
+
+            "GridCellX": 943,
+
+            "GridCellZ": 1146
+
+        },
+
+        {
+
+            "SiteCode": "WP-23",
+
+            "MissionNumber": 23,
+
+            "GridCellX": 966,
+
+            "GridCellZ": 1085
+
+        },
+
+        {
+
+            "SiteCode": "WP-25",
+
+            "MissionNumber": 25,
+
+            "GridCellX": 989,
+
+            "GridCellZ": 1027
+
+        },
+
+        {
+
+            "SiteCode": "WP-26",
+
+            "MissionNumber": 26,
+
+            "GridCellX": 859,
+
+            "GridCellZ": 967
+
+        },
+
+        {
+
+            "SiteCode": "WP-28",
+
+            "MissionNumber": 28,
+
+            "GridCellX": 722,
+
+            "GridCellZ": 986
+
+        },
+
+        {
+
+            "SiteCode": "WP-29",
+
+            "MissionNumber": 29,
+
+            "GridCellX": 962,
+
+            "GridCellZ": 848
+
+        },
+
+        {
+
+            "SiteCode": "WP-30",
+
+            "MissionNumber": 30,
+
+            "GridCellX": 902,
+
+            "GridCellZ": 763
+
+        },
+
+        {
+
+            "SiteCode": "WP-32",
+
+            "MissionNumber": 32,
+
+            "GridCellX": 1062,
+
+            "GridCellZ": 768
+
+        },
+
+        {
+
+            "SiteCode": "WP-33",
+
+            "MissionNumber": 33,
+
+            "GridCellX": 1175,
+
+            "GridCellZ": 772
+
+        },
+
+        {
+
+            "SiteCode": "WP-35",
+
+            "MissionNumber": 35,
+
+            "GridCellX": 1225,
+
+            "GridCellZ": 862
+
+        },
+
+        {
+
+            "SiteCode": "WP-36",
+
+            "MissionNumber": 36,
+
+            "GridCellX": 1227,
+
+            "GridCellZ": 967
+
+        },
+
+        {
+
+            "SiteCode": "WP-37",
+
+            "MissionNumber": 37,
+
+            "GridCellX": 1187,
+
+            "GridCellZ": 1017
+
+        },
+
+        {
+
+            "SiteCode": "WP-39",
+
+            "MissionNumber": 39,
+
+            "GridCellX": 1317,
+
+            "GridCellZ": 1027
+
+        },
+
+        {
+
+            "SiteCode": "WP-40",
+
+            "MissionNumber": 40,
+
+            "GridCellX": 1379,
+
+            "GridCellZ": 1094
+
+        },
+
+        {
+
+            "SiteCode": "WP-41",
+
+            "MissionNumber": 41,
+
+            "GridCellX": 1339,
+
+            "GridCellZ": 1144
+
+        },
+
+        {
+
+            "SiteCode": "WP-43",
+
+            "MissionNumber": 43,
+
+            "GridCellX": 1352,
+
+            "GridCellZ": 1285
+
+        },
+
+        {
+
+            "SiteCode": "WP-45",
+
+            "MissionNumber": 45,
+
+            "GridCellX": 1303,
+
+            "GridCellZ": 1403
+
+        },
+
+        {
+
+            "SiteCode": "WP-48",
+
+            "MissionNumber": 48,
+
+            "GridCellX": 1518,
+
+            "GridCellZ": 1539
+
+        },
+
+        {
+
+            "SiteCode": "WP-50",
+
+            "MissionNumber": 50,
+
+            "GridCellX": 1608,
+
+            "GridCellZ": 1469
+
+        },
+
+        {
+
+            "SiteCode": "WP-51",
+
+            "MissionNumber": 51,
+
+            "GridCellX": 1532,
+
+            "GridCellZ": 1384
+
+        },
+
+        {
+
+            "SiteCode": "WP-52",
+
+            "MissionNumber": 52,
+
+            "GridCellX": 1562,
+
+            "GridCellZ": 1314
+
+        }
+
+    ]
+
+}
+

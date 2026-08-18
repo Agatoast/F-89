@@ -1146,12 +1146,11 @@ namespace F89.UI
             }
 
             var gap = UiFitCanvas.Px(32f);
-            var fromCarrierResupply = CarrierResupplyState.IsResupplyFromCarrier;
-            var fromDeckRearm = FriendlyOutpostTakeoffState.HasPending
-                && FriendlyOutpostTakeoffState.ReturnToDeckMenu;
+            var fromFriendlyRearm = FriendlyOutpostTakeoffState.HasPending;
+            var fromCarrierResupply = CarrierResupplyState.IsResupplyFromCarrier && !fromFriendlyRearm;
             var y = UiFitCanvas.Rect.yMax - buttonHeight - margin;
 
-            if (fromCarrierResupply || fromDeckRearm)
+            if (fromFriendlyRearm || fromCarrierResupply)
             {
                 var continueWidth = UiFitCanvas.Px(320f);
                 var continueRect = new Rect(
@@ -1159,7 +1158,8 @@ namespace F89.UI
                     y,
                     continueWidth,
                     buttonHeight);
-                if (DrawActionButton(continueRect, "RETURN TO DECK", 20))
+                var continueLabel = fromFriendlyRearm ? "RETURN TO BASE" : "RETURN TO DECK";
+                if (DrawActionButton(continueRect, continueLabel, 20))
                 {
                     heldGunArrowIndex = -1;
                     CancelGunRoundsEdit();
@@ -1174,14 +1174,22 @@ namespace F89.UI
             var bailRect = new Rect(startX, y, buttonWidth, buttonHeight);
             var startRect = new Rect(startX + buttonWidth + gap, y, buttonWidth, buttonHeight);
 
-            if (DrawActionButton(bailRect, "BAIL OUT?", 20))
+            if (DrawActionButton(bailRect, GamePlayModeState.IsFreeFlight ? "BACK" : "BAIL OUT?", 20))
             {
                 heldGunArrowIndex = -1;
                 CancelGunRoundsEdit();
-                showBailOutConfirm = true;
+                if (GamePlayModeState.IsFreeFlight)
+                {
+                    ConfirmBailOut();
+                }
+                else
+                {
+                    showBailOutConfirm = true;
+                }
             }
 
-            if (DrawActionButton(startRect, "START MISSION", 20))
+            var launchLabel = GamePlayModeState.IsFreeFlight ? "TAKE OFF" : "START MISSION";
+            if (DrawActionButton(startRect, launchLabel, 20))
             {
                 heldGunArrowIndex = -1;
                 CancelGunRoundsEdit();
@@ -1367,24 +1375,78 @@ namespace F89.UI
             AircraftLoadoutState.MarkConfigured();
             var resupplyFromCarrier = CarrierResupplyState.IsResupplyFromCarrier;
             var returnToCarrierDeck = CarrierResupplyState.ReturnToDeckMenu;
-            var fromFriendlyOutpost = FriendlyOutpostTakeoffState.HasPending;
+            var parkedFriendlyOutpost = FriendlyOutpostTakeoffState.OutpostName;
+            var returnToFriendlyDeck = FriendlyOutpostTakeoffState.TryConsume(
+                out var friendlyOutpostName,
+                out var friendlyReturnToDeck);
+            if (string.IsNullOrWhiteSpace(friendlyOutpostName))
+            {
+                friendlyOutpostName = parkedFriendlyOutpost;
+            }
+            var stored = LandMissionHandoffState.GetStoredFlightSnapshot();
             CarrierResupplyState.Clear();
+            GamePauseController.ClearPauseOnSceneLoad();
             Time.timeScale = 1f;
             FlightMissionStartBootstrap.ResetForSceneLoad();
             FlightHudColorPalette.ResetToDefault();
 
-            if (resupplyFromCarrier || fromFriendlyOutpost)
+            if (resupplyFromCarrier || returnToFriendlyDeck)
             {
                 LandBossEncounter.ResetUndefeatedBossHealthOnRearm();
             }
 
-            if (FriendlyOutpostTakeoffState.TryConsume(out _, out var returnToRunwayDeck)
-                && returnToRunwayDeck)
+            var shouldReturnToRunwayDeck = returnToFriendlyDeck && friendlyReturnToDeck;
+            if (shouldReturnToRunwayDeck)
             {
                 DeckLandingServiceState.MarkRearmUsed();
-                var stored = LandMissionHandoffState.GetStoredFlightSnapshot();
+                FlightMissionLaunchState.Clear();
+                if (!stored.IsValid)
+                {
+                    stored = new LandSortieSnapshot
+                    {
+                        IsValid = true,
+                        ReturnSceneName = GameScenes.FlightTest
+                    };
+                }
+
                 stored.ReturnToRunwayDeck = true;
                 stored.RestoreWithImmediateTakeoff = false;
+                if (string.IsNullOrWhiteSpace(stored.OutpostName))
+                {
+                    stored.OutpostName = !string.IsNullOrWhiteSpace(friendlyOutpostName)
+                        ? friendlyOutpostName
+                        : OutpostRunwayDeckState.ParkedOutpostName;
+                }
+
+                if (string.IsNullOrWhiteSpace(stored.OutpostName)
+                    && CharacterSessionState.ActiveSave != null
+                    && !string.IsNullOrWhiteSpace(CharacterSessionState.ActiveSave.MissionLaunchOutpostName))
+                {
+                    stored.OutpostName = CharacterSessionState.ActiveSave.MissionLaunchOutpostName.Trim();
+                }
+
+                if (!string.IsNullOrWhiteSpace(stored.OutpostName))
+                {
+                    OutpostRunwayDeckState.BeginParked(stored.OutpostName, friendly: true);
+                }
+
+                if (stored.HasLandingMiles)
+                {
+                    LandingMileFlagState.SetFromMiles(
+                        new Vector2(stored.LandingMileX, stored.LandingMileY),
+                        stored.LandingRotationY);
+                }
+                else if (stored.AircraftWorldPosition.sqrMagnitude > 1f)
+                {
+                    LandingMileFlagState.SetFromLandingSquare(
+                        stored.AircraftWorldPosition,
+                        stored.AircraftWorldRotation);
+                }
+
+                MissionLaunchOrigin.PersistLaunchOutpost(
+                    CharacterSessionState.ActiveSave,
+                    stored.OutpostName);
+
                 LandMissionHandoffState.BeginReturnToFlight(stored, LandGroundSessionResult.Empty);
                 SceneManager.LoadScene(GameScenes.FlightTest);
                 return;
@@ -1406,12 +1468,26 @@ namespace F89.UI
 
             if (resupplyFromCarrier)
             {
-                LandMissionHandoffState.Clear();
+                GameplaySessionBootstrap.ClearSessionHandoffOnly();
                 FlightMissionLaunchState.BeginCarrierLaunch();
+                FlightMissionLaunchState.MarkForceCarrierDeckLaunch();
             }
             else
             {
+                if (!string.IsNullOrWhiteSpace(friendlyOutpostName))
+                {
+                    MissionLaunchOrigin.PersistLaunchOutpost(save, friendlyOutpostName);
+                }
+
                 MissionLaunchOrigin.PrepareFreshSortieLaunch(save);
+            }
+
+            if (BunkerDefenseIntegration.TryLaunchBeforeFlight(
+                    resupplyFromCarrier,
+                    shouldReturnToRunwayDeck,
+                    friendlyReturnToDeck))
+            {
+                return;
             }
 
             SceneManager.LoadScene(GameScenes.FlightTest);
@@ -1419,14 +1495,20 @@ namespace F89.UI
 
         private static void ConfirmBailOut()
         {
-            var save = CharacterSessionState.ActiveSave;
-            if (save != null)
+            if (GamePlayModeState.IsCampaign)
             {
-                CharacterSaveRepository.ApplyScorePenalty(save, MissionBriefingState.BailOutScorePenalty);
+                var save = CharacterSessionState.ActiveSave;
+                if (save != null)
+                {
+                    CharacterSaveRepository.ApplyScorePenalty(save, MissionBriefingState.BailOutScorePenalty);
+                }
             }
 
             Time.timeScale = 1f;
-            SceneManager.LoadScene(GameScenes.CharacterPage);
+            SceneManager.LoadScene(
+                GamePlayModeState.IsFreeFlight
+                    ? GameScenes.CharacterLoadout
+                    : GameScenes.CharacterPage);
         }
     }
 }

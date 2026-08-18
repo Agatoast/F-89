@@ -37,6 +37,40 @@ namespace F89.Enemies
                 return;
             }
 
+            if (!isTroop
+                && definition != null
+                && definition.IsHostile
+                && !isFlier
+                && string.Equals(
+                    definition.abbreviation,
+                    UrArwSpriteSheet.Abbreviation,
+                    System.StringComparison.OrdinalIgnoreCase)
+                && UrArwSpriteSheet.TryGetRotationFrames(out var arwFrames))
+            {
+                AttachTopDownRotationVisual(parent, arwFrames, footprint);
+                return;
+            }
+
+            if (!isTroop
+                && definition != null
+                && definition.IsHostile
+                && !isFlier
+                && UrTopDownVehicleSpriteSheet.TryGetRotationFrames(definition.abbreviation, out var topDownFrames))
+            {
+                AttachTopDownRotationVisual(parent, topDownFrames, footprint);
+                return;
+            }
+
+            if (!isTroop
+                && definition != null
+                && !definition.IsHostile
+                && !isFlier
+                && UsTopDownVehicleSpriteSheet.TryGetRotationFrames(definition.abbreviation, out var usTopDownFrames))
+            {
+                AttachTopDownRotationVisual(parent, usTopDownFrames, footprint);
+                return;
+            }
+
             if (!isTroop && TryGetVehicleSprite(definition, out var sprite))
             {
                 AttachSideSpriteVisual(parent, sprite, footprint);
@@ -119,6 +153,35 @@ namespace F89.Enemies
 
             var renderer = CreateSpriteRenderer(visualObject, sprite);
             ScaleSpriteToFootprint(visualObject.transform, sprite, footprint);
+        }
+
+        private static void AttachTopDownRotationVisual(Transform parent, Sprite[] frames, float footprint)
+        {
+            var first = frames[0];
+            for (var i = 0; i < frames.Length; i++)
+            {
+                if (frames[i] != null)
+                {
+                    first = frames[i];
+                    break;
+                }
+            }
+
+            if (first == null)
+            {
+                return;
+            }
+
+            var visualObject = new GameObject("VehicleVisual");
+            visualObject.transform.SetParent(parent, false);
+            visualObject.transform.localRotation = Quaternion.Euler(90f, 180f, 0f);
+            visualObject.transform.localPosition = new Vector3(0f, 0.02f, 0f);
+
+            var renderer = CreateSpriteRenderer(visualObject, first);
+            ScaleSpriteToFootprint(visualObject.transform, first, footprint);
+
+            var rotationSprite = visualObject.AddComponent<VehicleTopDownRotationSprite>();
+            rotationSprite.Configure(parent, renderer, frames);
         }
 
         private static void AttachAnimatedTopDownVisual(

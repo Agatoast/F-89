@@ -6,7 +6,7 @@ namespace F89.Core
     public class CharacterSaveData
     {
         public string Id = Guid.NewGuid().ToString("N");
-        public string Rank = "2nd LT";
+        public string Rank = "2LT";
         public string Name = "Pilot";
         public string LastPlayedUtc = string.Empty;
         public string HighestAward = MilitaryMedalIds.DefaultForNewCharacter;
@@ -19,7 +19,7 @@ namespace F89.Core
         public int BestMissionScore;
         public int TotalScore;
         /// <summary>
-        /// Sticky once the pilot reaches 1st LT (or 500 total score). Never cleared on demotion;
+        /// Sticky once the pilot reaches 1st LT (or 100 total score). Never cleared on demotion;
         /// enables GCMP when total score falls below zero.
         /// </summary>
         public bool HasAchievedFirstRank;
@@ -33,6 +33,10 @@ namespace F89.Core
         public string VehicleKillSummary = string.Empty;
         public string TroopKillSummary = string.Empty;
         public string[] EarnedRibbonIds = Array.Empty<string>();
+        /// <summary>
+        /// Award counts parallel to <see cref="EarnedRibbonIds"/> (1 = first award, up to 31 for device display).
+        /// </summary>
+        public int[] EarnedRibbonCounts = Array.Empty<int>();
         /// <summary>Max Hit Points for ground combat.</summary>
         public int MaxHitPoints = 100;
         /// <summary>Relative ground Move rating (3–15).</summary>
@@ -53,8 +57,28 @@ namespace F89.Core
         public int ResearchBootsTechLevel = 1;
         /// <summary>Per-character boss progress. Bit 0 represents Boss 1.</summary>
         public int DefeatedBossMask;
+        /// <summary>
+        /// Permanent boss-kill awards for Character Page display. Bit 0 = Boss 1.
+        /// Set only when the bunker boss is killed in combat — not on END MISSION without a kill.
+        /// </summary>
+        public int BossKillAwardMask;
         /// <summary>Per-character boss-area guard progress. Bit 0 represents BF1 guards.</summary>
         public int BossGuardClearedMask;
+        /// <summary>Campaign catalog mission slot (1 = Mission 01). Advanced after primary-complete END MISSION.</summary>
+        public int CampaignMissionNumber = 1;
+        /// <summary>Mission number whose site was last restored after early kills on a future site.</summary>
+        public int CampaignMissionSiteRestoredForMission;
+        /// <summary>Count of primary-complete END MISSION victories for this character.</summary>
+        public int SuccessfulEndMissionCount;
+        /// <summary>In-progress sortie mission score persisted across scene loads.</summary>
+        public int ActiveSortieMissionScore;
+        /// <summary>
+        /// Roster ownership: 0 = Campaign, 1 = Free Flight.
+        /// Free Flight characters are never listed in Campaign mode.
+        /// </summary>
+        public int PlayModeKind;
+        /// <summary>Set when Mission 53 is completed; unlocks this campaign character for Free Flight.</summary>
+        public bool HasCompletedCampaign;
         /// <summary>Active boss mission assigned at briefing (0 = none).</summary>
         public int AssignedBossNumber;
         /// <summary>Flight-map outpost linked to the active assigned boss mission.</summary>
@@ -71,10 +95,16 @@ namespace F89.Core
         public string[] DestroyedOutpostNames = Array.Empty<string>();
         /// <summary>Land outposts cleared by ground troops and now friendly.</summary>
         public string[] FriendlyOccupiedOutpostNames = Array.Empty<string>();
-        /// <summary>Outpost runway used for the current campaign sortie launch (empty = carrier).</summary>
+        /// <summary>Last friendly runway/base where the pilot landed. Never cleared in normal play.</summary>
         public string MissionLaunchOutpostName = string.Empty;
+        /// <summary>Bunker Defense mission ids already consumed for this character (once per id).</summary>
+        public string[] ConsumedBunkerDefenseMissionIds = Array.Empty<string>();
+        /// <summary>Bunker Defense mission ids finished at least once (win or loss).</summary>
+        public string[] CompletedBunkerDefenseMissionIds = Array.Empty<string>();
         /// <summary>Flight-map units destroyed by this character, keyed by outpost and unit label.</summary>
         public string[] DestroyedWorldTargetIds = Array.Empty<string>();
+        /// <summary>Waypoint secondary landing pads revealed after primary air objectives (WP-NN).</summary>
+        public WaypointSecondaryRevealSaveData[] WaypointSecondaryReveals = Array.Empty<WaypointSecondaryRevealSaveData>();
         /// <summary>Per-character default aircraft payload, restored whenever Aircraft Loadout opens.</summary>
         public bool HasDefaultAircraftPayload;
         public int[] DefaultAircraftLinkedPairWeapons = Array.Empty<int>();
@@ -120,20 +150,8 @@ namespace F89.Core
             }
         }
 
-        public string DisplayRank => AbbreviateRank(Rank);
-
-        private static string AbbreviateRank(string rank)
-        {
-            if (string.IsNullOrWhiteSpace(rank))
-            {
-                return rank;
-            }
-
-            return rank
-                .Replace("Lieutenant", "LT")
-                .Replace("Lieutentant", "LT")
-                .Replace("Lt", "LT");
-        }
+        public string DisplayRank =>
+            PilotCareerRanks.GetRankName(PilotCareerRanks.GetRankIndex(Rank));
     }
 
     [Serializable]

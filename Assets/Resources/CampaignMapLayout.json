@@ -3,444 +3,352 @@
         {
             "Id": "84c73248e5a94b5680e24866a4512bed",
             "Label": "Amundsen-Scott",
-            "XMiles": 141.285888671875,
-            "ZMiles": -147.2725830078125,
             "GridCellX": 1642,
-            "GridCellZ": 1374
+            "GridCellZ": 1374,
+            "SiteCode": "STN-AMUNDSEN-SCOTT"
         },
         {
             "Id": "0d6cd6508e844b8db8646e8374e37012",
             "SiteCode": "OP-SOUTH",
             "Label": "Outpost South",
-            "XMiles": -1091.972412109375,
-            "ZMiles": -573.5249633789063,
-            "GridCellX": 409,
-            "GridCellZ": 1800
+            "GridCellX": 419,
+            "GridCellZ": 1780
         },
         {
             "Id": "9547391650d443e18fb8dc4f5f5ce759",
             "SiteCode": "OP-01",
             "Label": "Outpost 01",
-            "XMiles": -991.39599609375,
-            "ZMiles": -513.6580200195313,
             "GridCellX": 509,
             "GridCellZ": 1740
         },
         {
             "Id": "8525766dc79845bd8db53e5f1d244048",
+            "SiteCode": "OP-13-SE",
             "Label": "Outpost 13 SE",
-            "XMiles": -818.9793090820313,
-            "ZMiles": -257.4277038574219,
             "GridCellX": 682,
             "GridCellZ": 1484
         },
         {
             "Id": "f4e5674cb9cb417cbbe68a1f1424c881",
+            "SiteCode": "OP-21",
             "Label": "Outpost 21",
-            "XMiles": -524.43408203125,
-            "ZMiles": -386.7402038574219,
             "GridCellX": 976,
             "GridCellZ": 1613
         },
         {
             "Id": "a1b158ef3ab7434095306e0e4b3c551f",
             "Label": "Outpost 33",
-            "XMiles": -275.38775634765627,
-            "ZMiles": 444.2124328613281,
             "GridCellX": 1225,
-            "GridCellZ": 782
+            "GridCellZ": 782,
+            "SiteCode": "OP-33"
         },
         {
             "Id": "5fd46e5b4fce44fab473ad23e48eed6c",
             "Label": "Outpost 10",
-            "XMiles": -11.973381042480469,
-            "ZMiles": 439.423095703125,
             "GridCellX": 1489,
             "GridCellZ": 787
         },
         {
             "Id": "00522072ae0e4644a9330dfa9c6db008",
+            "SiteCode": "OP-31",
             "Label": "Outpost 31",
-            "XMiles": 261.01971435546877,
-            "ZMiles": 592.682373046875,
             "GridCellX": 1762,
             "GridCellZ": 634
         },
         {
             "Id": "c5506baab501400393a58cf560a91f2b",
             "Label": "Outpost 02",
-            "XMiles": 289.7558288574219,
-            "ZMiles": 801.0191650390625,
             "GridCellX": 1790,
             "GridCellZ": 426
         },
         {
             "Id": "45a687ff23a04887b35ad757bbe11c91",
             "Label": "Outpost 50",
-            "XMiles": 696.8507690429688,
-            "ZMiles": 499.28997802734377,
             "GridCellX": 2197,
             "GridCellZ": 727
         },
         {
             "Id": "ca58b4abce324e11b604b4878cd194c8",
             "Label": "Outpost 23",
-            "XMiles": 706.4295043945313,
-            "ZMiles": 659.7332763671875,
             "GridCellX": 2207,
             "GridCellZ": 567
         },
         {
             "Id": "7e76cdb160f5460e8135b797df5cc59b",
             "Label": "Outpost 07",
-            "XMiles": 972.238525390625,
-            "ZMiles": 489.7112731933594,
             "GridCellX": 2473,
             "GridCellZ": 737
         },
         {
             "Id": "a46aa7961b414ec1903cba67960c41ba",
             "Label": "Outpost 24",
-            "XMiles": 122.12848663330078,
-            "ZMiles": -884.8328857421875,
             "GridCellX": 1623,
             "GridCellZ": 2111
         },
         {
             "Id": "721774ecbc8345c6891e27bad7c13ae8",
             "Label": "Outpost 17",
-            "XMiles": -129.31251525878907,
-            "ZMiles": -987.803955078125,
             "GridCellX": 1371,
             "GridCellZ": 2214
         },
         {
             "Id": "c8b56b2714b64e5aa08e5f88e2b32c62",
             "Label": "Outpost 28",
-            "XMiles": 347.2280578613281,
-            "ZMiles": -767.4937133789063,
             "GridCellX": 1848,
             "GridCellZ": 1994
         },
         {
             "Id": "ac53b093959240f9a8eb7aa2b86d0d88",
             "Label": "Outpost 14",
-            "XMiles": 524.43408203125,
-            "ZMiles": -911.17431640625,
             "GridCellX": 2025,
             "GridCellZ": 2138
         },
         {
             "Id": "a4ca32e521804692a1b4694e70b37436",
             "Label": "Outpost 19",
-            "XMiles": -11.973381042480469,
-            "ZMiles": -518.4473876953125,
             "GridCellX": 1489,
             "GridCellZ": 1745
         },
         {
             "Id": "0bd2b189d806479eba3eeaaf7fb0cb85",
             "Label": "Outpost 35",
-            "XMiles": -340.04400634765627,
-            "ZMiles": -595.0770263671875,
             "GridCellX": 1160,
             "GridCellZ": 1822
         },
         {
             "Id": "878ee2ece53b49d49a9f9582d601ff7f",
             "Label": "Outpost 09",
-            "XMiles": 221.6927947998047,
-            "ZMiles": -682.3660888671875,
             "GridCellX": 1722,
             "GridCellZ": 1909
         },
         {
             "Id": "c03afa17ff8f4b4bb0e354f12ca94d7d",
             "Label": "Outpost 37",
-            "XMiles": -38.3148193359375,
-            "ZMiles": -745.941650390625,
             "GridCellX": 1462,
             "GridCellZ": 1973
         },
         {
             "Id": "bee15aca3d4e49c396bf31edbb8c2f06",
             "Label": "Outpost 06",
-            "XMiles": -292.1505126953125,
-            "ZMiles": -774.677734375,
             "GridCellX": 1208,
             "GridCellZ": 2001
         },
         {
             "Id": "89f021e0c0524ffd919eef04bf317147",
+            "SiteCode": "STN-ROTHERA",
             "Label": "Rothera Research",
-            "XMiles": -498.0926513671875,
-            "ZMiles": -130.50985717773438,
             "GridCellX": 1002,
             "GridCellZ": 1357
         },
         {
             "Id": "48f2636afe7f4fbf9af6d3a22452a820",
+            "SiteCode": "OP-43",
             "Label": "Outpost 43",
-            "XMiles": -596.2743530273438,
-            "ZMiles": -271.7957458496094,
             "GridCellX": 904,
             "GridCellZ": 1498
         },
         {
             "Id": "3845580831a14d64b9d185159080ad12",
+            "SiteCode": "STN-PALMER",
             "Label": "Palmer Station",
-            "XMiles": -577.116943359375,
-            "ZMiles": 10.776042938232422,
             "GridCellX": 923,
             "GridCellZ": 1216
         },
         {
             "Id": "fa29afbe2d214af2af159c666a519cf6",
+            "SiteCode": "STN-MARAMBIO",
             "Label": "Marambio Base",
-            "XMiles": -474.1458740234375,
-            "ZMiles": 101.77374267578125,
             "GridCellX": 1026,
             "GridCellZ": 1125
         },
         {
             "Id": "a900d8e745144e95ba57cb2c978f752b",
+            "SiteCode": "OP-18",
             "Label": "Outpost 18",
-            "XMiles": -591.4850463867188,
-            "ZMiles": 259.8223571777344,
             "GridCellX": 909,
             "GridCellZ": 967
         },
         {
             "Id": "103f33ef496346cab0588ce82c782969",
             "Label": "Outpost 05",
-            "XMiles": -538.8021240234375,
-            "ZMiles": 468.1592102050781,
             "GridCellX": 962,
-            "GridCellZ": 758
+            "GridCellZ": 758,
+            "SiteCode": "OP-05"
         },
         {
             "Id": "3f464fc97f264b358097db7a3871368f",
+            "SiteCode": "OP-13",
             "Label": "Outpost 13",
-            "XMiles": -888.4249267578125,
-            "ZMiles": -358.00408935546877,
             "GridCellX": 612,
             "GridCellZ": 1585
         },
         {
             "Id": "5c0dd2e4c5ce47fa848f164c86dfbf50",
             "Label": "Outpost 46",
-            "XMiles": -225.82447814941407,
-            "ZMiles": -370.692626953125,
             "GridCellX": 1275,
             "GridCellZ": 1597
         },
         {
             "Id": "68400e43d58842779ca954d39904ed56",
             "Label": "Outpost 22",
-            "XMiles": 217.6539306640625,
-            "ZMiles": -386.81036376953127,
             "GridCellX": 1718,
             "GridCellZ": 1613
         },
         {
             "Id": "693d746a5467448fae69a9b05a84ac8d",
             "Label": "Outpost 44",
-            "XMiles": 67.05093383789063,
-            "ZMiles": -322.0839538574219,
             "GridCellX": 1568,
-            "GridCellZ": 1549
+            "GridCellZ": 1549,
+            "SiteCode": "OP-44"
         },
         {
             "Id": "1447e3aa43c847acb746890aa5a9f4e6",
             "Label": "Halley VI",
-            "XMiles": -102.97107696533203,
-            "ZMiles": -255.03302001953126,
             "GridCellX": 1398,
-            "GridCellZ": 1482
+            "GridCellZ": 1482,
+            "SiteCode": "STN-HALLEY-VI"
         },
         {
             "Id": "026e8a72fbb34498ab07e23bf7666788",
             "Label": "Outpost 16",
-            "XMiles": 548.668212890625,
-            "ZMiles": -657.2587890625,
             "GridCellX": 2049,
             "GridCellZ": 1884
         },
         {
             "Id": "ed6b3d98438142a48c9f9a768ea74887",
             "Label": "Outpost 30",
-            "XMiles": 545.9862060546875,
-            "ZMiles": -508.8686828613281,
             "GridCellX": 2046,
             "GridCellZ": 1735
         },
         {
             "Id": "7b6af25627074fec8cb7528d4fbd5a3e",
             "Label": "Outpost 12",
-            "XMiles": 967.8003540039063,
-            "ZMiles": -255.78018188476563,
             "GridCellX": 2468,
             "GridCellZ": 1482
         },
         {
             "Id": "495f9d091ec148abb2567bdb5e16b58e",
             "Label": "Outpost 32",
-            "XMiles": 1111.636474609375,
-            "ZMiles": -150.45587158203126,
             "GridCellX": 2612,
             "GridCellZ": 1377
         },
         {
             "Id": "17b224b50e4147bd9c6ba246155e8ef3",
             "Label": "Outpost 39",
-            "XMiles": 1036.894775390625,
-            "ZMiles": -403.5029296875,
             "GridCellX": 2537,
             "GridCellZ": 1630
         },
         {
             "Id": "653b70ff0bec428a80063c8cc9156522",
             "Label": "Outpost 04",
-            "XMiles": 919.31298828125,
-            "ZMiles": -621.3497314453125,
             "GridCellX": 2420,
             "GridCellZ": 1848
         },
         {
             "Id": "e7e830018f7e416599a2280c948d8960",
             "Label": "Outpost 40",
-            "XMiles": 692.0614013671875,
-            "ZMiles": -753.1256713867188,
             "GridCellX": 2193,
             "GridCellZ": 1980
         },
         {
             "Id": "f91ce634add04ae580e662f39dd535ea",
             "Label": "Outpost 47",
-            "XMiles": 1084.788330078125,
-            "ZMiles": 247.84898376464845,
             "GridCellX": 2585,
             "GridCellZ": 979
         },
         {
             "Id": "68a84973b7c94efebd1b1ef45ede9c85",
             "Label": "Outpost 20",
-            "XMiles": 804.6112060546875,
-            "ZMiles": 245.45431518554688,
             "GridCellX": 2305,
             "GridCellZ": 981
         },
         {
             "Id": "760ec2550011416ab32ad4d5ad5196ff",
             "Label": "Outpost 08",
-            "XMiles": 1218.89013671875,
-            "ZMiles": 92.19503784179688,
             "GridCellX": 2719,
             "GridCellZ": 1134
         },
         {
             "Id": "306e4049d84c4f9dba0cd4ef9a918104",
             "Label": "McMurdo Station",
-            "XMiles": 390.33221435546877,
-            "ZMiles": -286.163818359375,
             "GridCellX": 1891,
             "GridCellZ": 1513
         },
         {
             "Id": "10a2c6aed331423c839fcb699f202385",
             "Label": "Casey Station",
-            "XMiles": 620.2211303710938,
-            "ZMiles": -228.6915740966797,
             "GridCellX": 2121,
             "GridCellZ": 1455
         },
         {
             "Id": "18f18c26af394847bfb411f707682a3c",
             "Label": "Outpost 29",
-            "XMiles": 177.20603942871095,
-            "ZMiles": 278.9797668457031,
             "GridCellX": 1678,
             "GridCellZ": 948
         },
         {
             "Id": "26d7707e48c94471ae9c8027c3563a50",
             "Label": "Outpost 49",
-            "XMiles": 409.4896240234375,
-            "ZMiles": 171.21934509277345,
             "GridCellX": 1910,
             "GridCellZ": 1055
         },
         {
             "Id": "4142b7c29c034497954687e6cc1b5ac7",
             "Label": "Outpost 15",
-            "XMiles": 478.93524169921877,
-            "ZMiles": 369.97747802734377,
             "GridCellX": 1979,
             "GridCellZ": 857
         },
         {
             "Id": "ddb24e60f0d84ea2be4ea5ed1727020d",
             "Label": "Davis Station",
-            "XMiles": 562.5509643554688,
-            "ZMiles": -161.53504943847657,
             "GridCellX": 2063,
             "GridCellZ": 1388
         },
         {
             "Id": "11453b995bb3406d82f108548d4271f9",
             "Label": "Zhongshan Station",
-            "XMiles": 499.5006408691406,
-            "ZMiles": -96.45098114013672,
             "GridCellX": 2000,
             "GridCellZ": 1323
         },
         {
             "Id": "473bdb571f3e4b7aa9800917590f0e15",
             "Label": "Vostok Station",
-            "XMiles": 114.59308624267578,
-            "ZMiles": -3.239185333251953,
             "GridCellX": 1615,
             "GridCellZ": 1230
         },
         {
             "Id": "cf9638159d7247cda12071894ce0e4c6",
             "Label": "Concordia Station",
-            "XMiles": -98.96403503417969,
-            "ZMiles": -58.15391540527344,
             "GridCellX": 1402,
-            "GridCellZ": 1285
+            "GridCellZ": 1285,
+            "SiteCode": "STN-CONCORDIA"
         },
         {
             "Id": "8b7d516394594fe89049c429a1dc1b92",
             "Label": "Outpost 41",
-            "XMiles": -111.16728210449219,
-            "ZMiles": 82.18370056152344,
             "GridCellX": 1389,
-            "GridCellZ": 1144
+            "GridCellZ": 1144,
+            "SiteCode": "OP-41"
         },
         {
             "Id": "4532922c61f2446b982402d22f67036c",
             "Label": "Outpost 27",
-            "XMiles": -263.41436767578127,
-            "ZMiles": 209.53416442871095,
             "GridCellX": 1237,
-            "GridCellZ": 1017
+            "GridCellZ": 1017,
+            "SiteCode": "OP-27"
         },
         {
             "Id": "3dee7c4397784500b1074bb2f8dc35eb",
             "Label": "Outpost 42",
-            "XMiles": 349.62274169921877,
-            "ZMiles": -537.6047973632813,
             "GridCellX": 1850,
             "GridCellZ": 1764
         },
         {
             "Id": "6e33f5ab528f4d3a9a601107b33b11b6",
             "Label": "Neumayer III",
-            "XMiles": -147.49620056152345,
-            "ZMiles": -186.86776733398438,
             "GridCellX": 1353,
-            "GridCellZ": 1413
+            "GridCellZ": 1413,
+            "SiteCode": "STN-NEUMAYER-III"
         }
     ]
 }

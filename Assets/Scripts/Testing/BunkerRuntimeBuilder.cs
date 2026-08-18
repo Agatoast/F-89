@@ -31,6 +31,9 @@ namespace F89.UI
     public sealed class BunkerScreenController : MonoBehaviour
     {
         private const float DownedExitDelaySeconds = 2.5f;
+        private const int BunkerInteriorGuardCount = 5;
+        private const float BunkerGuardRingRadius = 3.25f;
+        private const float BunkerGuardForwardOffset = 5.5f;
         private bool exitingAfterDowned;
         private float downedExitAt;
         private int pendingBossNumber;
@@ -43,7 +46,6 @@ namespace F89.UI
             pendingBossNumber = LandBunkerHandoffState.ConsumeBossFightPending();
             if (pendingBossNumber != 0)
             {
-                LandBossEncounter.BeginBossFight(pendingBossNumber);
                 LandBossEncounter.BeginIntroCountdown();
                 Debug.Log($"F-89 Bunker: Boss {pendingBossNumber} intro — 5s countdown.");
             }
@@ -110,12 +112,41 @@ namespace F89.UI
                     spawnPos,
                     LandBossEncounter.GetEnemyLevel(bossNumber),
                     player.transform,
-                    savedHitPoints);
+                    savedHitPoints,
+                    LandEnemySpriteSheet.Camouflage.Black);
                 go.name = objectName;
             }
 
             var enemyLabel = bossCount == 1 ? "enemy" : "enemies";
             Debug.Log($"F-89 Bunker: Boss {bossNumber} engaged with {bossCount} UR level {LandBossEncounter.GetEnemyLevel(bossNumber)} {enemyLabel}.");
+            SpawnBunkerInteriorGuards(bossNumber, player.transform);
+        }
+
+        private static void SpawnBunkerInteriorGuards(int bossNumber, Transform faceTarget)
+        {
+            if (faceTarget == null
+                || !LandBossAreaCatalog.TryGet(bossNumber, out var area))
+            {
+                return;
+            }
+
+            var guardLevel = LandUrEnemyStats.ScaleMissionTroopLevel(area.GuardLevel);
+            var anchor = (Vector2)faceTarget.position + Vector2.up * BunkerGuardForwardOffset;
+            var guardsSpawned = 0;
+
+            for (var i = 0; i < BunkerInteriorGuardCount; i++)
+            {
+                var angle = (i / (float)BunkerInteriorGuardCount) * Mathf.PI * 2f;
+                var offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * BunkerGuardRingRadius;
+                var spawnPos = anchor + offset;
+                var guardObject = new GameObject($"{area.BunkerCode}_Guard_{i + 1}");
+                var guard = guardObject.AddComponent<LandGroundEnemy>();
+                guard.Initialize(spawnPos, guardLevel, faceTarget);
+                guardsSpawned++;
+            }
+
+            Debug.Log(
+                $"F-89 Bunker: {area.BunkerCode} — {guardsSpawned} interior guards at UR level {guardLevel}.");
         }
 
         private void TryScheduleDownedExit()
@@ -182,7 +213,7 @@ namespace F89.UI
             var secondsLeft = Mathf.CeilToInt(LandBossEncounter.RemainingSeconds);
             var numberStyle = HudStyleFactory.CreateLabel(96, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
             var labelStyle = HudStyleFactory.CreateLabel(22, FontStyle.Bold, TextAnchor.MiddleCenter, new Color(0.9f, 0.85f, 0.55f));
-            GUI.Label(new Rect(0f, Screen.height * 0.28f, Screen.width, 40f), "BOSS FIGHT", labelStyle);
+            GUI.Label(new Rect(0f, Screen.height * 0.28f, Screen.width, 40f), "Defeat UR Local Commander", labelStyle);
             GUI.Label(new Rect(0f, Screen.height * 0.36f, Screen.width, 120f), secondsLeft.ToString(), numberStyle);
         }
     }

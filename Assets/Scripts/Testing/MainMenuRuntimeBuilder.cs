@@ -126,6 +126,17 @@ namespace F89.Testing
                 return;
             }
 
+            if (sceneName == GameScenes.MARefuel)
+            {
+                MidAirRefuelRuntimeBuilder.BuildIfNeeded();
+                return;
+            }
+
+            if (sceneName == GameScenes.BunkerPlayScene)
+            {
+                return;
+            }
+
             if (sceneName == GameScenes.MissionComplete)
             {
                 MissionCompleteRuntimeBuilder.BuildIfNeeded();

@@ -61,6 +61,11 @@ namespace F89.Core
                 return;
             }
 
+            groundPosition = TacticalMapPadPlacement.ResolveInteriorWorld(
+                groundPosition,
+                padParent != null ? padParent.name : null);
+            groundPosition.y = 0f;
+
             if (padParent.Find(PadObjectName) != null)
             {
                 return;

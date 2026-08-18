@@ -58,6 +58,40 @@ namespace F89.Weapons
         public bool HasSortieInventory => inventoryInitialized;
         public Gau27aGunController Gau27aGun => gau27aGun;
         public MissileLockController LockController => lockController;
+
+        private void Awake()
+        {
+            EnsureRuntimeReferences();
+        }
+
+        private void EnsureRuntimeReferences()
+        {
+            if (aircraft == null)
+            {
+                aircraft = GetComponent<AircraftController>();
+            }
+
+            if (inputSource == null)
+            {
+                inputSource = GetComponent<PlayerAircraftInput>();
+            }
+
+            if (lockController == null)
+            {
+                lockController = GetComponent<MissileLockController>();
+            }
+
+            if (targetPaint == null)
+            {
+                targetPaint = GetComponent<WeaponTargetPaint>();
+            }
+
+            if (gau27aGun == null)
+            {
+                gau27aGun = GetComponent<Gau27aGunController>();
+            }
+        }
+
         public HudTargetFilter ActiveHudTargetFilter => ActiveWeapon switch
         {
             SelectedWeapon.Aim9z => HudTargetFilter.AirOnly,
@@ -221,11 +255,24 @@ namespace F89.Weapons
 
         private void Update()
         {
+            EnsureRuntimeReferences();
+            var gauFireSound = GetComponent<Gau27FireSound>();
             if (GamePauseController.IsPaused
+                || AntarcticaMapOverlay.IsOpen
                 || inputSource == null
                 || aircraft == null
                 || lockController == null)
             {
+                gauFireSound?.NotifyFireReleased();
+                lockController?.UpdateLockProgress(false);
+                return;
+            }
+
+            if (!PlayerAircraftCombatState.CanOperateWeapons(aircraft))
+            {
+                gauFireSound?.NotifyFireReleased();
+                lockController.UpdateLockProgress(false);
+                HandleWeaponSelect(inputSource.Current);
                 return;
             }
 
@@ -242,31 +289,27 @@ namespace F89.Weapons
 
             if (ActiveWeapon == SelectedWeapon.Gau27a && gau27aGun != null)
             {
-                lockController.SetActiveWeapon(null);
                 if (input.cycleTargetPressed)
                 {
                     TryCycleTarget();
                     AlignGauCrosshairToSelectedTarget();
                 }
 
-                lockController.UpdateLockProgress(false);
-                gau27aGun.UpdateCrosshairFromMouse(rawAimScreen);
                 HandleTargetSelectionClick(input, rawAimScreen);
-                gau27aGun.TryFire(
-                    aircraft.GetWeaponAccuracyMultiplier(),
-                    input.fireHeld || input.firePressed);
-                return;
-            }
+                ApplyLockControllerState(gau27aConfig, gau27aConfig);
 
-            var lockWeapon = GetActiveLockWeapon();
-            if (lockWeapon != null)
-            {
-                lockController.SetActiveWeapon(lockWeapon);
-            }
-            else
-            {
-                lockController.SetActiveWeapon(null);
-                lockController.UpdateLockProgress(false);
+                gau27aGun.UpdateCrosshairFromMouse(rawAimScreen);
+
+                // GAU fire/sound: physical Fire binding only (default LMB). Ignore AutoFire —
+                // selecting the gun must not start the burst until the trigger is held.
+                var triggerHeld = GameKeyBindings.IsHeld(GameKeyBindingIds.Fire);
+                Gau27FireSound.EnsureOn(gameObject);
+                GetComponent<Gau27FireSound>()?.SetFiring(
+                    triggerHeld && gau27aGun.RoundsRemaining > 0);
+
+                var lockedTarget = lockController.GetLockedTarget();
+                gau27aGun.TryFire(aircraft.GetWeaponAccuracyMultiplier(), triggerHeld, lockedTarget);
+                return;
             }
 
             if (input.cycleTargetPressed)
@@ -274,12 +317,43 @@ namespace F89.Weapons
                 TryCycleTarget();
             }
 
-            if (lockWeapon != null)
+            var fireLockWeapon = GetActiveLockWeapon();
+            HandleTargetSelectionClick(
+                input,
+                rawAimScreen,
+                fireLockWeapon != null ? FireActiveWeapon : null,
+                aimScreen);
+            ApplyLockControllerState(fireLockWeapon, ResolveTrackingLockWeapon(fireLockWeapon));
+        }
+
+        private void ApplyLockControllerState(ILockCapableWeapon fireLockWeapon, ILockCapableWeapon trackingLockWeapon)
+        {
+            if (trackingLockWeapon != null)
             {
+                lockController.SetActiveWeapon(fireLockWeapon, trackingLockWeapon);
                 lockController.UpdateLockProgress(true);
+                return;
             }
 
-            HandleTargetSelectionClick(input, rawAimScreen, lockWeapon != null ? FireActiveWeapon : null, aimScreen);
+            lockController.SetActiveWeapon(null);
+            lockController.UpdateLockProgress(false);
+        }
+
+        private ILockCapableWeapon ResolveTrackingLockWeapon(ILockCapableWeapon fireLockWeapon)
+        {
+            if (fireLockWeapon != null)
+            {
+                return fireLockWeapon;
+            }
+
+            if (lockController != null
+                && lockController.SelectedTarget != null
+                && lockController.SelectedTarget.IsAlive)
+            {
+                return GenericTargetLockProfile.Instance;
+            }
+
+            return null;
         }
 
         private void HandleTargetSelectionClick(
@@ -484,10 +558,7 @@ namespace F89.Weapons
             }
 
             var outpostBuilding = target.GetComponent<OutpostBuilding>();
-            if (outpostBuilding != null
-                && !OutpostPrimaryObjective.IsMissionHostileBuilding(
-                    outpostBuilding.BuildingType,
-                    target.TargetLabel))
+            if (outpostBuilding != null && !OutpostPrimaryObjective.IsMissionHostileTarget(target))
             {
                 return false;
             }
@@ -510,8 +581,6 @@ namespace F89.Weapons
                         || target.GetComponent<OutpostBuilding>() != null;
                 case SelectedWeapon.Gbu12Paveway:
                     return target.TargetKind == LockableTargetKind.Ground;
-                case SelectedWeapon.Gau27a:
-                    return DirectFireTargetRules.CanBeDamagedByGau27(target);
                 default:
                     return true;
             }
@@ -569,10 +638,7 @@ namespace F89.Weapons
             }
 
             var outpostBuilding = target.GetComponent<OutpostBuilding>();
-            if (outpostBuilding != null
-                && !OutpostPrimaryObjective.IsMissionHostileBuilding(
-                    outpostBuilding.BuildingType,
-                    target.TargetLabel))
+            if (outpostBuilding != null && !OutpostPrimaryObjective.IsMissionHostileTarget(target))
             {
                 return false;
             }
@@ -603,8 +669,6 @@ namespace F89.Weapons
                         && (target.IsGroundVehicle || target.IsInfantry);
                 case SelectedWeapon.Gbu12Paveway:
                     return target.TargetKind == LockableTargetKind.Ground;
-                case SelectedWeapon.Gau27a:
-                    return DirectFireTargetRules.CanBeDamagedByGau27(target);
                 default:
                     return true;
             }
@@ -687,6 +751,7 @@ namespace F89.Weapons
                 ActiveWeapon = ActiveWeapon == SelectedWeapon.Gau27a
                     ? SelectedWeapon.None
                     : SelectedWeapon.Gau27a;
+                GetComponent<Gau27FireSound>()?.NotifyFireReleased();
                 if (selecting && gau27aGun != null)
                 {
                     gau27aGun.ResetCrosshairDistance();

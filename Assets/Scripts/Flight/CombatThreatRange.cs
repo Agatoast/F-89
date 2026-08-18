@@ -90,10 +90,7 @@ namespace F89.Flight
                 }
 
                 var building = target.GetComponent<OutpostBuilding>();
-                if (building != null
-                    && !OutpostPrimaryObjective.IsMissionHostileBuilding(
-                        building.BuildingType,
-                        target.TargetLabel))
+                if (building != null && !OutpostPrimaryObjective.IsMissionHostileTarget(target))
                 {
                     continue;
                 }

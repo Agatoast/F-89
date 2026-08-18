@@ -152,8 +152,8 @@ namespace F89.Core
                 return true;
             }
 
-            if (CampaignMapLayoutState.TryGetSite(baseSite.BaseName, out var site)
-                || CampaignMapLayoutState.TryGetSiteByCode(baseSite.SiteCode, out site))
+            if (CampaignMapLayoutState.TryGetSiteByCode(baseSite.SiteCode, out var site)
+                || CampaignMapLayoutState.TryGetSite(baseSite.BaseName, out site))
             {
                 var locked = CampaignMapLayoutState.GetLockedMiles(site);
                 if (locked.sqrMagnitude > 0.01f)

@@ -5,8 +5,8 @@ namespace F89.LandCombat
 {
     public static class LandResearchService
     {
-        public const float ChancePerItemPercent = 0.5f;
-        public const float MaxChancePercent = 30f;
+        public const float ChancePerItemPercent = 3f;
+        public const float MaxChancePercent = 50f;
         public const int MinTechLevel = 1;
         public const int MaxTechLevel = 10;
         public const int SlotCount = 4;

@@ -58,9 +58,23 @@ namespace F89.UI
 
         private void OnGUI()
         {
+            DrawOpenFieldInfantryNotice();
             LandCombatHud.Draw(LandGroundMissionExit.Leave);
             LandLootBagUi.Draw();
             DrawRunwayDeckOrTakeOffDialog();
+        }
+
+        private static void DrawOpenFieldInfantryNotice()
+        {
+            if (!OpenFieldLandingNotice.IsPending)
+            {
+                return;
+            }
+
+            if (OkMessageDialog.Draw("Enemy infantry in the open") == OkMessageDialog.Result.Confirmed)
+            {
+                OpenFieldLandingNotice.Clear();
+            }
         }
 
         private static void DrawRunwayDeckOrTakeOffDialog()

@@ -1,3 +1,4 @@
+using F89.Flight;
 using F89.Weapons;
 using UnityEngine;
 
@@ -56,8 +57,8 @@ namespace F89.Core
                 return;
             }
 
-            if (!AntarcticaOutpostState.IsTargetDestroyed(
-                    baseSite.BaseName,
+            if (!AntarcticaOutpostState.IsTargetDestroyedForBase(
+                    baseSite,
                     OutpostPrimaryObjective.BunkerBuildingLabel))
             {
                 return;
@@ -95,8 +96,8 @@ namespace F89.Core
                 return;
             }
 
-            if (!AntarcticaOutpostState.IsTargetDestroyed(
-                    baseSite.BaseName,
+            if (!AntarcticaOutpostState.IsTargetDestroyedForBase(
+                    baseSite,
                     OutpostPrimaryObjective.RunwayTowerLabel))
             {
                 return;
@@ -116,6 +117,56 @@ namespace F89.Core
             else if (tower.gameObject.activeSelf)
             {
                 tower.gameObject.SetActive(false);
+            }
+        }
+
+        public static void ApplyFriendlyBaseCleanup(AntarcticaBase baseSite)
+        {
+            if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Land)
+            {
+                return;
+            }
+
+            AntarcticaOutpostState.MarkMissionStructuresClearedForBase(baseSite);
+
+            var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            ApplySavedTowerDestruction(baseSite);
+            ApplySavedBunkerDestruction(baseSite, ticSize);
+            RefreshBuildingAffiliations(baseSite);
+            F89.Flight.CombatThreatRange.InvalidateCaches();
+        }
+
+        private static void RefreshBuildingAffiliations(AntarcticaBase baseSite)
+        {
+            if (baseSite == null)
+            {
+                return;
+            }
+
+            var buildings = baseSite.GetComponentsInChildren<OutpostBuilding>(true);
+            for (var i = 0; i < buildings.Length; i++)
+            {
+                var building = buildings[i];
+                if (building == null || building.IsDestroyed)
+                {
+                    continue;
+                }
+
+                var lockable = building.GetComponent<LockableTarget>();
+                if (lockable == null)
+                {
+                    continue;
+                }
+
+                lockable.Configure(
+                    lockable.TargetLabel,
+                    LockableTargetKind.Ground,
+                    OutpostPrimaryObjective.AffiliationForBuilding(
+                        building.BuildingType,
+                        lockable.TargetLabel,
+                        baseSite),
+                    TargetUnitClass.Building);
             }
         }
 
@@ -194,8 +245,8 @@ namespace F89.Core
             var existing = baseSite.transform.Find(RunwayBunkerObjectName);
             if (existing == null)
             {
-                if (AntarcticaOutpostState.IsTargetDestroyed(
-                        baseSite.BaseName,
+                if (AntarcticaOutpostState.IsTargetDestroyedForBase(
+                        baseSite,
                         OutpostPrimaryObjective.BunkerBuildingLabel))
                 {
                     ApplySavedBunkerDestruction(baseSite, ticSizeWorldUnits);
@@ -216,7 +267,8 @@ namespace F89.Core
                     LockableTargetKind.Ground,
                     OutpostPrimaryObjective.AffiliationForBuilding(
                         OutpostBuildingType.Bunker,
-                        OutpostPrimaryObjective.BunkerBuildingLabel),
+                        OutpostPrimaryObjective.BunkerBuildingLabel,
+                        baseSite),
                     TargetUnitClass.Building);
                 lockable.SetMaxGroundHitPoints(OutpostBuildingGhp.ForType(OutpostBuildingType.Bunker));
                 lockable.SetHitRadiusWorld(
@@ -305,6 +357,15 @@ namespace F89.Core
                 return;
             }
 
+            if (baseSite.Control != BaseControl.Hostile
+                || AntarcticaOutpostState.IsFriendlyOccupied(baseSite.BaseName)
+                || (!string.IsNullOrWhiteSpace(baseSite.SiteCode)
+                    && AntarcticaOutpostState.IsFriendlyOccupied(baseSite.SiteCode)))
+            {
+                ApplySavedTowerDestruction(baseSite);
+                return;
+            }
+
             var existing = runway.Find(RunwayTowerObjectName);
             if (existing == null)
             {
@@ -317,8 +378,8 @@ namespace F89.Core
                 return;
             }
 
-            if (AntarcticaOutpostState.IsTargetDestroyed(
-                    baseSite.BaseName,
+            if (AntarcticaOutpostState.IsTargetDestroyedForBase(
+                    baseSite,
                     OutpostPrimaryObjective.RunwayTowerLabel))
             {
                 return;
@@ -338,7 +399,8 @@ namespace F89.Core
                 LockableTargetKind.Ground,
                 OutpostPrimaryObjective.AffiliationForBuilding(
                     OutpostBuildingType.Type3,
-                    OutpostPrimaryObjective.RunwayTowerLabel),
+                    OutpostPrimaryObjective.RunwayTowerLabel,
+                    baseSite),
                 TargetUnitClass.Building);
             lockable.SetMaxGroundHitPoints(OutpostBuildingGhp.ForType(OutpostBuildingType.Type3));
             lockable.SetHitRadiusWorld(

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace F89.LandCombat
 {
-    /// <summary>Active open-field landing session (empty ground arena at touchdown coords).</summary>
+    /// <summary>Active open-field landing session. Supersedes last-land base while active; cleared on VTOL.</summary>
     public static class OpenFieldLandingState
     {
         public static bool IsActive { get; private set; }

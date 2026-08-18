@@ -175,7 +175,12 @@ namespace F89.Testing
 
             if (groundMaterial.HasProperty(SatelliteBlendId))
             {
-                groundMaterial.SetFloat(SatelliteBlendId, 1f);
+                groundMaterial.SetFloat(SatelliteBlendId, 0f);
+            }
+
+            if (groundMaterial.HasProperty("_LandNoiseScale"))
+            {
+                groundMaterial.SetFloat("_LandNoiseScale", 0.09f);
             }
 
             var landMask = AntarcticaLandMask.GetReadableMap();

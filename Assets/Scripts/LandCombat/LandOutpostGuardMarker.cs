@@ -30,6 +30,7 @@ namespace F89.LandCombat
                 OutpostGroundGuardState.PersistFullGuardClearance(
                     outpostName,
                     OutpostRunwayDeckState.ResolveRunwayGuardCount(outpostName));
+                F89.UI.MissionObjectiveFlashNotifier.FlashSecondaryEliminated();
             }
 
             OutpostRunwayDeckState.NotifyGuardDestroyed(outpostName);

@@ -7,16 +7,21 @@ namespace F89.UI
     {
         public static Rect GetNameBarRect()
         {
-            const float marginLeftDesignPx = 10f;
             const float yNorm = 0.014f;
             const float widthNorm = 0.19f;
             const float heightNorm = 0.05f;
             return new Rect(
-                UiFitCanvas.Rect.x + UiFitCanvas.Px(marginLeftDesignPx),
+                GetRibbonArrayLeftX(),
                 UiFitCanvas.NormY(yNorm),
                 UiFitCanvas.Rect.width * widthNorm,
                 UiFitCanvas.Rect.height * heightNorm);
         }
+
+        /// <summary>Left edge of the ribbon rack (column 0).</summary>
+        public static float GetRibbonArrayLeftX() => GetRibbonsRect().x;
+
+        public static float GetKillFolderLeftX() =>
+            UiFitCanvas.NormX(KillFolderLeftNorm) - UiFitCanvas.Px(KillFolderShiftLeftDesignPx);
 
         public static Rect GetRibbonsRect()
         {
@@ -28,13 +33,12 @@ namespace F89.UI
         public static Rect GetRibbonSlotRect(Rect panelRect, int row, int column)
         {
             const int maxColumns = 3;
-            const int maxRows = 4;
             const float sizeScale = 0.855f * 0.8f;
+            const float ribbonHeightOverWidth = 27f / 100f;
 
             var slotWidth = panelRect.width / maxColumns;
-            var slotHeight = panelRect.height / maxRows;
             var ribbonWidth = slotWidth * sizeScale;
-            var ribbonHeight = slotHeight * sizeScale;
+            var ribbonHeight = ribbonWidth * ribbonHeightOverWidth;
             var x = panelRect.x + column * ribbonWidth;
             var y = panelRect.y + row * ribbonHeight;
             return new Rect(x, y, ribbonWidth, ribbonHeight);
@@ -84,23 +88,69 @@ namespace F89.UI
         private const float KillFolderRightShiftLeftDesignPx = 25f;
         private const float KillFolderShiftDownDesignPx = 45f;
 
-        public const int KillFolderSlotColumns = 5;
-        public const int KillFolderSlotRows = 2;
-        public const int KillFolderSlotCount = KillFolderSlotColumns * KillFolderSlotRows;
-        private const float KillFolderSlotSizeDesignPx = 72f;
+        public const int VehicleKillFolderSlotColumns = 5;
+        public const int VehicleKillFolderSlotRows = 2;
+        public const int VehicleKillFolderSlotCount = VehicleKillFolderSlotColumns * VehicleKillFolderSlotRows;
+
+        public const int TroopKillFolderSlotColumns = 5;
+        public const int TroopKillFolderSlotRows = 4;
+        public const int TroopKillFolderSlotCount = TroopKillFolderSlotColumns * TroopKillFolderSlotRows;
+
+        private const float VehicleKillFolderSlotSizeDesignPx = 72f;
+        private const float TroopKillFolderSlotSizeDesignPx = 36f * 1.3f;
         private const float KillFolderSlotGapDesignPx = 0f;
         private const float KillFolderSlotGridTopDesignPx = 245f;
 
-        public static Rect GetKillFolderSlotRect(Rect folderRect, int index)
+        public static Rect GetVehicleKillFolderSlotRect(Rect folderRect, int index) =>
+            GetKillFolderSlotRect(
+                folderRect,
+                index,
+                VehicleKillFolderSlotColumns,
+                UiFitCanvas.Px(VehicleKillFolderSlotSizeDesignPx),
+                GetVehicleKillFolderGridTop(folderRect));
+
+        public static Rect GetTroopKillFolderSlotRect(Rect folderRect, int index) =>
+            GetKillFolderSlotRect(
+                folderRect,
+                index,
+                TroopKillFolderSlotColumns,
+                UiFitCanvas.Px(TroopKillFolderSlotSizeDesignPx),
+                GetTroopKillFolderGridTop(folderRect));
+
+        private static float GetVehicleKillFolderGridTop(Rect folderRect) =>
+            folderRect.y + UiFitCanvas.Px(KillFolderSlotGridTopDesignPx);
+
+        private static float GetVehicleKillFolderGridBottom(Rect folderRect)
         {
-            var col = index % KillFolderSlotColumns;
-            var row = index / KillFolderSlotColumns;
-            var slotSize = UiFitCanvas.Px(KillFolderSlotSizeDesignPx);
+            var slotSize = UiFitCanvas.Px(VehicleKillFolderSlotSizeDesignPx);
             var slotGap = UiFitCanvas.Px(KillFolderSlotGapDesignPx);
-            var gridWidth = KillFolderSlotColumns * slotSize
-                + (KillFolderSlotColumns - 1) * slotGap;
+            var gridTop = GetVehicleKillFolderGridTop(folderRect);
+            return gridTop
+                + VehicleKillFolderSlotRows * slotSize
+                + (VehicleKillFolderSlotRows - 1) * slotGap;
+        }
+
+        /// <summary>Bottom row aligns with the vehicle kill folder bottom row.</summary>
+        private static float GetTroopKillFolderGridTop(Rect folderRect)
+        {
+            var slotSize = UiFitCanvas.Px(TroopKillFolderSlotSizeDesignPx);
+            var slotGap = UiFitCanvas.Px(KillFolderSlotGapDesignPx);
+            var gridHeight = TroopKillFolderSlotRows * slotSize + (TroopKillFolderSlotRows - 1) * slotGap;
+            return GetVehicleKillFolderGridBottom(folderRect) - gridHeight;
+        }
+
+        private static Rect GetKillFolderSlotRect(
+            Rect folderRect,
+            int index,
+            int columns,
+            float slotSize,
+            float gridTop)
+        {
+            var col = index % columns;
+            var row = index / columns;
+            var slotGap = UiFitCanvas.Px(KillFolderSlotGapDesignPx);
+            var gridWidth = columns * slotSize + (columns - 1) * slotGap;
             var gridLeft = folderRect.x + (folderRect.width - gridWidth) * 0.5f;
-            var gridTop = folderRect.y + UiFitCanvas.Px(KillFolderSlotGridTopDesignPx);
             return new Rect(
                 gridLeft + col * (slotSize + slotGap),
                 gridTop + row * (slotSize + slotGap),
@@ -146,7 +196,7 @@ namespace F89.UI
             var width = height;
             var portrait = GetPortraitRect();
             var bottomY = portrait.y + UiFitCanvas.Px(KillFolderShiftDownDesignPx);
-            var leftX = UiFitCanvas.NormX(KillFolderLeftNorm) - UiFitCanvas.Px(KillFolderShiftLeftDesignPx);
+            var leftX = GetKillFolderLeftX();
             var x = index == 0
                 ? leftX
                 : leftX + width + UiFitCanvas.Px(KillFolderGapDesignPx)

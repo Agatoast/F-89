@@ -15,7 +15,8 @@ namespace F89.UI
 
     /// <summary>
     /// Pending crash landing report pages after player aircraft structural failure.
-    /// Wounded flow continues to PurpleHeartAward before post-mission navigation.
+    /// Wounded and KIA flows continue to PurpleHeartAward before post-mission navigation.
+    /// Repeat grants increment ribbon devices — only one Purple Heart ribbon on the character page.
     /// </summary>
     public static class CrashLandingOutcomeState
     {
@@ -49,6 +50,7 @@ namespace F89.UI
                     break;
                 default:
                     PageQueue.Enqueue(CrashLandingPage.KIA);
+                    PageQueue.Enqueue(CrashLandingPage.PurpleHeartAward);
                     break;
             }
         }
@@ -125,7 +127,9 @@ namespace F89.UI
                 CrashLandingPage.KIA =>
                     "Your aircraft went down and rescue teams could not reach you in time.\n\nYou have been killed in action.",
                 CrashLandingPage.PurpleHeartAward =>
-                    "For wounds received in action during your crash landing,\n\nyou have been awarded the Purple Heart.",
+                    outcome == CrashLandingOutcome.NotRescued
+                        ? "For wounds received in action resulting in your death,\n\nyou have been awarded the Purple Heart."
+                        : "For wounds received in action during your crash landing,\n\nyou have been awarded the Purple Heart.",
                 _ => string.Empty
             };
         }

@@ -182,6 +182,7 @@ namespace F89.Core
             EnsureRestoredAfterScriptReload();
             suppressCarrierRespawn = false;
             pendingReturnSnapshot = LandSortieSnapshot.Empty;
+            storedFlightSnapshot = LandSortieSnapshot.Empty;
             ClearPrefs();
         }
 
@@ -191,6 +192,8 @@ namespace F89.Core
         /// </summary>
         public static void ClearPersistedReturnAfterApplication()
         {
+            suppressCarrierRespawn = false;
+            pendingReturnSnapshot = LandSortieSnapshot.Empty;
             ClearPrefs();
         }
 

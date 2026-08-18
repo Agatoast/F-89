@@ -67,6 +67,7 @@ namespace F89.UI
                 continueScene = LandMissionHandoffState.PendingReturnSceneName;
             }
 
+            // Keep ActiveSortieMissionScore when returning to FlightTest for the same sortie.
             if (save != null
                 && (downed != LandDownedOutcome.None || continueScene != GameScenes.FlightTest))
             {
@@ -93,6 +94,7 @@ namespace F89.UI
             // Mission completion is evaluated only when the aircraft later lands on the CV.
             if (continueScene == GameScenes.FlightTest)
             {
+                FlightMissionStartBootstrap.ResetForSceneLoad();
                 SceneManager.LoadScene(continueScene);
                 return;
             }

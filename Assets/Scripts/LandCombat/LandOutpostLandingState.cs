@@ -26,7 +26,9 @@ namespace F89.LandCombat
 
             ActiveOutpostName = string.Empty;
 
-            if (snapshot.IsOpenFieldLanding || string.IsNullOrWhiteSpace(snapshot.OutpostName))
+            if (snapshot.IsOpenFieldLanding
+                || !string.IsNullOrWhiteSpace(snapshot.WaypointSiteCode)
+                || string.IsNullOrWhiteSpace(snapshot.OutpostName))
 
             {
 

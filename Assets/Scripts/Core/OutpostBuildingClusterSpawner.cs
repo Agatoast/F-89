@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using F89.Flight;
 using F89.Weapons;
 using UnityEngine;
 
@@ -21,6 +22,68 @@ namespace F89.Core
             }
         }
 
+        /// <summary>
+        /// Lazy-loads the nearest land outpost building cluster when the player flies within range.
+        /// Hostile outposts usually get clusters via enemy platoon spawn; friendly bases need this path.
+        /// </summary>
+        public static void EnsureNearestClusterWithinMiles(
+            Vector3 worldPosition,
+            float rangeMiles,
+            WorldMapConfig worldMap,
+            float ticSizeWorldUnits)
+        {
+            if (worldMap == null || rangeMiles <= 0f)
+            {
+                return;
+            }
+
+            var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap, ticSizeWorldUnits);
+            var bases = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
+            AntarcticaBase nearest = null;
+            var nearestDistance = float.MaxValue;
+
+            for (var i = 0; i < bases.Length; i++)
+            {
+                var baseSite = bases[i];
+                if (baseSite == null
+                    || !baseSite.IsActive
+                    || baseSite.IsDestroyed
+                    || baseSite.SiteKind != BaseSiteKind.Land)
+                {
+                    continue;
+                }
+
+                if (baseSite.transform.Find(ClusterRootName) != null)
+                {
+                    continue;
+                }
+
+                var distanceMiles = CombatThreatRange.DistanceMiles(
+                    worldPosition,
+                    baseSite.transform.position,
+                    worldMap,
+                    ticSizeWorldUnits);
+                if (distanceMiles > rangeMiles || distanceMiles >= nearestDistance)
+                {
+                    continue;
+                }
+
+                nearestDistance = distanceMiles;
+                nearest = baseSite;
+            }
+
+            if (nearest == null)
+            {
+                return;
+            }
+
+            EnsureCluster(nearest, worldUnitsPerMile, ticSizeWorldUnits);
+            if (AntarcticaOutpostState.IsFriendlyBaseSite(nearest))
+            {
+                OutpostRunwayVisual.ApplyFriendlyBaseCleanup(nearest);
+            }
+        }
+
         public static void EnsureCluster(
             AntarcticaBase baseSite,
             float worldUnitsPerMile,
@@ -37,6 +100,22 @@ namespace F89.Core
                 if (existing != null)
                 {
                     Object.Destroy(existing.gameObject);
+                }
+
+                // Friendly occupied bases still need a runway strip for parked launches.
+                if (AntarcticaOutpostState.IsFriendlyOccupied(baseSite.BaseName)
+                    || (!string.IsNullOrWhiteSpace(baseSite.SiteCode)
+                        && AntarcticaOutpostState.IsFriendlyOccupied(baseSite.SiteCode)))
+                {
+                    var clusterCenter = baseSite.transform.position;
+                    clusterCenter.y = 0f;
+                    EnsureRunway(
+                        baseSite,
+                        clusterCenter,
+                        OutpostGroundRules.KeepOutRadiusWorld(ticSizeWorldUnits),
+                        ticSizeWorldUnits,
+                        new System.Random(StableSeed(baseSite) + 9137));
+                    return;
                 }
 
                 var runway = baseSite.transform.Find(OutpostRunwayVisual.RunwayObjectName);
@@ -77,6 +156,7 @@ namespace F89.Core
                 return;
             }
 
+            var baseSite = clusterRoot.GetComponentInParent<AntarcticaBase>();
             var footprint = OutpostGroundRules.FootprintWorld(ticSizeWorldUnits);
             var buildings = clusterRoot.GetComponentsInChildren<OutpostBuilding>(true);
             for (var i = 0; i < buildings.Length; i++)
@@ -89,7 +169,10 @@ namespace F89.Core
 
                 var lockable = building.GetComponent<LockableTarget>();
                 var label = lockable != null ? lockable.TargetLabel : building.BuildingType.ToString();
-                var affiliation = OutpostPrimaryObjective.AffiliationForBuilding(building.BuildingType, label);
+                var affiliation = OutpostPrimaryObjective.AffiliationForBuilding(
+                    building.BuildingType,
+                    label,
+                    baseSite);
                 if (lockable == null)
                 {
                     lockable = building.gameObject.AddComponent<LockableTarget>();
@@ -394,7 +477,7 @@ namespace F89.Core
             lockable.Configure(
                 stableLabel,
                 LockableTargetKind.Ground,
-                OutpostPrimaryObjective.AffiliationForBuilding(type, stableLabel),
+                OutpostPrimaryObjective.AffiliationForBuilding(type, stableLabel, baseSite),
                 TargetUnitClass.Building);
             lockable.SetMaxGroundHitPoints(OutpostBuildingGhp.ForType(type));
             lockable.SetHitRadiusWorld(footprint * 0.55f);
@@ -442,6 +525,68 @@ namespace F89.Core
                 hash = (hash * 31) + Mathf.RoundToInt(baseSite.PositionMiles.y * 10f);
                 return hash;
             }
+        }
+
+        public static void ForceRebuildCluster(
+            AntarcticaBase baseSite,
+            float worldUnitsPerMile,
+            float ticSizeWorldUnits = 1f)
+        {
+            if (baseSite == null || baseSite.SiteKind != BaseSiteKind.Land)
+            {
+                return;
+            }
+
+            DestroySurfacePads(baseSite.transform);
+            var existing = baseSite.transform.Find(ClusterRootName);
+            if (existing != null)
+            {
+                Object.Destroy(existing.gameObject);
+            }
+
+            if (baseSite.IsDestroyed)
+            {
+                return;
+            }
+
+            SpawnCluster(baseSite, worldUnitsPerMile, ticSizeWorldUnits);
+        }
+
+        private static void DestroySurfacePads(Transform root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            const string padObjectName = "SurfaceBunkerPad";
+            var directPad = root.Find(padObjectName);
+            if (directPad != null)
+            {
+                Object.Destroy(directPad.gameObject);
+            }
+
+            var cluster = root.Find(ClusterRootName);
+            if (cluster == null)
+            {
+                return;
+            }
+
+            var clusterPad = cluster.Find(padObjectName);
+            if (clusterPad != null)
+            {
+                Object.Destroy(clusterPad.gameObject);
+            }
+        }
+
+        private static float ResolveWorldUnitsPerMile(WorldMapConfig worldMap, float ticSizeWorldUnits)
+        {
+            if (worldMap == null)
+            {
+                return 20f * ticSizeWorldUnits;
+            }
+
+            return worldMap.GridSpacingTics * ticSizeWorldUnits / worldMap.milesPerGrid;
         }
     }
 }

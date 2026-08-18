@@ -93,6 +93,16 @@ namespace F89.UI
             returnSceneName = string.Empty;
         }
 
+        /// <summary>Mission score and/or medal pages without R&amp;D rolls (e.g. survived crash landing).</summary>
+        public static void BeginScoreAndMedalsOnly(string continueToScene)
+        {
+            DiscoveryQueue.Clear();
+            showingNoBreakthroughs = false;
+            returnSceneName = string.IsNullOrEmpty(continueToScene)
+                ? F89.Core.GameScenes.CharacterPage
+                : continueToScene;
+        }
+
         public static string PageIdFor(LandResearchReportPage page) =>
             page switch
             {

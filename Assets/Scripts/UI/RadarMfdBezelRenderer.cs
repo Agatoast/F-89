@@ -26,6 +26,8 @@ namespace F89.UI
 
         private static Texture2D cachedTexture;
         private static Vector2Int cachedSize;
+        private const int BezelButtonLayoutVersion = 4;
+        private static int cachedButtonLayoutVersion = -1;
 
         public struct Layout
         {
@@ -38,6 +40,24 @@ namespace F89.UI
         public static Layout ComputeLayout()
         {
             return ComputeBottomLeftLayout();
+        }
+
+        public static Layout ComputeTopLeftLayout()
+        {
+            var scopeRadius = DisplayDiameter * 0.5f;
+            var scopeBandHeight = ScopeEdgeGap + DisplayDiameter + ScopeEdgeGap;
+            var assemblyWidth = CornerRockerSize * 2f + SideColumnWidth * 2f + DisplayDiameter;
+            var assemblyHeight = CornerRockerSize * 2f + scopeBandHeight;
+            var scopeLeft = CornerRockerSize + SideColumnWidth;
+            var scopeTop = CornerRockerSize + ScopeEdgeGap;
+
+            return new Layout
+            {
+                AssemblyRect = new Rect(0f, 0f, assemblyWidth, assemblyHeight),
+                ScopeRect = new Rect(scopeLeft, scopeTop, DisplayDiameter, DisplayDiameter),
+                ScopeCenter = new Vector2(scopeLeft + scopeRadius, scopeTop + scopeRadius),
+                ScopeRadius = scopeRadius
+            };
         }
 
         public static Layout ComputeTopRightLayout()
@@ -111,6 +131,24 @@ namespace F89.UI
             };
         }
 
+        public static Layout ComputeDamageIndicatorLayout()
+        {
+            var fuel = ComputeFuelGaugeLayout();
+            var gap = 6f * LayoutScale;
+            var height = fuel.ScopeRect.height;
+            var width = Mathf.Min(height * (616f / 104f), fuel.ScopeRect.width * 2.35f);
+            var left = fuel.ScopeRect.xMax + gap;
+            var top = fuel.ScopeRect.y;
+
+            return new Layout
+            {
+                AssemblyRect = new Rect(left, top, width, height),
+                ScopeRect = new Rect(left, top, width, height),
+                ScopeCenter = new Vector2(left + width * 0.5f, top + height * 0.5f),
+                ScopeRadius = height * 0.5f
+            };
+        }
+
         public static float GetMfdAssemblyHeight()
         {
             return CornerRockerSize * 2f + ScopeEdgeGap + DisplayDiameter + ScopeEdgeGap;
@@ -131,7 +169,10 @@ namespace F89.UI
         {
             var width = Mathf.RoundToInt(layout.AssemblyRect.width);
             var height = Mathf.RoundToInt(layout.AssemblyRect.height);
-            if (cachedTexture != null && cachedSize.x == width && cachedSize.y == height)
+            if (cachedTexture != null
+                && cachedSize.x == width
+                && cachedSize.y == height
+                && cachedButtonLayoutVersion == BezelButtonLayoutVersion)
             {
                 return cachedTexture;
             }
@@ -143,6 +184,7 @@ namespace F89.UI
 
             cachedTexture = BuildBezelTexture(width, height, circularDisplay: true);
             cachedSize = new Vector2Int(width, height);
+            cachedButtonLayoutVersion = BezelButtonLayoutVersion;
             return cachedTexture;
         }
 
@@ -214,33 +256,29 @@ namespace F89.UI
             DrawScrew(pixels, width, 8, height - 8);
             DrawScrew(pixels, width, width - 8, height - 8);
 
-            var innerLeft = Mathf.RoundToInt(CornerRockerSize);
-            var innerWidth = width - Mathf.RoundToInt(CornerRockerSize * 2f);
-            var topSlot = innerWidth / 5f;
-            var buttonY = scopeY - Mathf.RoundToInt(ScopeEdgeGap + EdgeOsbSize);
+            var buttonSize = Mathf.RoundToInt(EdgeOsbSize);
+            var topRowY = scopeY - Mathf.RoundToInt(ScopeEdgeGap) - buttonSize - 2;
+            var bottomRowY = scopeY + scopeSize + Mathf.RoundToInt(ScopeEdgeGap) + 2;
+            var horizontalSlot = scopeSize / 5f;
+            var rowButtonXs = new float[5];
             for (var i = 0; i < 5; i++)
             {
-                var x = innerLeft + Mathf.RoundToInt(topSlot * i + (topSlot - EdgeOsbSize) * 0.5f);
-                DrawSquareButton(pixels, width, x, buttonY, Mathf.RoundToInt(EdgeOsbSize));
+                rowButtonXs[i] = scopeX + horizontalSlot * i + (horizontalSlot - buttonSize) * 0.5f;
             }
 
-            var bottomY = scopeY + scopeSize + Mathf.RoundToInt(ScopeEdgeGap);
-            for (var i = 0; i < 5; i++)
-            {
-                var x = innerLeft + Mathf.RoundToInt(topSlot * i + (topSlot - EdgeOsbSize) * 0.5f);
-                DrawSquareButton(pixels, width, x, bottomY, Mathf.RoundToInt(EdgeOsbSize));
-            }
+            var columnXLeft = Mathf.RoundToInt(rowButtonXs[0] - buttonSize * 2f);
+            var columnXRight = Mathf.RoundToInt(rowButtonXs[4] + buttonSize * 2f);
+            var verticalGap = (scopeSize - buttonSize * 5f) / 6f;
 
-            var columnXLeft = innerLeft + Mathf.RoundToInt((SideColumnWidth - EdgeOsbSize) * 0.5f);
-            var columnXRight = width - innerLeft - Mathf.RoundToInt((SideColumnWidth + EdgeOsbSize) * 0.5f);
-            var columnTop = scopeY;
-            var columnHeight = scopeSize;
-            var gap = (columnHeight - EdgeOsbSize * 5f) / 6f;
             for (var i = 0; i < 5; i++)
             {
-                var y = columnTop + Mathf.RoundToInt(gap + i * (EdgeOsbSize + gap));
-                DrawSquareButton(pixels, width, columnXLeft, y, Mathf.RoundToInt(EdgeOsbSize));
-                DrawSquareButton(pixels, width, columnXRight, y, Mathf.RoundToInt(EdgeOsbSize));
+                var rowX = Mathf.RoundToInt(rowButtonXs[i]);
+                DrawSquareButton(pixels, width, rowX, topRowY, buttonSize);
+                DrawSquareButton(pixels, width, rowX, bottomRowY, buttonSize);
+
+                var colY = Mathf.RoundToInt(scopeY + verticalGap + i * (buttonSize + verticalGap));
+                DrawSquareButton(pixels, width, columnXLeft, colY, buttonSize);
+                DrawSquareButton(pixels, width, columnXRight, colY, buttonSize);
             }
 
             texture.SetPixels(pixels);

@@ -182,6 +182,18 @@ namespace F89.Flight
 
 
 
+            if (TryResolveWaypointSecondaryAtPosition(aircraft, out var waypointSiteCode))
+
+            {
+
+                GetOrAddLandingController(aircraft).BeginWaypointGroundLanding(waypointSiteCode);
+
+                return;
+
+            }
+
+
+
             GetOrAddLandingController(aircraft).BeginLanding();
 
         }
@@ -349,6 +361,40 @@ namespace F89.Flight
 
 
             return false;
+
+        }
+
+
+
+        private static bool TryResolveWaypointSecondaryAtPosition(AircraftController aircraft, out string siteCode)
+
+        {
+
+            siteCode = string.Empty;
+
+            var worldMap = aircraft.WorldMap;
+
+            var profile = aircraft.Profile;
+
+            if (worldMap == null || profile == null)
+
+            {
+
+                return false;
+
+            }
+
+
+
+            return CampaignWaypointLandingResolver.TryResolveSecondaryPadLanding(
+
+                aircraft.transform.position,
+
+                worldMap,
+
+                profile.ticSizeWorldUnits,
+
+                out siteCode);
 
         }
 

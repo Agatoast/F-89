@@ -34,6 +34,8 @@ namespace F89.Enemies
         private float roamRadiusMiles = DefaultRoamRadiusMiles;
         private float altitudeWorld;
         private float nextFireTime;
+        private int fireStaggerSeed;
+        private bool hadValidTargetLastScan;
         private LockableTarget lockedCombatTarget;
         private bool lockedCombatUsesAir;
 
@@ -62,7 +64,9 @@ namespace F89.Enemies
             pos.y = altitudeWorld;
             transform.position = pos;
 
-            nextFireTime = Time.time + VehicleCombatRules.RollFireDelaySeconds(definition);
+            fireStaggerSeed = gameObject.GetEntityId().GetHashCode();
+            hadValidTargetLastScan = false;
+            nextFireTime = Time.time + VehicleCombatRules.RollInitialFireDelaySeconds(definition, fireStaggerSeed);
             ClearCombatLock();
             PickRoamPoint(force: true);
         }
@@ -181,6 +185,16 @@ namespace F89.Enemies
             var target = SelectCombatTarget(out var useAirCombat);
             if (target == null || IsForbiddenFriendlyTarget(target))
             {
+                hadValidTargetLastScan = false;
+                nextFireTime = Time.time + VehicleCombatRules.RollTargetScanDelaySeconds(fireStaggerSeed);
+                return;
+            }
+
+            if (!hadValidTargetLastScan)
+            {
+                hadValidTargetLastScan = true;
+                FaceCombatTarget(target);
+                nextFireTime = Time.time + VehicleCombatRules.RollEngagementStaggerSeconds(fireStaggerSeed);
                 return;
             }
 
@@ -195,7 +209,7 @@ namespace F89.Enemies
                 TryGroundShot(target);
             }
 
-            nextFireTime = Time.time + VehicleCombatRules.RollFireDelaySeconds(definition);
+            nextFireTime = Time.time + VehicleCombatRules.RollFireCycleDelaySeconds(definition, fireStaggerSeed);
         }
 
         private LockableTarget SelectCombatTarget(out bool useAirCombat)
@@ -233,10 +247,44 @@ namespace F89.Enemies
             useAirCombat = false;
             ResolvePlayerTargetIfNeeded();
 
-            // UR only: weighted chance to prioritize the player aircraft.
             // US always engages opposing UR units — never the plane.
-            if (definition.IsHostile
-                && playerTarget != null
+            if (!definition.IsHostile)
+            {
+                var friendlyGround = FindClosestGroundTarget();
+                if (friendlyGround != null)
+                {
+                    useAirCombat = false;
+                    return friendlyGround;
+                }
+
+                return null;
+            }
+
+            // UR: no opposing US in ground range → everyone focuses the player aircraft.
+            var groundTarget = FindClosestGroundTarget();
+            if (groundTarget == null)
+            {
+                if (playerTarget != null
+                    && playerTarget.IsAlive
+                    && IsValidAirCombatTarget(playerTarget)
+                    && IsWithinAirRange(playerTarget))
+                {
+                    useAirCombat = true;
+                    return playerTarget;
+                }
+
+                var onlyAir = FindClosestAirTarget();
+                if (onlyAir != null)
+                {
+                    useAirCombat = true;
+                    return onlyAir;
+                }
+
+                return null;
+            }
+
+            // UR with US in range: weighted chance to peel onto the plane, else fight ground.
+            if (playerTarget != null
                 && playerTarget.IsAlive
                 && IsValidAirCombatTarget(playerTarget)
                 && IsWithinAirRange(playerTarget)
@@ -247,21 +295,8 @@ namespace F89.Enemies
                 return playerTarget;
             }
 
-            var airTarget = FindClosestAirTarget();
-            if (airTarget != null)
-            {
-                useAirCombat = true;
-                return airTarget;
-            }
-
-            var groundTarget = FindClosestGroundTarget();
-            if (groundTarget != null)
-            {
-                useAirCombat = false;
-                return groundTarget;
-            }
-
-            return null;
+            useAirCombat = false;
+            return groundTarget;
         }
 
         private void FaceCombatTarget(LockableTarget target)
@@ -340,6 +375,7 @@ namespace F89.Enemies
         {
             lockedCombatTarget = null;
             lockedCombatUsesAir = false;
+            hadValidTargetLastScan = false;
         }
 
         private bool IsValidLockedCombatTarget(LockableTarget target, bool useAirCombat)
@@ -370,6 +406,8 @@ namespace F89.Enemies
             }
 
             return target.IsPlayerAircraft
+                && PlayerAircraftCombatState.IsAirborneForEnemyEngagement(
+                    target.GetComponent<AircraftController>())
                 || target.TargetKind == LockableTargetKind.Air
                 || target.IsFlier;
         }
@@ -424,7 +462,7 @@ namespace F89.Enemies
 
         private LockableTarget FindClosestAirTarget()
         {
-            if (definition.airRangeTics <= 0f)
+            if (definition.airRangeMiles <= 0f)
             {
                 return null;
             }
@@ -440,13 +478,13 @@ namespace F89.Enemies
                     continue;
                 }
 
-                var distanceTics = AirCombatDistanceTics(transform.position, target);
-                if (distanceTics > definition.airRangeTics || distanceTics >= closestDistance)
+                var distanceMiles = AirCombatDistanceMiles(transform.position, target);
+                if (distanceMiles > definition.airRangeMiles || distanceMiles >= closestDistance)
                 {
                     continue;
                 }
 
-                closestDistance = distanceTics;
+                closestDistance = distanceMiles;
                 closest = target;
             }
 
@@ -498,15 +536,15 @@ namespace F89.Enemies
 
         private bool IsWithinAirRange(LockableTarget target)
         {
-            if (target == null || definition.airRangeTics <= 0f)
+            if (target == null || definition.airRangeMiles <= 0f)
             {
                 return false;
             }
 
-            return AirCombatDistanceTics(transform.position, target) <= definition.airRangeTics;
+            return AirCombatDistanceMiles(transform.position, target) <= definition.airRangeMiles;
         }
 
-        private float AirCombatDistanceTics(Vector3 from, LockableTarget target)
+        private float AirCombatDistanceMiles(Vector3 from, LockableTarget target)
         {
             var to = target.transform.position;
             if (target.IsPlayerAircraft || target.TargetKind == LockableTargetKind.Air || target.IsFlier)
@@ -515,7 +553,8 @@ namespace F89.Enemies
                 to.y = 0f;
             }
 
-            return AirDistanceTics(from, to);
+            var ticSize = flightProfile != null ? flightProfile.ticSizeWorldUnits : 1f;
+            return CombatThreatRange.DistanceMiles(from, to, worldMap, ticSize);
         }
 
         private void ResolvePlayerTargetIfNeeded()
@@ -534,12 +573,6 @@ namespace F89.Enemies
             var ticSize = flightProfile != null ? flightProfile.ticSizeWorldUnits : 1f;
             a.y = 0f;
             b.y = 0f;
-            return Vector3.Distance(a, b) / ticSize;
-        }
-
-        private float AirDistanceTics(Vector3 a, Vector3 b)
-        {
-            var ticSize = flightProfile != null ? flightProfile.ticSizeWorldUnits : 1f;
             return Vector3.Distance(a, b) / ticSize;
         }
 

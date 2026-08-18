@@ -108,9 +108,6 @@ namespace F89.LandCombat
             Color overlayColor,
             bool scaleFonts)
         {
-            var levelFontSize = Scale(Mathf.Max(8, baseNameFontSize), scaleFonts);
-            var level = LandTechLevelRules.GetTechLevel(item);
-
             var overlay = GetOverlayTexture(slot);
             if (overlay != null)
             {
@@ -137,19 +134,47 @@ namespace F89.LandCombat
                 GUI.Label(cell, GetFallbackCategoryLabel(slot), categoryStyle);
             }
 
-            // Level sits in the free corner on the rarity tile — match overlay ink (black on L1).
-            var levelColor = overlayColor;
+            // Level and X for R&D (Experimental) gear in the top-right corner; stats stay in tooltips.
+            DrawTopRightBadge(cell, item, catalog, overlayColor, scaleFonts, baseNameFontSize);
+        }
 
+        private static void DrawTopRightBadge(
+            Rect cell,
+            LandGearInstance item,
+            LandItemCatalog catalog,
+            Color ink,
+            bool scaleFonts,
+            int baseNameFontSize)
+        {
+            var levelFontSize = Scale(Mathf.Max(8, baseNameFontSize), scaleFonts);
+            var detailFontSize = Mathf.Max(6, levelFontSize - 2);
+            var lineHeight = levelFontSize + 1f;
+            var detailLineHeight = detailFontSize + 1f;
+            var inset = 2f;
+            var badgeWidth = cell.width - inset * 2f + 1f;
+            var badgeX = cell.x + inset;
+            var y = cell.y + 1f;
+
+            var level = LandTechLevelRules.GetTechLevel(item);
             var levelStyle = HudStyleFactory.CreateLabel(
                 levelFontSize,
                 FontStyle.Bold,
                 TextAnchor.UpperRight,
-                levelColor,
+                ink,
                 wordWrap: false);
-            var inset = 2f;
-            // Extend the right edge two pixels so the level number sits 2px farther right.
-            var levelRect = new Rect(cell.x + inset, cell.y + 1f, cell.width - inset * 2f + 1f, levelFontSize + 4f);
-            GUI.Label(levelRect, level.ToString(), levelStyle);
+            GUI.Label(new Rect(badgeX, y, badgeWidth, lineHeight), level.ToString(), levelStyle);
+            y += lineHeight;
+
+            if (LandItemCombatStatsResolver.IsResearchUnlockedGear(item, catalog))
+            {
+                var categoryStyle = HudStyleFactory.CreateLabel(
+                    detailFontSize,
+                    FontStyle.Bold,
+                    TextAnchor.UpperRight,
+                    ink,
+                    wordWrap: false);
+                GUI.Label(new Rect(badgeX, y, badgeWidth, detailLineHeight), "X", categoryStyle);
+            }
         }
 
         private static Color InvertInk(Color overlayColor) =>

@@ -19,7 +19,7 @@ namespace F89.Testing
         private const int CarrierCount = 1;
         private const int ExpectedBaseCount = CatalogBaseCount + LandBaseCount - ExcludedLandBaseCount
             + FixedCarrierRelativeBaseCount + FixedAnchorRelativeBaseCount + CarrierCount;
-        private const int BasesLayoutVersion = 58;
+        private const int BasesLayoutVersion = 62;
         private const float FixedRelativeBaseOffsetMiles = 200f;
         private const float AnchorRelativeBaseSnapSearchMiles = 45f;
         private const float SolidIceSnapSearchMiles = AntarcticaLandMask.BasePlacementSnapSearchMiles;
@@ -87,7 +87,7 @@ namespace F89.Testing
                     AntarcticaOutpostState.ApplyFriendlyControlToAllBases();
                     LogCarrierReadyState();
                     LogOutpostSiteIdSystem();
-                    EnsureOpSouthPlatoonIfPlayerPresent();
+                    EnsureActiveCampaignMissionPlatoon();
                     return;
                 }
 
@@ -112,15 +112,15 @@ namespace F89.Testing
             AntarcticaOutpostState.ApplyFriendlyControlToAllBases();
             LogCarrierReadyState();
             LogOutpostSiteIdSystem();
-            EnsureOpSouthPlatoonIfPlayerPresent();
+            EnsureActiveCampaignMissionPlatoon();
         }
 
         public static void EnsureMissionPlatoonsIfNeeded(AircraftController player)
         {
-            EnsureOpSouthPlatoonIfPlayerPresent(player);
+            EnsureActiveCampaignMissionPlatoon(player);
         }
 
-        private static void EnsureOpSouthPlatoonIfPlayerPresent(AircraftController preferredPlayer = null)
+        private static void EnsureActiveCampaignMissionPlatoon(AircraftController preferredPlayer = null)
         {
             if (FlightGroundReturnService.ShouldSkipCarrierSpawn()
                 || LandMissionHandoffState.IsRunwayDeckSortie())
@@ -128,27 +128,67 @@ namespace F89.Testing
                 return;
             }
 
+            if (!GamePlayModeState.IsCampaign)
+            {
+                return;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            if (save == null
+                || !CampaignMissionSiteCatalog.TryGetCurrentSiteCode(save, out var siteCode))
+            {
+                return;
+            }
+
+            var player = preferredPlayer ?? Object.FindAnyObjectByType<AircraftController>();
+            if (player == null)
+            {
+                return;
+            }
+
+            if (CampaignMissionSiteCatalog.IsWaypointSite(siteCode))
+            {
+                CampaignWaypointVehicleSpawner.EnsureActiveWaypointPlatoon(player, siteCode);
+                return;
+            }
+
+            // Past outpost missions that are already cleared/friendly must never refill.
+            if (CampaignMissionObjectiveState.TryResolveOutpostBaseName(siteCode, out var baseName)
+                && (AntarcticaOutpostState.IsFriendlyOccupied(baseName)
+                    || OutpostPrimaryObjective.AreAirObjectivesDestroyed(baseName)))
+            {
+                var outpost = FindLandOutpostBySiteCode(siteCode);
+                if (outpost != null)
+                {
+                    OutpostVehicleSpawner.EnsureEmptyPlatoonMarker(outpost);
+                }
+
+                return;
+            }
+
+            OutpostVehicleSpawner.EnsureSiteEnemyPlatoon(siteCode, player);
+        }
+
+        private static AntarcticaBase FindLandOutpostBySiteCode(string siteCode)
+        {
+            if (string.IsNullOrWhiteSpace(siteCode))
+            {
+                return null;
+            }
+
             var outposts = Object.FindObjectsByType<AntarcticaBase>(FindObjectsSortMode.None);
             for (var i = 0; i < outposts.Length; i++)
             {
                 var outpost = outposts[i];
                 if (outpost != null
-                    && string.Equals(
-                        outpost.SiteCode,
-                        OutpostVehicleSpawner.OpSouthSiteCode,
-                        System.StringComparison.OrdinalIgnoreCase)
-                    && OutpostFlightPlatoonState.ShouldSkipPlatoonRespawn(outpost))
+                    && outpost.SiteKind == BaseSiteKind.Land
+                    && string.Equals(outpost.SiteCode, siteCode, System.StringComparison.OrdinalIgnoreCase))
                 {
-                    OutpostVehicleSpawner.EnsureEmptyPlatoonMarker(outpost);
-                    return;
+                    return outpost;
                 }
             }
 
-            var player = preferredPlayer ?? Object.FindAnyObjectByType<AircraftController>();
-            if (player != null)
-            {
-                OutpostVehicleSpawner.EnsureOpSouthEnemyPlatoon(player);
-            }
+            return null;
         }
 
         private static void EnsureOutpostBuildingClusters(float worldUnitsPerMile, FlightProfile profile)
@@ -470,35 +510,58 @@ namespace F89.Testing
             worldPosition = Vector3.zero;
             worldRotation = Quaternion.identity;
 
-            if (FlightGroundReturnService.ShouldSkipCarrierSpawn())
+            if (FlightGroundReturnService.TryGetPendingReturnSpawn(out worldPosition, out worldRotation))
             {
-                return FlightGroundReturnService.TryGetPendingReturnSpawn(out worldPosition, out worldRotation);
+                return true;
             }
 
-            var worldUnitsPerMile = ResolveWorldUnitsPerMile(worldMap, profile);
-            if (worldUnitsPerMile <= 0f)
+            if (LandingMileFlagState.HasActiveFlag
+                && LandingMileFlagState.TryResolveWorldPosition(out worldPosition, out worldRotation))
             {
-                Debug.LogWarning("F-89: Invalid world scale — player spawn left at current position.");
+                return true;
+            }
+
+            var pendingOutpost = FlightMissionLaunchState.LaunchFromOutpostName;
+            if (!string.IsNullOrWhiteSpace(pendingOutpost)
+                && TryGetOutpostSpawn(worldMap, profile, pendingOutpost, out worldPosition, out worldRotation))
+            {
+                return true;
+            }
+
+            if (MissionLaunchOrigin.TryResolveLaunchOutpost(CharacterSessionState.ActiveSave, out var savedOutpost)
+                && TryGetOutpostSpawn(worldMap, profile, savedOutpost, out worldPosition, out worldRotation))
+            {
+                return true;
+            }
+
+            // Ocean CV deck spawn is handled only by FlightMissionStartBootstrap for explicit carrier sorties.
+            return false;
+        }
+
+        private static bool TryGetOutpostSpawn(
+            WorldMapConfig worldMap,
+            FlightProfile profile,
+            string outpostName,
+            out Vector3 worldPosition,
+            out Quaternion worldRotation)
+        {
+            worldPosition = Vector3.zero;
+            worldRotation = Quaternion.identity;
+            if (string.IsNullOrWhiteSpace(outpostName))
+            {
                 return false;
             }
 
-            if (!TryResolveCarrierMiles(out var carrierMiles))
+            if (OutpostRunwayLanding.TryGetRunwaySpawn(outpostName, out worldPosition, out worldRotation)
+                || OutpostRunwayLanding.TryGetLayoutMilesSpawn(outpostName, out worldPosition, out worldRotation))
             {
-                Debug.LogWarning("F-89: Carrier base not found — player spawn left at current position.");
-                return false;
+                worldPosition.y = 0f;
+                return true;
             }
 
-            // Keep CV transform aligned with its mile source of truth, then spawn the plane
-            // on that exact point so both share the same tactical-map grid square.
-            var carrier = FindCarrierBase();
-            if (carrier != null)
-            {
-                carrier.SetPositionMiles(carrierMiles, worldUnitsPerMile);
-            }
-
-            worldPosition = MilesToWorld(carrierMiles, worldMap, profile);
-            worldRotation = ResolveSpawnRotation(worldPosition);
-            return true;
+            _ = worldMap;
+            _ = profile;
+            return false;
         }
 
         public static Vector2 GetLockedCarrierPositionMiles()

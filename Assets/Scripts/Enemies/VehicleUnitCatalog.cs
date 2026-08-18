@@ -93,15 +93,28 @@ namespace F89.Enemies
 
         public VehicleUnitDefinition GetUrVehicleByLevel(int level)
         {
-            return GetUrUnitByLevel(level, troopsOnly: false);
+            return GetUnitByLevel(VehicleUnitDesignation.UR, level, troopsOnly: false);
         }
 
         public VehicleUnitDefinition GetUrTroopByLevel(int level)
         {
-            return GetUrUnitByLevel(level, troopsOnly: true);
+            return GetUnitByLevel(VehicleUnitDesignation.UR, level, troopsOnly: true);
         }
 
-        private VehicleUnitDefinition GetUrUnitByLevel(int level, bool troopsOnly)
+        public VehicleUnitDefinition GetUsVehicleByLevel(int level)
+        {
+            return GetUnitByLevel(VehicleUnitDesignation.US, level, troopsOnly: false);
+        }
+
+        public VehicleUnitDefinition GetUsTroopByLevel(int level)
+        {
+            return GetUnitByLevel(VehicleUnitDesignation.US, level, troopsOnly: true);
+        }
+
+        private VehicleUnitDefinition GetUnitByLevel(
+            VehicleUnitDesignation designation,
+            int level,
+            bool troopsOnly)
         {
             if (units == null)
             {
@@ -112,7 +125,7 @@ namespace F89.Enemies
             {
                 var unit = units[i];
                 if (unit == null
-                    || unit.designation != VehicleUnitDesignation.UR
+                    || unit.designation != designation
                     || unit.vehicleLevel != level
                     || unit.isTroop != troopsOnly)
                 {

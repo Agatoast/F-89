@@ -35,5 +35,31 @@ namespace F89.Core
 
             return snapshot.FuelNormalized > 0.001f;
         }
+
+        /// <summary>
+        /// Older snapshots may only store FuelNormalized; hydrate tank gallons for restore paths.
+        /// </summary>
+        public static void ResolveTankGallons(in LandSortieSnapshot snapshot, out float leftGallons, out float rightGallons)
+        {
+            leftGallons = snapshot.LeftTankGallons;
+            rightGallons = snapshot.RightTankGallons;
+            if (leftGallons + rightGallons > UsableFuelGallonsEpsilon)
+            {
+                return;
+            }
+
+            if (snapshot.FuelNormalized <= 0.001f)
+            {
+                leftGallons = 0f;
+                rightGallons = 0f;
+                return;
+            }
+
+            var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+            var gallonsPerTank = worldMap != null ? worldMap.fuelGallonsPerTank : 1350f;
+            var filledPerTank = gallonsPerTank * Mathf.Clamp01(snapshot.FuelNormalized);
+            leftGallons = filledPerTank;
+            rightGallons = filledPerTank;
+        }
     }
 }

@@ -63,6 +63,10 @@ namespace F89.LandCombat
         public static int ClampLevel(int level) =>
             Mathf.Clamp(level, MinLevel, MaxLevel);
 
+        /// <summary>Catalog/design troop levels are doubled for mission combat difficulty.</summary>
+        public static int ScaleMissionTroopLevel(int designLevel) =>
+            ClampLevel(designLevel * 2);
+
         public static int GetDamageResistance(int level)
         {
             level = ClampLevel(level);

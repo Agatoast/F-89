@@ -17,6 +17,7 @@ namespace F89.Weapons
         private bool unlimitedAmmo;
         private Gau27FireSound fireSound;
 
+        public Gau27aWeaponConfig Config => config;
         public float CrosshairDistanceMiles => crosshairDistanceMiles;
         public int RoundsRemaining => roundsRemaining;
         public Vector3 CrosshairWorldPoint { get; private set; }
@@ -28,9 +29,20 @@ namespace F89.Weapons
             config = weaponConfig;
             aircraft = aircraftController;
             aimCamera = camera;
-            fireSound = GetComponent<Gau27FireSound>();
+            EnsureFireSound();
             roundsRemaining = config != null ? config.startingRounds : 0;
             ResetCrosshairDistance();
+        }
+
+        private void EnsureFireSound()
+        {
+            if (fireSound != null)
+            {
+                return;
+            }
+
+            Gau27FireSound.EnsureOn(gameObject);
+            fireSound = GetComponent<Gau27FireSound>();
         }
 
         public void SetRounds(int rounds)
@@ -124,10 +136,10 @@ namespace F89.Weapons
                     ticSize,
                     out var worldPoint))
             {
-                UpdateCrosshairScreenPoint();
                 return;
             }
 
+            // Cursor stays inside the 30° ogive — screen position is the clamped aim.
             CrosshairWorldPoint = worldPoint;
             crosshairDistanceMiles = CombatThreatRange.DistanceMiles(
                 aircraft.transform.position,
@@ -161,17 +173,16 @@ namespace F89.Weapons
             UpdateCrosshairScreenPoint();
         }
 
-        public void TryFire(float accuracyMultiplier, bool fireHeld)
+        public void TryFire(float accuracyMultiplier, bool fireHeld, LockableTarget lockedTarget = null)
         {
+            // Audio is owned by PlayerWeaponController from the physical trigger hold.
             if (!fireHeld || config == null || aircraft == null)
             {
-                fireSound?.NotifyFireReleased();
                 return;
             }
 
             if (!unlimitedAmmo && roundsRemaining <= 0)
             {
-                fireSound?.NotifyFireReleased();
                 return;
             }
 
@@ -208,9 +219,9 @@ namespace F89.Weapons
                 aircraft.WorldMap,
                 spawnPoint,
                 fireDestination,
-                GetHorizontalForward() * aircraft.CurrentSpeed);
-
-            fireSound?.OnRoundFired();
+                GetHorizontalForward() * aircraft.CurrentSpeed,
+                lockedTarget,
+                aircraft.transform);
         }
 
         public LockableTarget GetTargetUnderCrosshair()

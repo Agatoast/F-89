@@ -9,11 +9,8 @@ namespace F89.Core
 {
 
     /// <summary>
-
-    /// Persists the exact tactical-map mile coordinate where the aircraft landed.
-
-    /// Consumed on VTOL takeoff after ground combat, then cleared.
-
+    /// Persists the exact tactical-map mile coordinate where the aircraft landed (open field or sortie return).
+    /// Supersedes the saved last-land base for spawn/VTOL while active. Cleared on VTOL takeoff.
     /// </summary>
 
     public static class LandingMileFlagState
@@ -46,7 +43,11 @@ namespace F89.Core
 
         private static bool restoredFromPrefs;
 
-
+        public static void ForceReloadFromPrefs()
+        {
+            restoredFromPrefs = false;
+            EnsureRestored();
+        }
 
         public static bool HasActiveFlag
 
@@ -87,56 +88,45 @@ namespace F89.Core
         }
 
         public static void SetFromWorldPosition(Vector3 worldPosition, Quaternion rotation)
-
         {
-
-            EnsureRestored();
-
-            var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
-
-            var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
-
-            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
-
-            var worldUnitsPerMile = worldMap != null ? worldMap.GetWorldUnitsPerMile(ticSize) : 0f;
-
-            if (worldUnitsPerMile <= 0f)
-
-            {
-
-                Debug.LogWarning("[F-89] Landing mile flag not saved — invalid world scale.");
-
-                return;
-
-            }
-
-
-
-            var miles = CampaignMapCoordinates.WorldToMiles(worldPosition, worldMap, ticSize);
-
-            active = new LandingMileFlagData
-
-            {
-
-                IsValid = true,
-
-                MilesX = miles.x,
-
-                MilesY = miles.y,
-
-                RotationY = rotation.eulerAngles.y
-
-            };
-
-            Save();
-
-            Debug.Log(
-
-                $"[F-89] Landing mile flag set at ({miles.x:0.0}, {miles.y:0.0}) MI.");
-
+            SetFromLandingSquare(worldPosition, rotation);
         }
 
+        /// <summary>
+        /// Records the 1 MI grid square where the aircraft landed. All VTOL takeoffs use this until cleared.
+        /// </summary>
+        public static void SetFromLandingSquare(Vector3 worldPosition, Quaternion rotation)
+        {
+            EnsureRestored();
+            var worldMap = Resources.Load<WorldMapConfig>("F89_WorldMapConfig");
+            var profile = Resources.Load<FlightProfile>("F89_DefaultFlightProfile");
+            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
+            if (worldMap != null
+                && ticSize > 0f
+                && CampaignMapCoordinates.TryWorldToGridCell(
+                    worldPosition,
+                    worldMap,
+                    ticSize,
+                    out var gridCell))
+            {
+                var center = CampaignMapCoordinates.GridCellToWorld(gridCell, worldMap, ticSize);
+                var miles = CampaignMapCoordinates.WorldToMiles(center, worldMap, ticSize);
+                active = new LandingMileFlagData
+                {
+                    IsValid = true,
+                    MilesX = miles.x,
+                    MilesY = miles.y,
+                    RotationY = rotation.eulerAngles.y
+                };
+                Save();
+                Debug.Log(
+                    $"[F-89] Landing mile flag set at square {CampaignMapCoordinates.FormatMilesLabel(miles)}.");
+                return;
+            }
 
+            var fallbackMiles = CampaignMapCoordinates.WorldToMiles(worldPosition, worldMap, ticSize);
+            SetFromMiles(fallbackMiles, rotation.eulerAngles.y);
+        }
 
         public static void ApplyToSnapshot(ref LandSortieSnapshot snapshot)
 

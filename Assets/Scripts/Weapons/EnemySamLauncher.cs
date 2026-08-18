@@ -33,7 +33,9 @@ namespace F89.Weapons
                 || worldMap == null
                 || flightProfile == null
                 || playerTarget == null
-                || !playerTarget.IsAlive)
+                || !playerTarget.IsAlive
+                || !F89.Flight.PlayerAircraftCombatState.IsAirborneForEnemyEngagement(
+                    playerTarget.GetComponent<AircraftController>()))
             {
                 return;
             }

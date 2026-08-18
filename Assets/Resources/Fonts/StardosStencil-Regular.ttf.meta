@@ -4,7 +4,7 @@ TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
   fontSize: 16
-  forceReadable: 0
+  forceReadable: 1
   includeFontData: 1
   asdfEncoding: 1
   fontNames:

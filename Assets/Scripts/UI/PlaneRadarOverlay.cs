@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using F89.Core;
 using F89.Flight;
 using F89.Weapons;
 using UnityEngine;
@@ -178,13 +179,14 @@ namespace F89.UI
 
             var bezelLayout = GetBezelLayout();
             var layout = MfdLayout.From(bezelLayout);
-            var center = layout.ScopeCenter;
-            var displayRadius = layout.ScopeRadius;
 
             if (Event.current.type != EventType.Repaint)
             {
                 return;
             }
+
+            var center = layout.ScopeCenter;
+            var displayRadius = layout.ScopeRadius;
 
             RebuildBlipLayouts(center, displayRadius);
 
@@ -206,6 +208,7 @@ namespace F89.UI
 
             GUI.depth = -100;
             DrawMfdLabels(layout, FlightHudColorPalette.Mfd);
+
             GUI.depth = previousDepth;
             GUI.color = Color.white;
         }

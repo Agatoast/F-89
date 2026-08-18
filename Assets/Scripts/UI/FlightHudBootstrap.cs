@@ -38,7 +38,8 @@ namespace F89.UI
             EnsureAirspeedTape(widgetRoot, controller);
             EnsureStoresPanel(widgetRoot, weapons, flares);
             EnsureFuelGauge(widgetRoot, controller);
-            EnsureWeaponReticle(widgetRoot, weapons, input);
+            EnsureDamageIndicator(widgetRoot, controller);
+            EnsureWeaponReticle(widgetRoot, weapons, input, controller);
             EnsureTargetDiamonds(widgetRoot, weapons, controller, camera);
             EnsureLongRangeRadar(widgetRoot, controller, lockController, weapons);
             EnsureShortRangeRadar(widgetRoot, controller, lockController, weapons);
@@ -133,13 +134,20 @@ namespace F89.UI
             gauge.Configure(controller);
         }
 
+        private static void EnsureDamageIndicator(Transform widgetRoot, AircraftController controller)
+        {
+            var indicator = EnsureHudWidget<AircraftDamageIndicatorHud>(widgetRoot, "AircraftDamageIndicatorHud");
+            indicator.Configure(controller);
+        }
+
         private static void EnsureWeaponReticle(
             Transform widgetRoot,
             PlayerWeaponController weapons,
-            PlayerAircraftInput input)
+            PlayerAircraftInput input,
+            AircraftController controller)
         {
             var reticle = EnsureHudWidget<WeaponReticleHud>(widgetRoot, "WeaponReticleHud");
-            reticle.Configure(weapons, input);
+            reticle.Configure(weapons, input, controller);
         }
 
         private static void EnsureTargetDiamonds(

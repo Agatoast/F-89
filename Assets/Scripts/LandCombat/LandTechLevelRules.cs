@@ -17,8 +17,33 @@ namespace F89.LandCombat
                 return 0;
             }
 
-            if (item.DefinitionId == TechZeroDefinitionId
-                || IsBasicLoadoutItem(item))
+            if (item.DefinitionId == TechZeroDefinitionId)
+            {
+                return 0;
+            }
+
+            // US Basic Loadout / R&D ladders are authoritative for M- and X- gear.
+            if (LandUsWeaponCatalog.TryGetByDefinitionId(item.DefinitionId, out var usWeapon))
+            {
+                return usWeapon.TechLevel;
+            }
+
+            if (LandUsGearCatalog.TryGetByDefinitionId(item.DefinitionId, out var usGear))
+            {
+                return usGear.TechLevel;
+            }
+
+            if (LandUrWeaponCatalog.TryGetByDefinitionId(item.DefinitionId, out var urWeapon))
+            {
+                return urWeapon.TechLevel;
+            }
+
+            if (LandUrGearCatalog.TryGetByDefinitionId(item.DefinitionId, out var urGear))
+            {
+                return urGear.TechLevel;
+            }
+
+            if (IsBasicLoadoutItem(item))
             {
                 return 0;
             }

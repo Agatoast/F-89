@@ -10,7 +10,7 @@ namespace F89.UI
     {
         private const string BackgroundResourcePath = "SelectionPage/selection_page";
         private const string PortraitFrameResourcePath = "CharacterPage/portrait_frame";
-        private const string DefaultCharacterRank = "2nd LT";
+        private const string DefaultCharacterRank = "2LT";
 
         private readonly List<CharacterSaveData> visibleSaves = new List<CharacterSaveData>();
 
@@ -31,6 +31,7 @@ namespace F89.UI
         {
             CharacterPortraitService.ClearPresetCache();
             MilitaryMedalService.ClearCache();
+            MilitaryRibbonDeviceService.ClearCache();
             backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
             portraitFrameTexture = Resources.Load<Texture2D>(PortraitFrameResourcePath);
 
@@ -104,6 +105,7 @@ namespace F89.UI
             DrawCharacterDossier();
             DrawNewCharacterButton();
             DrawDeleteButton();
+            DrawBackButton();
             DrawSelectButton();
             MilitaryAwardTooltipUi.Draw();
         }
@@ -296,6 +298,18 @@ namespace F89.UI
             }
         }
 
+        private void DrawBackButton()
+        {
+            var rect = SelectionPageLayout.GetBackButtonRect();
+            if (!StartPageMenuStyles.DrawMenuButton(rect, "BACK"))
+            {
+                return;
+            }
+
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(GameScenes.StartPage);
+        }
+
         private void DrawSelectButton()
         {
             var save = FindSelectedSave();
@@ -321,6 +335,13 @@ namespace F89.UI
             }
 
             CharacterSessionState.ActiveSave = save;
+            GameplaySessionBootstrap.ClearStalePersistedSession();
+            MissionScoreState.HydrateFromSave(save);
+            if (GamePlayModeState.IsCampaign)
+            {
+                CampaignMissionProgress.EnsureInitialized(save);
+                LandBossMissionAssignment.SyncAssignmentToCampaignMission(save);
+            }
             CharacterGearSession.Bind(save, forceReload: true);
             CharacterSaveRepository.SetLastSelectedSaveId(save.Id);
             if (!save.IsKilledInAction && !save.IsCourtMartialed)
@@ -469,7 +490,7 @@ namespace F89.UI
             visibleSaves.Clear();
             foreach (var save in CharacterSaveRepository.Saves)
             {
-                if (save != null)
+                if (CharacterPlayModeRules.IsVisibleInCurrentMode(save))
                 {
                     visibleSaves.Add(save);
                 }
@@ -483,7 +504,7 @@ namespace F89.UI
             visibleSaves.Clear();
             foreach (var save in CharacterSaveRepository.Saves)
             {
-                if (save != null)
+                if (CharacterPlayModeRules.IsVisibleInCurrentMode(save))
                 {
                     visibleSaves.Add(save);
                 }
@@ -497,7 +518,8 @@ namespace F89.UI
                 hasInitializedSelection = true;
 
                 var lastSelectedId = CharacterSaveRepository.GetLastSelectedSaveId();
-                if (!string.IsNullOrEmpty(lastSelectedId) && CharacterSaveRepository.FindById(lastSelectedId) != null)
+                if (!string.IsNullOrEmpty(lastSelectedId)
+                    && visibleSaves.Exists(save => save != null && save.Id == lastSelectedId))
                 {
                     selectedSaveId = lastSelectedId;
                     pendingScrollToSelected = true;
@@ -505,7 +527,8 @@ namespace F89.UI
                 }
             }
 
-            if (FindSelectedSave() != null)
+            if (!string.IsNullOrEmpty(selectedSaveId)
+                && visibleSaves.Exists(save => save != null && save.Id == selectedSaveId))
             {
                 return;
             }
@@ -515,7 +538,21 @@ namespace F89.UI
 
         private CharacterSaveData FindSelectedSave()
         {
-            return CharacterSaveRepository.FindById(selectedSaveId);
+            if (string.IsNullOrEmpty(selectedSaveId))
+            {
+                return null;
+            }
+
+            for (var i = 0; i < visibleSaves.Count; i++)
+            {
+                var save = visibleSaves[i];
+                if (save != null && save.Id == selectedSaveId)
+                {
+                    return save;
+                }
+            }
+
+            return null;
         }
 
         private static void DrawDossierHighestAward(CharacterSaveData save)

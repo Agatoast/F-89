@@ -162,10 +162,10 @@ namespace F89.UI
 
             if (slot == LandEquipmentSlot.Weapon)
             {
-                if (catalog.TryGetWeapon(item.DefinitionId, out var weapon))
+                if (LandItemCombatStatsResolver.TryGetWeaponStats(item, catalog, out var damage, out var range))
                 {
-                    attributes.Add($"{LandItemStatFormatter.FormatStatLabel(LandItemStat.Damage)} {weapon.Damage:0}");
-                    attributes.Add($"{LandItemStatFormatter.FormatStatLabel(LandItemStat.Range)} {weapon.Range:0}");
+                    attributes.Add($"{LandItemStatFormatter.FormatStatLabel(LandItemStat.Damage)} {damage:0}");
+                    attributes.Add($"{LandItemStatFormatter.FormatStatLabel(LandItemStat.Range)} {range:0}");
                 }
 
                 return true;

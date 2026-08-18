@@ -29,17 +29,19 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _LandNoiseScale: 0.0035
+    - _LandNoiseScale: 0.09
     - _MapAspectWidthOverHeight: 1.223
     - _MapHalfSizeWorld: 30000
-    - _SatelliteBlend: 1
+    - _SatelliteBlend: 0
     - _WaveScale: 0.012
     - _WaveSpeed: 0.4
     m_Colors:
-    - _IceBright: {r: 0.9, g: 0.93, b: 0.96, a: 1}
-    - _IceCrack: {r: 0.48, g: 0.56, b: 0.66, a: 1}
-    - _IceMid: {r: 0.78, g: 0.83, b: 0.88, a: 1}
-    - _IceShadow: {r: 0.62, g: 0.69, b: 0.78, a: 1}
+    - _IceBright: {r: 0.93, g: 0.95, b: 0.98, a: 1}
+    - _IceBlue: {r: 0.72, g: 0.82, b: 0.92, a: 1}
+    - _IceCrack: {r: 0.52, g: 0.6, b: 0.72, a: 1}
+    - _IceMid: {r: 0.82, g: 0.86, b: 0.91, a: 1}
+    - _IceShadow: {r: 0.68, g: 0.74, b: 0.82, a: 1}
+    - _RockTint: {r: 0.58, g: 0.56, b: 0.54, a: 1}
     - _OceanDeep: {r: 0.239, g: 0.486, b: 0.8, a: 1}
     - _OceanHighlight: {r: 0.22, g: 0.48, b: 0.62, a: 1}
     - _OceanShallow: {r: 0.1, g: 0.34, b: 0.52, a: 1}

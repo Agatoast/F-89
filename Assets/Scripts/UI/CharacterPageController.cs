@@ -21,6 +21,7 @@ namespace F89.UI
 
         private void Start()
         {
+            PilotRankInsigniaService.ClearCache();
             backgroundTexture = Resources.Load<Texture2D>(BackgroundResourcePath);
             paperdollTexture = Resources.Load<Texture2D>(PaperdollResourcePath);
             topSecretFolderTexture = Resources.Load<Texture2D>(TopSecretFolderResourcePath);
@@ -60,6 +61,7 @@ namespace F89.UI
         {
             MilitaryAwardTooltipUi.BeginFrame();
             LandItemTooltipUi.BeginFrame();
+            CharacterPageKillFolderUi.BeginFrame();
 
             var save = CharacterSessionState.ActiveSave;
             var isCareerMemorial = save != null && (save.IsKilledInAction || save.IsCourtMartialed);
@@ -98,6 +100,7 @@ namespace F89.UI
             }
 
             DrawPortrait(save);
+            DrawKillFolders(save);
             DrawScoreRows(save);
             DrawKillFolderLabels();
 
@@ -120,6 +123,7 @@ namespace F89.UI
             }
 
             MilitaryAwardTooltipUi.Draw();
+            CharacterPageKillFolderUi.DrawBossPortraitHoverPreview();
         }
 
         private static void DrawReturnToSavePageButton()
@@ -226,6 +230,19 @@ namespace F89.UI
         private static void DrawMissionBriefButton()
         {
             var rect = CharacterPageLayout.GetMissionBriefButtonRect();
+            if (GamePlayModeState.IsFreeFlight)
+            {
+                if (!StartPageMenuStyles.DrawMenuButton(rect, "TAKE OFF"))
+                {
+                    return;
+                }
+
+                CharacterGearSession.PersistActive();
+                CharacterLoadoutNavState.MarkEnteredFromMissionBrief();
+                SceneManager.LoadScene(GameScenes.CharacterLoadout);
+                return;
+            }
+
             if (!StartPageMenuStyles.DrawMenuButton(rect, "MISSION BRIEF"))
             {
                 return;
@@ -276,7 +293,7 @@ namespace F89.UI
             CharacterPageGearUi.DrawResearchAndDevelopmentSlots();
             GUI.Label(
                 CharacterPageLayout.GetResearchAndDevelopmentFooterRect(),
-                "Same or higher tech level UR items are destroyed and add 0.5% to R&D chance to create a new item after next mission. Maximum 30%",
+                $"Same or higher tech level UR gear and weapons are destroyed and add {LandResearchService.ChancePerItemPercent:0.#}% to R&D chance to create a new item after next mission. Maximum {LandResearchService.MaxChancePercent:0.#}%",
                 CharacterPageStyles.ResearchFooterStyle);
         }
 
@@ -284,6 +301,10 @@ namespace F89.UI
         {
             DrawNameBar(save);
             DrawRibbonsPanel(save);
+        }
+
+        private void DrawKillFolders(CharacterSaveData save)
+        {
             DrawKillFolder(CharacterPageLayout.GetVehicleKillsRect(), save, troopsFolder: false);
             DrawKillFolder(CharacterPageLayout.GetTroopKillsRect(), save, troopsFolder: true);
         }
@@ -295,9 +316,10 @@ namespace F89.UI
 
         private static void DrawNameBar(CharacterSaveData save)
         {
-            var rect = CharacterPageLayout.GetNameBarRect();
-            var label = save != null ? save.DisplayRankAndName : "NO CHARACTER";
-            GUI.Label(rect, label, CharacterPageStyles.NameBarStyle);
+            CharacterNameBarUi.Draw(
+                CharacterPageLayout.GetNameBarRect(),
+                save,
+                CharacterPageStyles.NameBarStyle);
         }
 
         private static void DrawRibbonsPanel(CharacterSaveData save)
@@ -309,7 +331,7 @@ namespace F89.UI
                 return;
             }
 
-            CharacterPageRibbonUi.DrawRibbons(rect, earnedRibbonIds);
+            CharacterPageRibbonUi.DrawRibbons(rect, earnedRibbonIds, save);
         }
 
         private static void DrawScoreRows(CharacterSaveData save)

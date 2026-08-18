@@ -52,7 +52,7 @@ namespace F89.Core
 
         public string OutpostName;
 
-        /// <summary>When true, ground exit restores the parked friendly-base deck menu instead of auto takeoff.</summary>
+        /// <summary>When true, ground exit restores the parked friendly runway menu instead of immediate takeoff.</summary>
 
         public bool ReturnToRunwayDeck;
 
@@ -73,6 +73,16 @@ namespace F89.Core
         public float LandingMileY;
 
         public float LandingRotationY;
+
+        /// <summary>Non-outpost waypoint secondary landing (WP-NN). Empty for outpost or open-field landings.</summary>
+        public string WaypointSiteCode;
+
+        /// <summary>When true, restore in-flight airspeed after mid-air refuel return.</summary>
+        public bool HasInFlightSpeed;
+
+        public float InFlightSpeedMph;
+
+        public bool InFlightAutopilotActive;
 
 
 

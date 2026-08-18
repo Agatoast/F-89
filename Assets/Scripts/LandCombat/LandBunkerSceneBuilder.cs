@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 namespace F89.LandCombat
 {
-    /// <summary>Builds one of several procedural bunker interiors.</summary>
+    /// <summary>Builds the boss bunker interior — 200 ft command room with terminal solids.</summary>
     public static class LandBunkerSceneBuilder
     {
         public static void BuildIfNeeded()
@@ -15,87 +15,13 @@ namespace F89.LandCombat
                 return;
             }
 
-            var layout = LandBunkerHandoffState.ConsumeLayoutIndex(LandBunkerEntrance.LayoutCount);
-            BuildFloor();
-            BuildLayout(layout);
-            BuildPlayer(Vector2.zero);
-            BuildExitPad(ResolveExitPosition(layout));
-            Debug.Log($"F-89 Bunker: Layout {layout + 1}/{LandBunkerEntrance.LayoutCount} ready.");
-        }
-
-        private static void BuildFloor()
-        {
-            var floor = new GameObject("BunkerFloor");
-            floor.transform.position = new Vector3(0f, 0f, 1f);
-            var renderer = floor.AddComponent<SpriteRenderer>();
-            renderer.sprite = LandPlaceholderArt.GetPixelSquare();
-            renderer.color = new Color(0.12f, 0.12f, 0.14f, 1f);
-            renderer.sortingOrder = -100;
-            floor.transform.localScale = new Vector3(80f, 80f, 1f);
-        }
-
-        private static void BuildLayout(int layoutIndex)
-        {
-            switch (layoutIndex)
-            {
-                case 0:
-                    // Long corridor north-south with side alcoves.
-                    AddWall(new Vector2(-4f, 0f), new Vector2(1.2f, 28f));
-                    AddWall(new Vector2(4f, 0f), new Vector2(1.2f, 28f));
-                    AddWall(new Vector2(-7f, 8f), new Vector2(5f, 1.2f));
-                    AddWall(new Vector2(7f, -6f), new Vector2(5f, 1.2f));
-                    AddWall(new Vector2(0f, 15f), new Vector2(10f, 1.2f));
-                    AddWall(new Vector2(0f, -15f), new Vector2(10f, 1.2f));
-                    break;
-                case 1:
-                    // Open bay with central pillars.
-                    AddWall(new Vector2(0f, 12f), new Vector2(24f, 1.2f));
-                    AddWall(new Vector2(0f, -12f), new Vector2(24f, 1.2f));
-                    AddWall(new Vector2(-12f, 0f), new Vector2(1.2f, 24f));
-                    AddWall(new Vector2(12f, 0f), new Vector2(1.2f, 24f));
-                    AddWall(new Vector2(-4f, 4f), new Vector2(2.2f, 2.2f));
-                    AddWall(new Vector2(4f, -3f), new Vector2(2.2f, 2.2f));
-                    AddWall(new Vector2(5f, 5f), new Vector2(2.2f, 2.2f));
-                    AddWall(new Vector2(-5f, -5f), new Vector2(2.2f, 2.2f));
-                    break;
-                default:
-                    // T-junction chambers.
-                    AddWall(new Vector2(-2.5f, 4f), new Vector2(1.2f, 14f));
-                    AddWall(new Vector2(2.5f, 4f), new Vector2(1.2f, 14f));
-                    AddWall(new Vector2(-8f, -2f), new Vector2(12f, 1.2f));
-                    AddWall(new Vector2(8f, -2f), new Vector2(12f, 1.2f));
-                    AddWall(new Vector2(-14f, -8f), new Vector2(1.2f, 12f));
-                    AddWall(new Vector2(14f, -8f), new Vector2(1.2f, 12f));
-                    AddWall(new Vector2(0f, -14f), new Vector2(28f, 1.2f));
-                    AddWall(new Vector2(0f, 12f), new Vector2(8f, 1.2f));
-                    break;
-            }
-        }
-
-        private static Vector2 ResolveExitPosition(int layoutIndex) =>
-            layoutIndex switch
-            {
-                0 => new Vector2(0f, -13.5f),
-                1 => new Vector2(0f, -10.5f),
-                _ => new Vector2(0f, -12.5f)
-            };
-
-        private static void AddWall(Vector2 position, Vector2 size)
-        {
-            var wall = new GameObject("BunkerWall");
-            wall.transform.position = new Vector3(position.x, position.y, 0.2f);
-            var renderer = wall.AddComponent<SpriteRenderer>();
-            renderer.sprite = LandPlaceholderArt.GetPixelSquare();
-            renderer.color = new Color(0.05f, 0.05f, 0.06f, 1f);
-            renderer.sortingOrder = 2;
-            wall.transform.localScale = new Vector3(size.x, size.y, 1f);
-
-            var body = wall.AddComponent<Rigidbody2D>();
-            body.bodyType = RigidbodyType2D.Static;
-            body.gravityScale = 0f;
-
-            var box = wall.AddComponent<BoxCollider2D>();
-            box.size = Vector2.one;
+            var root = new GameObject("BunkerRoom");
+            LandBunkerFloorLayout.BuildFloorVisual(root.transform);
+            LandBunkerFloorLayout.BuildSolids(root.transform);
+            BuildPlayer(LandBunkerFloorLayout.PlayerSpawn);
+            BuildExitPad(LandBunkerFloorLayout.ExitPadPosition);
+            Debug.Log(
+                $"F-89 Bunker: Command room ready ({LandBunkerFloorLayout.RoomFeet:0} ft square).");
         }
 
         private static void BuildExitPad(Vector2 position)

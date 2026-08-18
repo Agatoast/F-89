@@ -24,7 +24,7 @@ Before implementing or approving any change that touches sortie return, ground t
 
 - `EnsurePlausibleOrCarrier` for **fresh** sortie starts with no pending ground return
 - Carrier deck VTOL launch via `ApplyCarrierDeckStart` / mission launch
-- `ReturnToRunwayDeck` for rearm→loadout→parked deck (not ground TAKE OFF)
+- `ReturnToRunwayDeck` for rearm→loadout→parked friendly runway (not ground TAKE OFF)
 
 ## Key files (guard these)
 

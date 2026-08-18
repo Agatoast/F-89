@@ -2,6 +2,16 @@ namespace F89.Core
 {
     public static class CharacterSessionState
     {
-        public static CharacterSaveData ActiveSave { get; set; }
+        private static CharacterSaveData activeSave;
+
+        public static CharacterSaveData ActiveSave
+        {
+            get => activeSave;
+            set
+            {
+                activeSave = value;
+                BunkerDefenseIntegration.OnActiveSaveChanged(value);
+            }
+        }
     }
 }

@@ -339,12 +339,19 @@ namespace F89.LandCombat
             for (var i = 0; i < enemies.Length; i++)
             {
                 var enemy = enemies[i];
-                if (enemy == null || !enemy.IsAlive)
+                if (enemy == null)
                 {
                     continue;
                 }
 
-                DrawMinimapDotRelative(mapInner, enemy.transform.position, center, half, new Color(0.95f, 0.25f, 0.2f), 5f);
+                if (enemy.IsAlive)
+                {
+                    DrawMinimapDotRelative(mapInner, enemy.transform.position, center, half, new Color(0.95f, 0.25f, 0.2f), 5f);
+                }
+                else if (enemy.IsCorpse)
+                {
+                    DrawMinimapCorpseX(mapInner, enemy.transform.position, center, half, 7f);
+                }
             }
         }
 
@@ -407,24 +414,8 @@ namespace F89.LandCombat
                 return true;
             }
 
-            var plane = LandLandedPlane.Instance;
-            if (plane == null)
-            {
-                bunkerPos = default;
-                return false;
-            }
-
-            var hasSurfaceMission = LandOutpostLandingState.HasActiveOutpost
-                || LandBossAreaState.HasActiveArea
-                || Object.FindAnyObjectByType<LandOutpostGuardMarker>() != null;
-            if (!hasSurfaceMission)
-            {
-                bunkerPos = default;
-                return false;
-            }
-
-            bunkerPos = LandOutpostSurfaceLayout.BunkerPositionFromPlane(plane.WorldPosition);
-            return true;
+            bunkerPos = default;
+            return false;
         }
 
         private static void DrawMinimapDotAtCenter(Rect mapInner, Color color, float size)
@@ -457,6 +448,39 @@ namespace F89.LandCombat
             var y = mapInner.y + ny * mapInner.height;
             GUI.color = color;
             GUI.DrawTexture(new Rect(x - size * 0.5f, y - size * 0.5f, size, size), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+        }
+
+        private static void DrawMinimapCorpseX(
+            Rect mapInner,
+            Vector3 worldPos,
+            Vector3 center,
+            float viewHalf,
+            float size)
+        {
+            var localX = worldPos.x - center.x;
+            var localY = worldPos.y - center.y;
+            if (Mathf.Abs(localX) > viewHalf || Mathf.Abs(localY) > viewHalf)
+            {
+                return;
+            }
+
+            var nx = Mathf.InverseLerp(-viewHalf, viewHalf, localX);
+            var ny = Mathf.InverseLerp(viewHalf, -viewHalf, localY);
+            var cx = mapInner.x + nx * mapInner.width;
+            var cy = mapInner.y + ny * mapInner.height;
+            var half = size * 0.5f;
+            var thickness = Mathf.Max(2f, size * 0.22f);
+            var barRect = new Rect(cx - half, cy - thickness * 0.5f, size, thickness);
+
+            GUI.color = Color.white;
+            var previousMatrix = GUI.matrix;
+            GUIUtility.RotateAroundPivot(45f, new Vector2(cx, cy));
+            GUI.DrawTexture(barRect, Texture2D.whiteTexture);
+            GUI.matrix = previousMatrix;
+            GUIUtility.RotateAroundPivot(-45f, new Vector2(cx, cy));
+            GUI.DrawTexture(barRect, Texture2D.whiteTexture);
+            GUI.matrix = Matrix4x4.identity;
             GUI.color = Color.white;
         }
 

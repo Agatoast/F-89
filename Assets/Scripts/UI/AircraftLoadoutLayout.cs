@@ -152,7 +152,7 @@ namespace F89.UI
         };
 
         public static readonly Vector2 LeftWingTipCenterPx = new Vector2(41f, 262.5f);
-        public static readonly Vector2 RightWingTipCenterPx = new Vector2(984.5f, 285.5f);
+        public static readonly Vector2 RightWingTipCenterPx = new Vector2(985.5f, 285.5f);
 
         /// <summary>
         /// DRAG WEAPON TO HARDPOINT copy, in plane_loadout.png pixels (1024×674).

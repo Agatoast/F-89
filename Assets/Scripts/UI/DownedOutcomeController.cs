@@ -7,7 +7,7 @@ namespace F89.UI
 {
     /// <summary>
     /// DeathScreen / POWScreen / EscapedScreen / FrozenDeath report after ground unconsciousness.
-    /// Frozen death: FrozenDeath → DeathScreen → Main Menu.
+    /// KIA: DeathScreen (or FrozenDeath then KIA) then PurpleHeartAward → character select.
     /// Other outcomes: single page → Main Menu.
     /// </summary>
     public sealed class DownedOutcomeController : MonoBehaviour
@@ -17,6 +17,11 @@ namespace F89.UI
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;
             Time.timeScale = 1f;
+
+            if (LandDownedOutcomeState.CurrentPage == LandDownedPage.PurpleHeartAward)
+            {
+                LandDownedOutcomeState.EnsurePurpleHeartGranted();
+            }
         }
 
         private void Update()
@@ -53,6 +58,11 @@ namespace F89.UI
                 LandDownedOutcomeState.BodyForCurrent(),
                 bodyStyle);
 
+            if (LandDownedOutcomeState.CurrentPage == LandDownedPage.PurpleHeartAward)
+            {
+                DrawPurpleHeartAward();
+            }
+
             var continueWidth = UiFitCanvas.Px(280f);
             var continueHeight = UiFitCanvas.Px(52f);
             var continueRect = new Rect(
@@ -76,6 +86,23 @@ namespace F89.UI
             }
         }
 
+        private static void DrawPurpleHeartAward()
+        {
+            var medalTexture = MilitaryMedalService.GetMedalTexture(MilitaryRibbonIds.PurpleHeart);
+            if (medalTexture == null)
+            {
+                return;
+            }
+
+            var size = UiFitCanvas.Px(180f);
+            var medalRect = new Rect(
+                UiFitCanvas.Rect.x + (UiFitCanvas.Rect.width - size) * 0.5f,
+                UiFitCanvas.NormY(0.52f),
+                size,
+                size * ((float)medalTexture.height / medalTexture.width));
+            GUI.DrawTexture(medalRect, medalTexture, ScaleMode.ScaleToFit, true);
+        }
+
         private static void Continue()
         {
             var outcome = LandDownedOutcomeState.Outcome;
@@ -97,6 +124,12 @@ namespace F89.UI
             }
 
             LandDownedOutcomeState.Clear();
+            if (isKia)
+            {
+                CharacterSessionState.ActiveSave = null;
+                CharacterGearSession.Bind(null);
+            }
+
             Time.timeScale = 1f;
             SceneManager.LoadScene(isKia ? GameScenes.SelectionPage : GameScenes.MainMenu);
         }

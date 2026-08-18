@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using F89.Core;
 using F89.Flight;
 using UnityEngine;
@@ -9,7 +10,7 @@ namespace F89.Weapons
     /// </summary>
     public sealed class GroundUnitAirMissileConfig : ScriptableObject, IMissileWeaponConfig
     {
-        [SerializeField] private float rangeMiles = 20f;
+        private static readonly Dictionary<int, GroundUnitAirMissileConfig> ConfigByDefinitionId = new();        [SerializeField] private float rangeMiles = 20f;
         [SerializeField] private float lockHitChance = 0.5f;
         [SerializeField] private int airDamage = 1;
         [SerializeField] private float speedMilesPerSecond = 0.42f;
@@ -42,39 +43,26 @@ namespace F89.Weapons
             WorldMapConfig worldMap,
             FlightProfile profile)
         {
-            var config = CreateInstance<GroundUnitAirMissileConfig>();
             if (definition == null)
             {
-                return config;
+                return CreateInstance<GroundUnitAirMissileConfig>();
             }
 
+            var definitionId = definition.GetEntityId().GetHashCode();
+            if (ConfigByDefinitionId.TryGetValue(definitionId, out var cached) && cached != null)
+            {
+                return cached;
+            }
+
+            var config = CreateInstance<GroundUnitAirMissileConfig>();
             config.Configure(
                 definition.abbreviation,
-                ResolveAirRangeMiles(definition, worldMap, profile),
+                definition.airRangeMiles,
                 definition.chanceToHitAir,
                 definition.airDamage,
                 ResolveLaunchSpeedMilesPerSecond(definition));
+            ConfigByDefinitionId[definitionId] = config;
             return config;
-        }
-
-        private static float ResolveAirRangeMiles(
-            Enemies.VehicleUnitDefinition definition,
-            WorldMapConfig worldMap,
-            FlightProfile profile)
-        {
-            var ticSize = profile != null ? profile.ticSizeWorldUnits : 1f;
-            if (worldMap == null || definition.airRangeTics <= 0f)
-            {
-                return definition.airRangeTics * ticSize / (20f * ticSize);
-            }
-
-            var worldUnitsPerMile = worldMap.GridSpacingTics * ticSize / worldMap.milesPerGrid;
-            if (worldUnitsPerMile <= 0f)
-            {
-                return 20f;
-            }
-
-            return definition.airRangeTics * ticSize / worldUnitsPerMile;
         }
 
         private static float ResolveLaunchSpeedMilesPerSecond(Enemies.VehicleUnitDefinition definition)

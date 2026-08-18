@@ -58,8 +58,8 @@ namespace F89.Enemies
         public float fireRateMaxSeconds = 4f;
 
         [Header("Air Combat")]
-        [Tooltip("Max targeting range against air units, in tics.")]
-        public float airRangeTics;
+        [Tooltip("Max targeting range against air units, in miles.")]
+        public float airRangeMiles;
 
         [Range(0f, 1f)]
         [Tooltip("Chance to hit a selected air target (includes the player aircraft).")]

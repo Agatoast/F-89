@@ -27,6 +27,7 @@ namespace F89.Core
                 OpenFieldLandingState.Clear();
                 LandMissionCompleteState.Clear();
                 LandMissionHealthState.Clear();
+                FlightInfantryLootState.Clear();
             }
 
             ResetAllOutpostsAndBunkers(force: true);
@@ -66,6 +67,8 @@ namespace F89.Core
             save.EnemyVehiclesKilled = 0;
             save.EnemyTroopsKilled = 0;
 
+            BunkerDefenseIntegration.ResetConsumedMissions(save);
+
             LandBossEncounter.ResetAllBossesForTest();
             LandBossMissionAssignment.InitializeBossMissionOutpostLinks(save);
             LandBossMissionAssignment.PrepareNextAssignment(save);
@@ -88,6 +91,7 @@ namespace F89.Core
                 OutpostRunwayDeckState.Clear();
                 LandMissionHandoffState.Clear();
                 LandingMileFlagState.Clear();
+                FlightInfantryLootState.Clear();
             }
 
             OutpostVehicleSpawner.RemoveAllPlatoons();
@@ -155,6 +159,11 @@ namespace F89.Core
         }
 
         /// <summary>True while a ground landing / return-to-flight spawn must be preserved.</summary>
-        public static bool ShouldPreserveActiveSortieSpawn() => ShouldPreserveFlightHandoff();
+        public static bool ShouldPreserveActiveSortieSpawn() =>
+            ShouldPreserveFlightHandoff()
+            || FlightMissionLaunchState.HasPendingLaunch
+            || FlightMissionLaunchState.FreshSortieLaunch
+            || FlightMissionLaunchState.HasForceCarrierDeckLaunch()
+            || FlightMissionLaunchState.HasPersistedFreshCarrierLaunch();
     }
 }

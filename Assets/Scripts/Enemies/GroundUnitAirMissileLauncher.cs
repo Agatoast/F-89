@@ -33,6 +33,13 @@ namespace F89.Enemies
                 return;
             }
 
+            if (airTarget.IsPlayerAircraft
+                && !F89.Flight.PlayerAircraftCombatState.IsAirborneForEnemyEngagement(
+                    airTarget.GetComponent<AircraftController>()))
+            {
+                return;
+            }
+
             var config = GroundUnitAirMissileConfig.FromDefinition(definition, worldMap, profile);
             LaunchWithConfig(config, launchTransform, airTarget, worldMap, profile, ResolveBodyColor(definition));
         }

@@ -3,19 +3,24 @@ using UnityEngine;
 namespace F89.Weapons
 {
     [CreateAssetMenu(fileName = "Gau27aWeaponConfig", menuName = "F-89/Weapons/GAU-27A Config")]
-    public class Gau27aWeaponConfig : ScriptableObject
+    public class Gau27aWeaponConfig : ScriptableObject, ILockCapableWeapon
     {
         [Header("Range")]
         [Tooltip("Maximum travel distance for each round.")]
         public float maxRangeMiles = 2f;
-        [Tooltip("Maximum crosshair distance inside the forward ogive envelope.")]
+        [Tooltip("Radius of the ogive (circular arc about the aircraft).")]
         public float ogiveMaxRangeMiles = 2.5f;
         public float minCrosshairMiles = 0.1f;
-        [Tooltip("Half-angle from the nose. 15° = 30° total cone centered on the aircraft forward axis.")]
+        [Tooltip("Half-angle from the nose. 15° ⇒ 30° arc at the far end, centered on the plane.")]
         public float ogiveHalfAngleDegrees = 15f;
 
         [Header("Crosshair")]
-        [Tooltip("Move the cursor anywhere inside the ogive envelope to aim the gun.")]
+        [Tooltip("Gun cursor is constrained to the 30° ogive sector centered on the aircraft.")]
+
+        [Header("Lock-On")]
+        public float lockTimeSeconds = 2f;
+        public float maxBeepInterval = 0.55f;
+        public float minBeepInterval = 0.12f;
 
         [Header("Firing")]
         public float roundsPerSecond = 10f;
@@ -32,5 +37,14 @@ namespace F89.Weapons
 
         public string WeaponName => "GAU-27A";
         public WeaponAimMode AimMode => WeaponAimMode.OgiveDirect;
+
+        float ILockCapableWeapon.RangeMiles => ogiveMaxRangeMiles;
+        float ILockCapableWeapon.LockTimeSeconds => lockTimeSeconds;
+        float ILockCapableWeapon.MaxBeepInterval => maxBeepInterval;
+        float ILockCapableWeapon.MinBeepInterval => minBeepInterval;
+        LockableTargetKind ILockCapableWeapon.ValidTargetKind => LockableTargetKind.Ground;
+        WeaponAimMode ILockCapableWeapon.AimMode => WeaponAimMode.OgiveDirect;
+        float ILockCapableWeapon.ForwardLockHalfAngleDegrees => ogiveHalfAngleDegrees;
+        WeaponEngagementType ILockCapableWeapon.EngagementType => WeaponEngagementType.ForwardGun;
     }
 }

@@ -14,6 +14,7 @@ namespace F89.LandCombat
 
         private SpriteRenderer spriteRenderer;
         private Transform faceTarget;
+        private LandEnemySpriteSheet.Camouflage camouflage = LandEnemySpriteSheet.Camouflage.White;
         private LandEnemySpriteSheet.Clip activeClip = LandEnemySpriteSheet.Clip.Idle;
         private int frameIndex;
         private float frameTimer;
@@ -49,6 +50,17 @@ namespace F89.LandCombat
         }
 
         public void SetFaceTarget(Transform target) => faceTarget = target;
+
+        public void SetCamouflage(LandEnemySpriteSheet.Camouflage style)
+        {
+            if (camouflage == style)
+            {
+                return;
+            }
+
+            camouflage = style;
+            ApplyFrame(activeClip, frameIndex);
+        }
 
         public void SetFaceDirection(Vector2 direction)
         {
@@ -90,6 +102,23 @@ namespace F89.LandCombat
             frameTimer = 0f;
         }
 
+        public void ShowCorpseImmediate()
+        {
+            dying = true;
+            deadHold = true;
+            moving = false;
+            shootVisualUntil = 0f;
+            onDeathComplete = null;
+            activeClip = LandEnemySpriteSheet.Clip.Dead;
+            var frames = LandEnemySpriteSheet.GetClip(activeClip, camouflage);
+            if (frames != null && frames.Length > 0)
+            {
+                ApplyFrame(activeClip, frames.Length - 1);
+            }
+
+            UpdateFacing();
+        }
+
         private void LateUpdate()
         {
             if (!dying)
@@ -117,7 +146,7 @@ namespace F89.LandCombat
                 }
             }
 
-            var frames = LandEnemySpriteSheet.GetClip(activeClip);
+            var frames = LandEnemySpriteSheet.GetClip(activeClip, camouflage);
             if (frames == null || frames.Length == 0)
             {
                 return;
@@ -176,7 +205,7 @@ namespace F89.LandCombat
 
         private void ApplyFrame(LandEnemySpriteSheet.Clip clip, int index)
         {
-            var frames = LandEnemySpriteSheet.GetClip(clip);
+            var frames = LandEnemySpriteSheet.GetClip(clip, camouflage);
             if (frames == null || frames.Length == 0)
             {
                 return;

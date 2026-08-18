@@ -8,6 +8,11 @@ namespace F89.Weapons
     public class HomingMissile : MonoBehaviour
     {
         private static readonly List<HomingMissile> ActiveMissiles = new List<HomingMissile>(16);
+        private static readonly List<HomingMissile> ThreatCacheIncoming = new List<HomingMissile>(16);
+        private static int threatCacheFrame = -1;
+        private static bool threatCacheTargetingPlayer;
+
+        private const float FlareRetargetIntervalSeconds = 0.2f;
 
         private IMissileWeaponConfig config;
         private WorldMapConfig worldMap;
@@ -27,11 +32,25 @@ namespace F89.Weapons
         private bool processedFlareBurnout;
         private float flareRetargetRangeWorld;
         private float accuracyMultiplier = 1f;
+        private float nextFlareRetargetTime;
         private System.Action onFlightComplete;
 
-        public bool IsIncomingEnemyThreat { get; private set; }
+        public bool IsIncomingEnemyThreat => IsEnemySeekerMissile && TargetsPlayerAircraft();
         public Vector3 WorldPosition => transform.position;
         public float SpeedMilesPerSecond => config != null ? config.SpeedMilesPerSecond : 0f;
+
+        private bool IsEnemySeekerMissile => seekerSettings.RespondsToFlares;
+
+        private bool TargetsPlayerAircraft()
+        {
+            var primary = seekerSettings.PrimaryTarget;
+            if (primary != null && primary.IsPlayerAircraft)
+            {
+                return true;
+            }
+
+            return lockedTarget != null && lockedTarget.IsPlayerAircraft;
+        }
 
         public bool IsActivelyTargetingPlayer()
         {
@@ -64,27 +83,32 @@ namespace F89.Weapons
 
         public static bool HasAnyActivelyTargetingPlayer()
         {
-            for (var i = ActiveMissiles.Count - 1; i >= 0; i--)
-            {
-                var missile = ActiveMissiles[i];
-                if (missile == null)
-                {
-                    ActiveMissiles.RemoveAt(i);
-                    continue;
-                }
-
-                if (missile.IsActivelyTargetingPlayer())
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            RefreshThreatCacheIfNeeded();
+            return threatCacheTargetingPlayer;
         }
 
         public static void CollectIncomingEnemyThreats(List<HomingMissile> results)
         {
+            RefreshThreatCacheIfNeeded();
             results.Clear();
+            for (var i = 0; i < ThreatCacheIncoming.Count; i++)
+            {
+                results.Add(ThreatCacheIncoming[i]);
+            }
+        }
+
+        private static void RefreshThreatCacheIfNeeded()
+        {
+            var frame = Time.frameCount;
+            if (threatCacheFrame == frame)
+            {
+                return;
+            }
+
+            threatCacheFrame = frame;
+            threatCacheTargetingPlayer = false;
+            ThreatCacheIncoming.Clear();
+
             for (var i = ActiveMissiles.Count - 1; i >= 0; i--)
             {
                 var missile = ActiveMissiles[i];
@@ -96,7 +120,12 @@ namespace F89.Weapons
 
                 if (missile.IsIncomingEnemyThreat)
                 {
-                    results.Add(missile);
+                    ThreatCacheIncoming.Add(missile);
+                }
+
+                if (!threatCacheTargetingPlayer && missile.IsActivelyTargetingPlayer())
+                {
+                    threatCacheTargetingPlayer = true;
                 }
             }
         }
@@ -116,8 +145,8 @@ namespace F89.Weapons
             System.Action onFlightComplete = null)
         {
             var isIncomingEnemyThreat = seekerSettings.RespondsToFlares
-                && seekerSettings.PrimaryTarget != null
-                && seekerSettings.PrimaryTarget.IsPlayerAircraft;
+                && target != null
+                && target.IsPlayerAircraft;
 
             GameObject missileObject;
             if (isIncomingEnemyThreat)
@@ -125,7 +154,7 @@ namespace F89.Weapons
                 missileObject = new GameObject(lockedShot
                     ? $"{weaponConfig.WeaponName} (locked)"
                     : weaponConfig.WeaponName);
-                FlareBurnVisual.AttachTo(missileObject.transform, profile, 0.5f);
+                EnemyMissileVisual.AttachTo(missileObject.transform, profile);
             }
             else
             {
@@ -216,13 +245,10 @@ namespace F89.Weapons
                 transform.rotation = Quaternion.LookRotation(launchForward, Vector3.up);
             }
 
-            IsIncomingEnemyThreat = seeker.RespondsToFlares
-                && seeker.PrimaryTarget != null
-                && seeker.PrimaryTarget.IsPlayerAircraft;
-
-            if (IsIncomingEnemyThreat)
+            if (seeker.RespondsToFlares)
             {
                 ActiveMissiles.Add(this);
+                nextFlareRetargetTime = Time.time + Random.Range(0f, FlareRetargetIntervalSeconds);
             }
         }
 
@@ -280,17 +306,6 @@ namespace F89.Weapons
 
         private void UpdateFlareSeekerBehavior()
         {
-            var flareTarget = FindBestFlareTarget();
-            if (flareTarget != null
-                && (seekerSettings.FlareRetargetChance >= 1f
-                    || Random.value <= seekerSettings.FlareRetargetChance))
-            {
-                lockedTarget = flareTarget;
-                hasExpiredFlareWaypoint = false;
-                processedFlareBurnout = false;
-                return;
-            }
-
             if (lockedTarget != null
                 && lockedTarget.IsFlareDecoy
                 && !lockedTarget.IsAlive
@@ -308,6 +323,23 @@ namespace F89.Weapons
                 }
 
                 lockedTarget = null;
+            }
+
+            if (Time.time < nextFlareRetargetTime || !CountermeasureFlare.HasActiveDecoys)
+            {
+                return;
+            }
+
+            nextFlareRetargetTime = Time.time + FlareRetargetIntervalSeconds;
+
+            var flareTarget = FindBestFlareTarget();
+            if (flareTarget != null
+                && (seekerSettings.FlareRetargetChance >= 1f
+                    || Random.value <= seekerSettings.FlareRetargetChance))
+            {
+                lockedTarget = flareTarget;
+                hasExpiredFlareWaypoint = false;
+                processedFlareBurnout = false;
             }
         }
 
@@ -500,6 +532,13 @@ namespace F89.Weapons
                     continue;
                 }
 
+                if (target.IsPlayerAircraft
+                    && !PlayerAircraftCombatState.IsAirborneForEnemyEngagement(
+                        target.GetComponent<AircraftController>()))
+                {
+                    continue;
+                }
+
                 if (FlattenDistance(center, target.transform.position) > blastRadius)
                 {
                     continue;
@@ -534,6 +573,15 @@ namespace F89.Weapons
 
         private void ResolveLockedHit(LockableTarget target)
         {
+            if (target != null
+                && target.IsPlayerAircraft
+                && !PlayerAircraftCombatState.IsAirborneForEnemyEngagement(
+                    target.GetComponent<AircraftController>()))
+            {
+                CompleteFlight();
+                return;
+            }
+
             var effectiveChance = config.LockHitChance * accuracyMultiplier;
             var hit = Random.value <= effectiveChance;
             if (hit)

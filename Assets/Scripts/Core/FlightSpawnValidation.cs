@@ -10,14 +10,30 @@ namespace F89.Core
     {
         public static bool ShouldBypassSpawnCorrection()
         {
-            return LandingMileFlagState.HasActiveFlag
+            if (LandingMileFlagState.HasActiveFlag
                 || LandMissionHandoffState.ShouldSuppressCarrierRespawn
                 || LandMissionHandoffState.HasPendingGroundReturn
-                || AircraftLandingController.IsTakeoffActive;
+                || AircraftLandingController.IsTakeoffActive
+                || AircraftLandingController.IsParkedAtRunway)
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(FlightMissionLaunchState.LaunchFromOutpostName)
+                && !FlightMissionLaunchState.LaunchFromCarrier)
+            {
+                return true;
+            }
+
+            return MissionLaunchOrigin.TryResolveLaunchOutpost(
+                CharacterSessionState.ActiveSave,
+                out _);
         }
 
         public static Vector3 ResolveSortieReturnPosition(LandSortieSnapshot snapshot, WorldMapConfig worldMap, float ticSize)
         {
+            FlightGroundReturnService.EnsureWaypointLandingFlag(snapshot);
+
             if (LandingMileFlagState.TryResolveFromSnapshot(snapshot, out var mileWorld, out _))
             {
                 mileWorld.y = 0f;
@@ -41,6 +57,13 @@ namespace F89.Core
                     new Vector2(snapshot.LandingMileX, snapshot.LandingMileY),
                     worldMap,
                     ticSize);
+            }
+
+            if (!string.IsNullOrWhiteSpace(snapshot.WaypointSiteCode)
+                && CampaignWaypointSecondaryState.TryGetPadWorldPosition(snapshot.WaypointSiteCode, out var padPosition))
+            {
+                padPosition.y = 0f;
+                return padPosition;
             }
 
             var aircraftPos = snapshot.AircraftWorldPosition;
@@ -137,20 +160,57 @@ namespace F89.Core
                 return true;
             }
 
-            Debug.LogWarning(
-                $"F-89: Aircraft at invalid spawn {CampaignMapCoordinates.FormatMilesLabel(CampaignMapCoordinates.WorldToMiles(position, worldMap, ticSize))} — moving to carrier deck.");
-            LandMissionHandoffState.Clear();
-            OutpostRunwayDeckState.Clear();
-            LandingMileFlagState.Clear();
-
-            AntarcticaBaseSpawner.TryMovePlayerToCarrier(aircraft.transform, worldMap, profile);
-            if (!IsValidSpawnPosition(aircraft.transform.position, worldMap, profile, ticSize))
+            if (MissionLaunchOrigin.TryResolveLaunchOutpost(
+                    CharacterSessionState.ActiveSave,
+                    out var launchOutpostName)
+                && TryApplySavedLaunchOutpostSpawn(aircraft, launchOutpostName))
             {
-                AntarcticaBaseSpawner.ForcePlayerToDefaultCarrier(aircraft.transform, worldMap, profile);
+                VtolTakeoffLaunch.BeginAt(aircraft, aircraft.transform.position);
+                return true;
             }
 
-            VtolTakeoffLaunch.BeginAt(aircraft, aircraft.transform.position);
+            Debug.LogError(
+                $"F-89: Invalid spawn {CampaignMapCoordinates.FormatMilesLabel(CampaignMapCoordinates.WorldToMiles(position, worldMap, ticSize))} — ocean CV relocation removed.");
             return false;
+        }
+
+        private static bool TryApplySavedLaunchOutpostSpawn(
+            AircraftController aircraft,
+            string outpostName)
+        {
+            if (aircraft == null || string.IsNullOrWhiteSpace(outpostName))
+            {
+                return false;
+            }
+
+            if (!OutpostRunwayLanding.TryGetRunwaySpawn(
+                    outpostName,
+                    out var spawnPosition,
+                    out var spawnRotation)
+                && !OutpostRunwayLanding.TryGetLayoutMilesSpawn(
+                    outpostName,
+                    out spawnPosition,
+                    out spawnRotation))
+            {
+                return false;
+            }
+
+            spawnPosition.y = 0f;
+            aircraft.transform.SetPositionAndRotation(spawnPosition, spawnRotation);
+            var body = aircraft.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.position = spawnPosition;
+                body.rotation = spawnRotation;
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+
+            Debug.LogWarning(
+                $"F-89: Recovered saved launch outpost '{outpostName}' at "
+                + $"{CampaignMapCoordinates.FormatMilesLabel(CampaignMapCoordinates.WorldToMiles(spawnPosition, aircraft.WorldMap, aircraft.Profile != null ? aircraft.Profile.ticSizeWorldUnits : 1f))} "
+                + "(avoided ocean CV fallback).");
+            return true;
         }
     }
 }

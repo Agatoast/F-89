@@ -3,12 +3,18 @@ using UnityEngine;
 namespace F89.LandCombat
 {
     /// <summary>
-    /// Loads the UR Arctic Soldier sheet. Art faces left; flipX when facing right.
+    /// Loads the UR soldier sheet in light gray arctic or black camouflage. Art faces left; flipX when facing right.
     /// </summary>
     public static class LandEnemySpriteSheet
     {
         public const string ResourcePath = "LandCombat/Enemy/ur_arctic_soldier";
         public const float PixelsPerUnit = 48f;
+
+        public enum Camouflage
+        {
+            White = 0,
+            Black = 1
+        }
 
         public enum Clip
         {
@@ -74,13 +80,13 @@ namespace F89.LandCombat
             }
         };
 
-        private static Sprite[][] clips;
+        private static Sprite[][][] clipsByCamouflage;
         private static bool loaded;
 
-        public static Sprite[] GetClip(Clip clip)
+        public static Sprite[] GetClip(Clip clip, Camouflage camouflage = Camouflage.White)
         {
             EnsureLoaded();
-            return clips[(int)clip];
+            return clipsByCamouflage[(int)camouflage][(int)clip];
         }
 
         public static void EnsureLoaded()
@@ -90,47 +96,98 @@ namespace F89.LandCombat
                 return;
             }
 
-            var texture = Resources.Load<Texture2D>(ResourcePath);
-            if (texture == null)
+            var sourceTexture = Resources.Load<Texture2D>(ResourcePath);
+            if (sourceTexture == null)
             {
                 Debug.LogError($"F-89 Land: Missing enemy sprite sheet at Resources/{ResourcePath}.");
-                clips = new Sprite[SheetRectsTopLeft.Length][];
-                for (var i = 0; i < clips.Length; i++)
+                clipsByCamouflage = new Sprite[2][][];
+                for (var camo = 0; camo < 2; camo++)
                 {
-                    clips[i] = System.Array.Empty<Sprite>();
+                    clipsByCamouflage[camo] = new Sprite[SheetRectsTopLeft.Length][];
+                    for (var i = 0; i < clipsByCamouflage[camo].Length; i++)
+                    {
+                        clipsByCamouflage[camo][i] = System.Array.Empty<Sprite>();
+                    }
                 }
 
                 loaded = true;
                 return;
             }
 
-            texture.filterMode = FilterMode.Point;
-            clips = new Sprite[SheetRectsTopLeft.Length][];
-            for (var c = 0; c < SheetRectsTopLeft.Length; c++)
+            sourceTexture.filterMode = FilterMode.Point;
+            var textures = new[]
             {
-                var src = SheetRectsTopLeft[c];
-                var frames = new Sprite[src.Length];
-                for (var i = 0; i < src.Length; i++)
-                {
-                    var r = src[i];
-                    var width = r.z;
-                    var height = r.w;
-                    var unityY = texture.height - r.y - height;
-                    var rect = new Rect(r.x, unityY, width, height);
-                    frames[i] = Sprite.Create(
-                        texture,
-                        rect,
-                        new Vector2(0.5f, 0.5f),
-                        PixelsPerUnit,
-                        0,
-                        SpriteMeshType.FullRect);
-                    frames[i].name = $"UR_{(Clip)c}_{i}";
-                }
+                CreateWhiteCamoTexture(sourceTexture),
+                sourceTexture
+            };
 
-                clips[c] = frames;
+            clipsByCamouflage = new Sprite[textures.Length][][];
+            for (var camoIndex = 0; camoIndex < textures.Length; camoIndex++)
+            {
+                var texture = textures[camoIndex];
+                texture.filterMode = FilterMode.Point;
+                clipsByCamouflage[camoIndex] = new Sprite[SheetRectsTopLeft.Length][];
+                for (var c = 0; c < SheetRectsTopLeft.Length; c++)
+                {
+                    var src = SheetRectsTopLeft[c];
+                    var frames = new Sprite[src.Length];
+                    for (var i = 0; i < src.Length; i++)
+                    {
+                        var r = src[i];
+                        var width = r.z;
+                        var height = r.w;
+                        var unityY = texture.height - r.y - height;
+                        var rect = new Rect(r.x, unityY, width, height);
+                        frames[i] = Sprite.Create(
+                            texture,
+                            rect,
+                            new Vector2(0.5f, 0.5f),
+                            PixelsPerUnit,
+                            0,
+                            SpriteMeshType.FullRect);
+                        frames[i].name = $"UR_{(Camouflage)camoIndex}_{(Clip)c}_{i}";
+                    }
+
+                    clipsByCamouflage[camoIndex][c] = frames;
+                }
             }
 
             loaded = true;
+        }
+
+        /// <summary>Remaps the source sheet into light gray arctic camo — keeps detail without washing out to white.</summary>
+        private static Texture2D CreateWhiteCamoTexture(Texture2D source)
+        {
+            var grayCamo = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp
+            };
+
+            var pixels = source.GetPixels32();
+            for (var i = 0; i < pixels.Length; i++)
+            {
+                var pixel = pixels[i];
+                if (pixel.a == 0)
+                {
+                    continue;
+                }
+
+                var luminance = (pixel.r * 0.299f + pixel.g * 0.587f + pixel.b * 0.114f) / 255f;
+                var arctic = new Color(
+                    0.48f + (0.78f - 0.48f) * luminance,
+                    0.50f + (0.80f - 0.50f) * luminance,
+                    0.54f + (0.84f - 0.54f) * luminance);
+                pixels[i] = new Color32(
+                    (byte)(arctic.r * 255f),
+                    (byte)(arctic.g * 255f),
+                    (byte)(arctic.b * 255f),
+                    pixel.a);
+            }
+
+            grayCamo.SetPixels32(pixels);
+            grayCamo.Apply(updateMipmaps: false, makeNoLongerReadable: false);
+            return grayCamo;
         }
     }
 }

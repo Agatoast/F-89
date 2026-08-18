@@ -108,7 +108,43 @@ namespace F89.LandCombat
                 return;
             }
 
+            if (IsBunkerEntryBlocked(out var blockMessage))
+            {
+                LandHudNotice.Show(blockMessage);
+                return;
+            }
+
             EnterBunker();
+        }
+
+        private static bool IsBunkerEntryBlocked(out string message)
+        {
+            message = string.Empty;
+            var outpostName = LandOutpostLandingState.ActiveOutpostName;
+            var save = CharacterSessionState.ActiveSave;
+            if (string.IsNullOrWhiteSpace(outpostName) || save == null)
+            {
+                return false;
+            }
+
+            if (!LandBossMissionAssignment.TryGetBossForOutpost(save, outpostName, out var bossNumber)
+                || bossNumber <= 0)
+            {
+                return false;
+            }
+
+            if (LandBossEncounter.IsDefeated(bossNumber))
+            {
+                return false;
+            }
+
+            if (!LandBossMissionAssignment.IsBunkerRevealedAtOutpost(save, outpostName))
+            {
+                message = "The door is damaged beyond use";
+                return true;
+            }
+
+            return false;
         }
 
         private static bool HasLivingSoldiers()

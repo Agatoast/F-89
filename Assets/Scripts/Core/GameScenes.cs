@@ -14,6 +14,8 @@ namespace F89.Core
         public const string FlightTest = "FlightTest";
         public const string GroundAttack = "GroundAttack";
         public const string Bunker = "Bunker";
+        public const string MARefuel = "MARefuel";
+        public const string BunkerPlayScene = "BunkerPlayScene";
         public const string MissionComplete = "MissionComplete";
 
         /// <summary>Shared runtime scene for end-of-mission R&amp;D report pages.</summary>
@@ -30,6 +32,10 @@ namespace F89.Core
         public const string CrashLandingWounded = "CrashLandingWounded";
         public const string CrashLandingKIA = "CrashLandingKIA";
         public const string PurpleHeartAward = "PurpleHeartAward";
+        public const string AntarcticaServiceAward = "AntarcticaServiceAward";
+        public const string GoodConductAward = "GoodConductAward";
+        public const string CombatActionAward = "CombatActionAward";
+        public const string RankPromotion = "RankPromotion";
         public const string MissionIncomplete = "MissionIncomplete";
 
         /// <summary>Shared runtime scene for Death / POW / Escaped pages after 0 HP.</summary>
@@ -48,6 +54,15 @@ namespace F89.Core
         public const string Boss8 = "Boss8";
         public const string Boss9 = "Boss9";
         public const string Boss10 = "Boss10";
+        public const string Boss11 = "Boss11";
+        public const string Boss12 = "Boss12";
+        public const string Boss13 = "Boss13";
+        public const string Boss14 = "Boss14";
+        public const string Boss15 = "Boss15";
+        public const string Boss16 = "Boss16";
+        public const string Boss17 = "Boss17";
+        public const string Boss18 = "Boss18";
+        public const string Boss19 = "Boss19";
 
         public static bool IsGameplayScene(string sceneName)
         {
@@ -62,6 +77,9 @@ namespace F89.Core
                 || sceneName == VestRnDPage
                 || sceneName == WeaponRnDPage
                 || sceneName == BootsRnDPage
+                || sceneName == AntarcticaServiceAward
+                || sceneName == GoodConductAward
+                || sceneName == CombatActionAward
                 || sceneName == "HelmetR&D"
                 || sceneName == "VestR&D"
                 || sceneName == "WeaponR&D"
@@ -93,35 +111,15 @@ namespace F89.Core
 
         public static int GetBossNumber(string sceneName)
         {
-            if (sceneName == Boss1) return 1;
-            if (sceneName == Boss2) return 2;
-            if (sceneName == Boss3) return 3;
-            if (sceneName == Boss4) return 4;
-            if (sceneName == Boss5) return 5;
-            if (sceneName == Boss6) return 6;
-            if (sceneName == Boss7) return 7;
-            if (sceneName == Boss8) return 8;
-            if (sceneName == Boss9) return 9;
-            if (sceneName == Boss10) return 10;
-            return 0;
+            if (string.IsNullOrEmpty(sceneName) || !sceneName.StartsWith("Boss", System.StringComparison.Ordinal))
+            {
+                return 0;
+            }
+
+            return int.TryParse(sceneName.Substring(4), out var bossNumber) ? bossNumber : 0;
         }
 
-        public static string GetBossScene(int bossNumber)
-        {
-            switch (bossNumber)
-            {
-                case 1: return Boss1;
-                case 2: return Boss2;
-                case 3: return Boss3;
-                case 4: return Boss4;
-                case 5: return Boss5;
-                case 6: return Boss6;
-                case 7: return Boss7;
-                case 8: return Boss8;
-                case 9: return Boss9;
-                case 10: return Boss10;
-                default: return Boss1;
-            }
-        }
+        public static string GetBossScene(int bossNumber) =>
+            bossNumber >= 1 ? $"Boss{bossNumber}" : Boss1;
     }
 }

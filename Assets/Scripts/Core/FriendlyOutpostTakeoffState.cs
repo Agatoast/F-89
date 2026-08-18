@@ -1,15 +1,17 @@
 namespace F89.Core
 {
-    /// <summary>Handoff from a runway deck into Aircraft Loadout.</summary>
+    /// <summary>Handoff from a friendly runway into Aircraft Loadout.</summary>
     public static class FriendlyOutpostTakeoffState
     {
         public static string OutpostName { get; private set; } = string.Empty;
         public static bool ReturnToDeckMenu { get; private set; }
 
-        public static bool HasPending => !string.IsNullOrEmpty(OutpostName);
+        /// <summary>Loadout should offer return to the parked friendly runway.</summary>
+        public static bool HasPending => ReturnToDeckMenu;
 
         public static void BeginDeckRearm(string outpostName)
         {
+            CarrierResupplyState.Clear();
             OutpostName = outpostName ?? string.Empty;
             ReturnToDeckMenu = true;
         }
@@ -18,7 +20,7 @@ namespace F89.Core
         {
             outpostName = OutpostName;
             returnToDeckMenu = ReturnToDeckMenu;
-            if (string.IsNullOrEmpty(outpostName))
+            if (!ReturnToDeckMenu)
             {
                 return false;
             }

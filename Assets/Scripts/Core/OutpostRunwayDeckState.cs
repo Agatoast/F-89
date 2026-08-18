@@ -12,7 +12,7 @@ namespace F89.Core
         public static bool SurfaceGuardsCleared { get; private set; }
         public static bool PendingDeckRefuelOnRestore { get; private set; }
         public static bool PendingDeckRearmOnRestore { get; private set; }
-        public static bool PendingDeckTakeoffOnRestore { get; private set; }
+        public static bool PendingFriendlyRunwayTakeoffOnRestore { get; private set; }
 
         public static bool IsParkedAtRunway => !string.IsNullOrEmpty(ParkedOutpostName);
 
@@ -63,9 +63,9 @@ namespace F89.Core
             PendingDeckRearmOnRestore = true;
         }
 
-        public static void RequestDeckTakeoffOnRestore()
+        public static void RequestFriendlyRunwayTakeoffOnRestore()
         {
-            PendingDeckTakeoffOnRestore = true;
+            PendingFriendlyRunwayTakeoffOnRestore = true;
         }
 
         public static bool ConsumePendingDeckRefuelOnRestore()
@@ -90,14 +90,14 @@ namespace F89.Core
             return true;
         }
 
-        public static bool ConsumePendingDeckTakeoffOnRestore()
+        public static bool ConsumePendingFriendlyRunwayTakeoffOnRestore()
         {
-            if (!PendingDeckTakeoffOnRestore)
+            if (!PendingFriendlyRunwayTakeoffOnRestore)
             {
                 return false;
             }
 
-            PendingDeckTakeoffOnRestore = false;
+            PendingFriendlyRunwayTakeoffOnRestore = false;
             return true;
         }
 
@@ -121,7 +121,7 @@ namespace F89.Core
             SurfaceGuardsCleared = false;
             PendingDeckRefuelOnRestore = false;
             PendingDeckRearmOnRestore = false;
-            PendingDeckTakeoffOnRestore = false;
+            PendingFriendlyRunwayTakeoffOnRestore = false;
         }
     }
 }

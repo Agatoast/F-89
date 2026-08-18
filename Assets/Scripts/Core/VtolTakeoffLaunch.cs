@@ -4,17 +4,25 @@ using UnityEngine;
 
 namespace F89.Core
 {
-    /// <summary>Single VTOL takeoff entry point for carrier, outpost, and ground-return launches.</summary>
+    /// <summary>VTOL takeoff for ground-return and friendly runway takeoff. CV uses <see cref="CarrierDeckLaunch"/>.</summary>
     public static class VtolTakeoffLaunch
     {
-        public static void BeginAt(AircraftController aircraft, Vector3 worldPosition)
+        public static bool BeginAt(AircraftController aircraft, Vector3 worldPosition)
         {
             if (aircraft == null)
             {
-                return;
+                return false;
+            }
+
+            var rotation = aircraft.transform.rotation;
+            if (LandingMileFlagState.TryResolveWorldPosition(out var flagPosition, out var flagRotation))
+            {
+                worldPosition = flagPosition;
+                rotation = flagRotation;
             }
 
             worldPosition.y = 0f;
+            aircraft.transform.SetPositionAndRotation(worldPosition, rotation);
             aircraft.SetLandingLocked(true);
             if (aircraft.TryGetComponent<Rigidbody>(out var body))
             {
@@ -24,19 +32,21 @@ namespace F89.Core
 
             var landing = aircraft.GetComponent<AircraftLandingController>()
                 ?? aircraft.gameObject.AddComponent<AircraftLandingController>();
+            landing.enabled = true;
             landing.PrepareForGroundReturn(worldPosition);
             landing.BeginTakeoff();
             FlightAudio.SetInFlight(true);
+            return AircraftLandingController.IsTakeoffActive;
         }
 
-        public static void BeginAt(GameObject playerObject, Vector3 worldPosition)
+        public static bool BeginAt(GameObject playerObject, Vector3 worldPosition)
         {
             if (playerObject == null)
             {
-                return;
+                return false;
             }
 
-            BeginAt(playerObject.GetComponent<AircraftController>(), worldPosition);
+            return BeginAt(playerObject.GetComponent<AircraftController>(), worldPosition);
         }
     }
 }

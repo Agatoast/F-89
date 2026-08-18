@@ -18,6 +18,7 @@ namespace F89.Core
         public const string SelectAim9z = "select_aim9z";
         public const string Flare = "flare";
         public const string CycleTarget = "cycle_target";
+        public const string MissionBrief = "mission_brief";
         public const string Land = "land";
         public const string UseBandage = "use_bandage";
         public const string ThrowGrenade = "throw_grenade";
@@ -55,6 +56,7 @@ namespace F89.Core
             new GameKeyBindingDefinition(GameKeyBindingIds.SelectAim9z, "Select AIM-9Z", KeyCode.Alpha5),
             new GameKeyBindingDefinition(GameKeyBindingIds.Flare, "Deploy Flare", KeyCode.F),
             new GameKeyBindingDefinition(GameKeyBindingIds.CycleTarget, "Cycle Target", KeyCode.Tab),
+            new GameKeyBindingDefinition(GameKeyBindingIds.MissionBrief, "Mission Brief", KeyCode.B),
             new GameKeyBindingDefinition(GameKeyBindingIds.Land, "Land", KeyCode.L),
             new GameKeyBindingDefinition(GameKeyBindingIds.UseBandage, "Use Bandage", KeyCode.R),
             new GameKeyBindingDefinition(GameKeyBindingIds.ThrowGrenade, "Throw Grenade", KeyCode.Mouse1)

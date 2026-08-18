@@ -13,7 +13,7 @@ namespace F89.UI
         [SerializeField] private float squareSize = HudTargetMarkerLayout.SquareSize;
         [SerializeField] private float diamondSize = HudTargetMarkerLayout.DiamondSize;
 
-        private static readonly Color FriendlyMarkerColor = new Color(0.25f, 0.78f, 0.35f, 1f);
+        private static readonly Color FriendlyMarkerColor = new Color(0x3b / 255f, 0x81 / 255f, 0x32 / 255f, 1f);
         private static readonly Color HostileMarkerColor = new Color(0.92f, 0.15f, 0.1f, 1f);
 
         private Texture2D squareTexture;
@@ -97,10 +97,7 @@ namespace F89.UI
                 }
 
                 var outpostBuilding = target.GetComponent<OutpostBuilding>();
-                if (outpostBuilding != null
-                    && !OutpostPrimaryObjective.IsMissionHostileBuilding(
-                        outpostBuilding.BuildingType,
-                        target.TargetLabel))
+                if (outpostBuilding != null && !OutpostPrimaryObjective.IsMissionHostileTarget(target))
                 {
                     continue;
                 }

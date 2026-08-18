@@ -107,5 +107,22 @@ namespace F89.Core
 
             return ids;
         }
+
+        /// <summary>One-time campaign ribbons — no repeat grants.</summary>
+        public static bool IsSingleAwardOnly(string ribbonId) =>
+            ribbonId == MilitaryRibbonIds.CombatAction
+            || ribbonId == MilitaryRibbonIds.AntarcticaService
+            || ribbonId == MilitaryRibbonIds.GoodConduct;
+
+        /// <summary>Medals 1, 2, 3, 5, 6, 7 — repeat awards show bronze/silver/gold star devices.</summary>
+        public static bool SupportsAwardDevices(string ribbonId)
+        {
+            if (!TryGetDefinition(ribbonId, out var definition))
+            {
+                return false;
+            }
+
+            return definition.Precedence is 1 or 2 or 3 or 5 or 6 or 7;
+        }
     }
 }

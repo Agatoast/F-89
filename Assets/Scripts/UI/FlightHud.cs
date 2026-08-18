@@ -78,6 +78,15 @@ namespace F89.UI
 
         private void OnGUI()
         {
+            if (Event.current != null
+                && Event.current.type == EventType.Repaint
+                && !GamePauseController.IsPaused
+                && !AntarcticaMapOverlay.IsOpen
+                && aircraft != null)
+            {
+                DrawMissionObjectiveFlash();
+            }
+
             if (Event.current == null
                 || GamePauseController.IsPaused
                 || AntarcticaMapOverlay.IsOpen
@@ -242,7 +251,8 @@ namespace F89.UI
                 heading,
                 visibleHalfDegrees,
                 targetWorld,
-                hudColor);
+                hudColor,
+                clampToTapeEdge: true);
         }
 
         private void DrawCompassCircleMarker(
@@ -251,7 +261,8 @@ namespace F89.UI
             float heading,
             float visibleHalfDegrees,
             Vector3 targetWorld,
-            Color markerColor)
+            Color markerColor,
+            bool clampToTapeEdge = false)
         {
             if (aircraft == null)
             {
@@ -269,7 +280,11 @@ namespace F89.UI
 
             var bearing = (Mathf.Atan2(toTarget.x, toTarget.z) * Mathf.Rad2Deg + 360f) % 360f;
             var delta = Mathf.DeltaAngle(heading, bearing);
-            if (Mathf.Abs(delta) > visibleHalfDegrees)
+            if (clampToTapeEdge)
+            {
+                delta = Mathf.Clamp(delta, -visibleHalfDegrees, visibleHalfDegrees);
+            }
+            else if (Mathf.Abs(delta) > visibleHalfDegrees)
             {
                 return;
             }
@@ -561,6 +576,11 @@ namespace F89.UI
             }
 
             if (direction.sqrMagnitude < 4f)
+            {
+                direction = GetCameraFallbackDirection(cam, toTarget.normalized);
+            }
+
+            if (direction.sqrMagnitude < 0.0001f)
             {
                 return false;
             }
@@ -952,6 +972,35 @@ namespace F89.UI
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = warningColor;
             GUI.Label(rect, text, warningStyle);
+            GUI.color = Color.white;
+        }
+
+        private void DrawMissionObjectiveFlash()
+        {
+            if (!MissionObjectiveFlashNotifier.TryGetActiveFlash(out var text)
+                || !MissionObjectiveFlashNotifier.ShouldBlinkVisible())
+            {
+                return;
+            }
+
+            var flashColor = new Color(0.2f, 1f, 0.35f);
+            var flashStyle = HudStyleFactory.CreateLabel(
+                18,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                flashColor);
+
+            var size = flashStyle.CalcSize(new GUIContent(text));
+            var rect = new Rect(
+                (Screen.width - size.x) * 0.5f - 20f,
+                124f,
+                size.x + 40f,
+                size.y + 14f);
+
+            GUI.color = new Color(flashColor.r, flashColor.g, flashColor.b, 0.28f);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = flashColor;
+            GUI.Label(rect, text, flashStyle);
             GUI.color = Color.white;
         }
     }

@@ -57,7 +57,7 @@ namespace F89.UI
             DrawPortrait(save);
             GUI.Label(
                 CharacterLoadoutLayout.GetBasicLoadoutTitleRect(),
-                "BASIC LOADOUT",
+                "R&D LOADOUT",
                 CharacterPageStyles.FootlockerTitleStyle);
 
             GUI.Label(
@@ -146,9 +146,10 @@ namespace F89.UI
 
         private static void DrawNameBar(CharacterSaveData save)
         {
-            var rect = CharacterLoadoutLayout.GetNameBarRect();
-            var label = save != null ? save.DisplayRankAndName : "NO CHARACTER";
-            GUI.Label(rect, label, CharacterPageStyles.NameBarStyle);
+            CharacterNameBarUi.Draw(
+                CharacterLoadoutLayout.GetNameBarRect(),
+                save,
+                CharacterPageStyles.NameBarStyle);
         }
 
         private void DrawPortrait(CharacterSaveData save)
@@ -201,10 +202,20 @@ namespace F89.UI
                 var aircraftRect = new Rect(startX + buttonWidth + gap, y, buttonWidth, buttonHeight);
 
                 if (!CharacterLoadoutNavState.EnteredFromFriendlyOutpostTakeoff
-                    && StartPageMenuStyles.DrawMenuButton(bailRect, "BAIL OUT?", fontSize: 15)
+                    && StartPageMenuStyles.DrawMenuButton(
+                        bailRect,
+                        GamePlayModeState.IsFreeFlight ? "BACK" : "BAIL OUT?",
+                        fontSize: 15)
                     && !showMissingEquipmentDialog)
                 {
-                    showBailOutConfirm = true;
+                    if (GamePlayModeState.IsFreeFlight)
+                    {
+                        ReturnToCharacterPage();
+                    }
+                    else
+                    {
+                        showBailOutConfirm = true;
+                    }
                 }
 
                 if (StartPageMenuStyles.DrawMenuButton(aircraftRect, "AIRCRAFT LOADOUT", fontSize: 15)

@@ -1,3 +1,5 @@
+using System;
+using System.Collections;
 using F89.Core;
 using F89.Flight;
 using F89.LandCombat;
@@ -6,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace F89.UI
 {
-    [DefaultExecutionOrder(10000)]
+    [DefaultExecutionOrder(-10000)]
     public class GamePauseController : MonoBehaviour
     {
         private enum PauseView
@@ -14,7 +16,8 @@ namespace F89.UI
             Root = 0,
             Settings = 1,
             MainMenuConfirm = 2,
-            Memorial = 3
+            Memorial = 3,
+            MissionBrief = 4
         }
 
         private const float DialogWidth = 420f;
@@ -25,12 +28,18 @@ namespace F89.UI
 
         public static bool IsPaused { get; private set; }
 
+        public static bool IsInFlightMissionBriefOpen =>
+            IsPaused && currentView == PauseView.MissionBrief;
+
         public static GamePauseController Instance { get; private set; }
 
         private static PauseView currentView = PauseView.Root;
         private static SettingsMenuUi.View settingsView = SettingsMenuUi.View.Root;
         private static float timeScaleBeforePause = 1f;
         private static int lastEscapePauseFrame = -1;
+        private static int lastMissionBriefToggleFrame = -1;
+
+        private bool inFlightBriefBailOutUnused;
 
         private GUIStyle titleStyle;
         private GUIStyle messageStyle;
@@ -43,6 +52,59 @@ namespace F89.UI
             currentView = PauseView.Root;
             settingsView = SettingsMenuUi.View.Root;
             lastEscapePauseFrame = -1;
+            lastMissionBriefToggleFrame = -1;
+        }
+
+        public static void OpenInFlightMissionBrief()
+        {
+            if (!CanOpenInFlightMissionBrief())
+            {
+                return;
+            }
+
+            var save = CharacterSessionState.ActiveSave;
+            if (save != null)
+            {
+                MissionBriefingState.RefreshCurrentMissionBrief(save);
+            }
+
+            IsPaused = true;
+            currentView = PauseView.MissionBrief;
+            CaptureTimeScaleBeforePause();
+            Time.timeScale = 0f;
+            AudioListener.pause = true;
+            Cursor.visible = true;
+            Cursor.lockState = CursorLockMode.None;
+        }
+
+        private static bool CanOpenInFlightMissionBrief()
+        {
+            if (IsPaused)
+            {
+                return false;
+            }
+
+            if (SceneManager.GetActiveScene().name != GameScenes.FlightTest)
+            {
+                return false;
+            }
+
+            if (!CanOpenPauseMenu())
+            {
+                return false;
+            }
+
+            if (AntarcticaMapOverlay.IsOpen)
+            {
+                return false;
+            }
+
+            if (AircraftLandingController.IsParkedAtRunway)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         public static void ClearPauseOnSceneLoad()
@@ -51,13 +113,39 @@ namespace F89.UI
             currentView = PauseView.Root;
             settingsView = SettingsMenuUi.View.Root;
             lastEscapePauseFrame = -1;
+            lastMissionBriefToggleFrame = -1;
             GameKeyBindings.ClearRebindState();
             AudioListener.pause = false;
+            Time.timeScale = 1f;
+        }
+
+        /// <summary>Runs after the current GUI frame — safe for scene loads that must not start from OnGUI.</summary>
+        public static void ScheduleAfterGui(Action action)
+        {
+            if (action == null)
+            {
+                return;
+            }
+
+            EnsureExists();
+            if (Instance == null)
+            {
+                action();
+                return;
+            }
+
+            Instance.StartCoroutine(RunAfterGui(action));
+        }
+
+        private static IEnumerator RunAfterGui(Action action)
+        {
+            yield return new WaitForEndOfFrame();
+            action();
         }
 
         public static void EnsureExists()
         {
-            var controllers = Object.FindObjectsByType<GamePauseController>(FindObjectsSortMode.None);
+            var controllers = UnityEngine.Object.FindObjectsByType<GamePauseController>(FindObjectsSortMode.None);
             if (controllers.Length == 0)
             {
                 var pauseObject = new GameObject("GamePauseController");
@@ -86,7 +174,7 @@ namespace F89.UI
                 var controller = controllers[i];
                 if (controller != null && controller != keeper)
                 {
-                    Object.Destroy(controller.gameObject);
+                    UnityEngine.Object.Destroy(controller.gameObject);
                 }
             }
         }
@@ -141,11 +229,17 @@ namespace F89.UI
         private void OnGUI()
         {
             if (Event.current != null
-                && Event.current.type == EventType.KeyDown
-                && Event.current.keyCode == KeyCode.Escape
-                && TryHandleEscapePause())
+                && Event.current.type == EventType.KeyDown)
             {
-                Event.current.Use();
+                if (Event.current.keyCode == KeyCode.Escape
+                    && TryHandleEscapePause())
+                {
+                    Event.current.Use();
+                }
+                else if (TryHandleMissionBriefKey(Event.current.keyCode))
+                {
+                    Event.current.Use();
+                }
             }
 
             if (!IsPaused)
@@ -159,7 +253,14 @@ namespace F89.UI
             }
 
             EnsureStyles();
-            DrawOverlay();
+
+            var previousGuiDepth = GUI.depth;
+            GUI.depth = -10000;
+
+            if (currentView != PauseView.MissionBrief)
+            {
+                DrawOverlay();
+            }
 
             switch (currentView)
             {
@@ -172,10 +273,45 @@ namespace F89.UI
                 case PauseView.Memorial:
                     DrawMemorialWall();
                     break;
+                case PauseView.MissionBrief:
+                    DrawInFlightMissionBrief();
+                    break;
                 default:
                     DrawRootMenu();
                     break;
             }
+
+            GUI.depth = previousGuiDepth;
+        }
+
+        private static bool TryHandleMissionBriefKey(KeyCode key)
+        {
+            if (GameKeyBindings.GetKey(GameKeyBindingIds.MissionBrief) != key)
+            {
+                return false;
+            }
+
+            var frame = Time.frameCount;
+            if (lastMissionBriefToggleFrame == frame)
+            {
+                return false;
+            }
+
+            lastMissionBriefToggleFrame = frame;
+
+            if (IsPaused && currentView == PauseView.MissionBrief)
+            {
+                ResumeGameplay();
+                return true;
+            }
+
+            if (!IsPaused)
+            {
+                OpenInFlightMissionBrief();
+                return IsPaused;
+            }
+
+            return false;
         }
 
         private static bool CanOpenPauseMenu()
@@ -186,6 +322,13 @@ namespace F89.UI
             }
 
             if (AircraftLandingController.IsCarrierApproachPromptVisible)
+            {
+                return false;
+            }
+
+            if (AircraftLandingController.IsParkedAtRunway
+                || AircraftLandingController.IsRunwayDeckMenuVisible
+                || AircraftLandingController.IsRunwayEndMissionLeaving)
             {
                 return false;
             }
@@ -260,6 +403,9 @@ namespace F89.UI
                     break;
                 case PauseView.Memorial:
                     currentView = PauseView.Root;
+                    break;
+                case PauseView.MissionBrief:
+                    ResumeGameplay();
                     break;
                 default:
                     ResumeGameplay();
@@ -378,6 +524,16 @@ namespace F89.UI
             MemorialWallUi.Draw(() => currentView = PauseView.Root);
         }
 
+        private void DrawInFlightMissionBrief()
+        {
+            MissionBriefingUi.Draw(
+                MissionBriefingUi.FooterMode.InFlightContinueOnly,
+                ref inFlightBriefBailOutUnused,
+                onAccept: null,
+                onConfirmBailOut: null,
+                onContinue: ResumeGameplay);
+        }
+
         private void DrawSettingsMenu()
         {
             settingsView = SettingsMenuUi.Draw(
@@ -442,7 +598,7 @@ namespace F89.UI
             }
 
             AutopilotController.Instance?.DisengageAutopilot("Returned to main menu.");
-            Object.FindAnyObjectByType<AntarcticaMapOverlay>()?.CloseMap();
+            UnityEngine.Object.FindAnyObjectByType<AntarcticaMapOverlay>()?.CloseMap();
 
             Cursor.visible = true;
             Cursor.lockState = CursorLockMode.None;

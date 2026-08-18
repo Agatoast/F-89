@@ -187,6 +187,17 @@ namespace F89.UI
                 height);
         }
 
+        public static Rect GetBackButtonRect()
+        {
+            var deleteRect = GetDeleteButtonRect();
+            StartPageMenuStyles.GetMenuButtonSize(out _, out var height);
+            return new Rect(
+                deleteRect.x,
+                deleteRect.yMax + UiFitCanvas.Px(8f),
+                deleteRect.width,
+                height);
+        }
+
         public static Rect GetSelectButtonRect()
         {
             const float lowerDesignPx = 10f;

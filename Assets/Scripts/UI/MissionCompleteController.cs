@@ -168,11 +168,14 @@ namespace F89.UI
             LandMissionHandoffState.UpdateStoredFlightSnapshot(snapshot);
 
             LandingMileFlagState.Clear();
+            OpenFieldLandingState.Clear();
             LandMissionCompleteState.Clear();
             DeckLandingServiceState.Clear();
             CarrierDeckTakeoffState.Begin();
             FlightMissionLaunchState.BeginCarrierLaunch();
             FlightMissionStartBootstrap.ResetForSceneLoad();
+            GamePauseController.ClearPauseOnSceneLoad();
+            Time.timeScale = 1f;
             SceneManager.LoadScene(GameScenes.FlightTest);
         }
 

@@ -42,6 +42,16 @@ namespace F89.LandCombat
                 return weapon.DisplayName;
             }
 
+            if (LandUsWeaponCatalog.TryGetByDefinitionId(item.DefinitionId, out var usWeapon))
+            {
+                return usWeapon.DisplayName;
+            }
+
+            if (LandUrWeaponCatalog.TryGetByDefinitionId(item.DefinitionId, out var urWeapon))
+            {
+                return urWeapon.DisplayName;
+            }
+
             if (TryGetGear(item.DefinitionId, out var gear))
             {
                 return gear.DisplayName;
@@ -53,25 +63,51 @@ namespace F89.LandCombat
         public bool TryGetWeaponSummary(LandGearInstance item, out string summary)
         {
             summary = string.Empty;
-            if (!LandLoadoutSlots.IsValidItem(item) || !TryGetWeapon(item.DefinitionId, out var weapon))
+            if (!LandLoadoutSlots.IsValidItem(item))
             {
                 return false;
             }
 
-            summary = LandItemStatFormatter.FormatWeaponSummary(weapon);
-            return true;
+            if (TryGetWeapon(item.DefinitionId, out var weapon))
+            {
+                summary = LandItemStatFormatter.FormatWeaponSummary(weapon);
+                return true;
+            }
+
+            if (LandItemCombatStatsResolver.TryGetWeaponStats(item, this, out var damage, out var range))
+            {
+                summary = $"{LandItemStatFormatter.FormatStatLabel(LandItemStat.Damage)} {damage:0}  |  {LandItemStatFormatter.FormatStatLabel(LandItemStat.Range)} {range:0}";
+                return true;
+            }
+
+            return false;
         }
 
         public bool TryGetGearSummary(LandGearInstance item, out string summary)
         {
             summary = string.Empty;
-            if (!LandLoadoutSlots.IsValidItem(item) || !TryGetGear(item.DefinitionId, out var gear))
+            if (!LandLoadoutSlots.IsValidItem(item))
             {
                 return false;
             }
 
-            summary = LandItemStatFormatter.FormatGearSummary(gear);
-            return !string.IsNullOrEmpty(summary);
+            if (TryGetGear(item.DefinitionId, out var gear))
+            {
+                summary = LandItemStatFormatter.FormatGearSummary(gear);
+                return !string.IsNullOrEmpty(summary);
+            }
+
+            if (LandUsGearCatalog.TryGetByDefinitionId(item.DefinitionId, out var usGear))
+            {
+                summary =
+                    $"{LandItemStatFormatter.FormatStatLabel(LandItemStat.DamageResistance)} {usGear.DamageResistance}"
+                    + (usGear.Move > 0
+                        ? $"  |  {LandItemStatFormatter.FormatStatLabel(LandItemStat.Move)} {usGear.Move}"
+                        : string.Empty);
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
